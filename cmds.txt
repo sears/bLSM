@@ -1,0 +1,9 @@
+ dd if=/dev/zero of=storefile.txt bs=1M count=20000
+
+
+/dhtRecOpsGenerator -d clientType=LogStoreClient host=sherpa4 numOps=10ls existingStartKey=100 existingEndKey=1000 insertRatio=1.0
+
+
+
+
+dhtRecOpsGeneratorWrapper startClientID=1 endClientID=4 -d clientType=LogStoreClient host=sherpa4.corp.re1.yahoo.com numOps=5000000 existingStartKey=100 existingEndKey=10000000 insertRatio=1.0 readRatio=0 numClients=3
