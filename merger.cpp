@@ -344,6 +344,7 @@ void* memMergeThread(void*arg)
         //force write the new region to disk
         recordid scratch_alloc_state = scratch_tree->get_tree_state();        
         //TlsmForce(xid,scratch_root,logtree::force_region_rid, &scratch_alloc_state);
+        // XXX When called by merger_check (at least), we hold a pin on a page that should be forced.  This causes stasis to abort() the process.
         logtree::force_region_rid(xid, &scratch_alloc_state);
         //force write the new datapages
         DataPage<datatuple>::force_region_rid(xid, &ltable->get_dpstate1());
