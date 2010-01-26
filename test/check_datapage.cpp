@@ -2,8 +2,8 @@
 #include <vector>
 #include <iostream>
 #include <sstream>
-#include "logstore.h"
-#include "datapage.cpp"
+#include <logstore.h>
+#include <datapage.cpp> // XXX
 
 #include <assert.h>
 #include <limits.h>
@@ -18,10 +18,10 @@
 template class DataPage<datatuple>;
 
 bool mycmp(const std::string & k1,const std::string & k2)
-{            
+{
     //for char* ending with \0
     return strcmp(k1.c_str(),k2.c_str()) < 0;
-    
+
     //for int32_t
     //printf("%d\t%d\n",(*((int32_t*)k1)) ,(*((int32_t*)k2)));
     //return (*((int32_t*)k1)) <= (*((int32_t*)k2));
