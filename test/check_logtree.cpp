@@ -22,55 +22,7 @@
 #undef begin
 #undef end
 
-bool mycmp(const std::string & k1,const std::string & k2)
-{            
-    //for char* ending with \0
-    return strcmp(k1.c_str(),k2.c_str()) < 0;
-    
-    //for int32_t
-    //printf("%d\t%d\n",(*((int32_t*)k1)) ,(*((int32_t*)k2)));
-    //return (*((int32_t*)k1)) <= (*((int32_t*)k2));
-}
-
-void preprandstr(int count, std::vector<std::string> &arr)
-{    
-
-    for ( int j=0; j<count; j++)
-    {
-        int str_len = rand()%100 + 3;
-
-        char *rc = (char*)malloc(str_len);
-        
-        for(int i=0; i<str_len-1; i++)        
-            rc[i] = rand()%10+48;
-        
-        rc[str_len-1]='\0';
-        std::string str(rc);
-        
-        //make sure there is no duplicate key
-        bool dup = false;
-        for(int i=0; i<j; i++)        
-            if(! (mycmp(arr[i], str) || mycmp(str, arr[i])))
-            {
-                dup=true;
-                break;
-            }
-        if(dup)
-        {
-            j--;
-            continue;
-        }
-
-        
-        //printf("keylen-%d\t%d\t%s\n", str_len, str.length(),rc);
-        free(rc);
-
-        arr.push_back(str);
-        
-    }
-
-}
-
+#include "check_util.h"
 
 void insertProbeIter_str(int  NUM_ENTRIES)
 {
@@ -100,7 +52,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
     long oldpagenum = -1;
 
     std::vector<std::string> arr;
-    preprandstr(NUM_ENTRIES, arr);
+    preprandstr(NUM_ENTRIES, arr, 50, false);
     std::sort(arr.begin(), arr.end(), &mycmp);
     
     //for(int i = 0; i < NUM_ENTRIES; i++)
