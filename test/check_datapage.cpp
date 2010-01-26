@@ -19,63 +19,6 @@
 
 template class DataPage<datatuple>;
 
-/**
- * REGION ALLOCATION
- **/
-pageid_t alloc_region(int xid, void *conf)
-{
-    RegionAllocConf_t* a = (RegionAllocConf_t*)conf;
-    
-  if(a->nextPage == a->endOfRegion) {
-    if(a->regionList.size == -1) {
-        //DEBUG("nextPage: %lld\n", a->nextPage);
-        a->regionList = TarrayListAlloc(xid, 1, 4, sizeof(pageid_t));
-        DEBUG("regionList.page: %lld\n", a->regionList.page);
-        DEBUG("regionList.slot: %d\n", a->regionList.slot);
-        DEBUG("regionList.size: %lld\n", a->regionList.size);
-        
-        a->regionCount = 0;
-    }
-    DEBUG("{%lld <- alloc region arraylist}\n", a->regionList.page);
-    TarrayListExtend(xid,a->regionList,1);
-    a->regionList.slot = a->regionCount;
-    DEBUG("region lst slot %d\n",a->regionList.slot);
-    a->regionCount++;
-    DEBUG("region count %lld\n",a->regionCount);
-    a->nextPage = TregionAlloc(xid, a->regionSize,12);
-    DEBUG("next page %lld\n",a->nextPage);
-    a->endOfRegion = a->nextPage + a->regionSize;
-    Tset(xid,a->regionList,&a->nextPage);
-    DEBUG("next page %lld\n",a->nextPage);
-  }
-    
-  DEBUG("%lld ?= %lld\n", a->nextPage,a->endOfRegion);
-  pageid_t ret = a->nextPage;
-  // Ensure the page is in buffer cache without accessing disk (this
-  // sets it to clean and all zeros if the page is not in cache).
-  // Hopefully, future reads will get a cache hit, and avoid going to
-  // disk.
-
-  Page * p = loadUninitializedPage(xid, ret);
-  releasePage(p);
-  DEBUG("ret %lld\n",ret);
-  (a->nextPage)++;
-  return ret;
-
-}
-
-
-pageid_t alloc_region_rid(int xid, void * ridp) {
-  recordid rid = *(recordid*)ridp;
-  RegionAllocConf_t conf;
-  Tread(xid,rid,&conf);
-  pageid_t ret = alloc_region(xid,&conf);
-  DEBUG("{%lld <- alloc region extend}\n", conf.regionList.page);
-
-  Tset(xid,rid,&conf);
-  return ret;
-}
-
 
 void insertProbeIter(int  NUM_ENTRIES)
 {

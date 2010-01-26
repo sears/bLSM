@@ -92,7 +92,6 @@ private:
     inline void readbytes(int xid, int32_t offset, int count, byte **data=0);
 
 private:
-    int fix_pcount; //number of pages in a standard data page
     int pcount;
     pageid_t *pidarr;
     int32_t byte_offset;//points to the next free byte
@@ -101,6 +100,7 @@ private:
     //page alloc function
     pageid_t (*alloc_region)(int, void*);
     void *alloc_state;
+    int fix_pcount; //number of pages in a standard data page
 
     static const int32_t HEADER_SIZE;
     
