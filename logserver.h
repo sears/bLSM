@@ -142,6 +142,29 @@ public:
     
 public:
 
+    // XXX utility methods, pull out into some other class.
+
+    static inline void readfromsocket(int sockd, byte *buf, int count)
+    {
+
+        int n = 0;
+        while( n < count )
+        {
+            n += read( sockd, buf + n, count - n);
+        }
+
+    }
+
+    static inline void writetosocket(int sockd, byte *buf, int count)
+    {
+        int n = 0;
+        while( n < count )
+        {
+            n += write( sockd, buf + n, count - n);
+        }
+    }
+
+
 private:
 
     //main loop of server

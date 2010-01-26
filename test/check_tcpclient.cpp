@@ -19,26 +19,6 @@
 #undef begin
 #undef end
 
-inline void readfromsocket(int sockd, byte *buf, int count)
-{
-
-    int n = 0;
-    while( n < count )
-    {
-        n += read( sockd, buf + n, count - n);
-    }
-    
-}
-
-inline void writetosocket(int sockd, byte *buf, int count)
-{
-    int n = 0;
-    while( n < count )
-    {
-        n += write( sockd, buf + n, count - n);
-    }    
-}
-
 datatuple * sendTuple(std::string & servername, int serverport, uint8_t opcode,  datatuple &tuple)
 {
     struct sockaddr_in serveraddr;
@@ -84,9 +64,9 @@ datatuple * sendTuple(std::string & servername, int serverport, uint8_t opcode, 
     n = write(sockfd, (byte*) tuple.datalen, sizeof(uint32_t));
     assert( n == sizeof(uint32_t));
 
-    writetosocket(sockfd, (byte*) tuple.key, *tuple.keylen);
+    logserver::writetosocket(sockfd, (byte*) tuple.key, *tuple.keylen);
     if(!tuple.isDelete() && *tuple.datalen != 0)
-        writetosocket(sockfd, (byte*) tuple.data, *tuple.datalen);
+        logserver::writetosocket(sockfd, (byte*) tuple.data, *tuple.datalen);
 
     //read the reply code
     uint8_t rcode;
@@ -105,12 +85,12 @@ datatuple * sendTuple(std::string & servername, int serverport, uint8_t opcode, 
         assert(n == sizeof(uint32_t));
         //read key
         rcvdtuple->key = (byte*) malloc(*rcvdtuple->keylen);
-        readfromsocket(sockfd, (byte*) rcvdtuple->key, *rcvdtuple->keylen);
+        logserver::readfromsocket(sockfd, (byte*) rcvdtuple->key, *rcvdtuple->keylen);
         if(!rcvdtuple->isDelete())
         {
             //read key
             rcvdtuple->data = (byte*) malloc(*rcvdtuple->datalen);
-            readfromsocket(sockfd, (byte*) rcvdtuple->data, *rcvdtuple->datalen);        
+            logserver::readfromsocket(sockfd, (byte*) rcvdtuple->data, *rcvdtuple->datalen);
         }
 
         close(sockfd);

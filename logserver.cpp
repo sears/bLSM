@@ -212,7 +212,6 @@ void logserver::eventLoop()
     
     int maxfd;
 
-    struct timeval Timeout;
     struct timespec   ts;
          
     while(true)
@@ -406,25 +405,6 @@ void *serverLoop(void *args)
     
 }
 
-inline void readfromsocket(int sockd, byte *buf, int count)
-{
-
-    int n = 0;
-    while( n < count )
-    {
-        n += read( sockd, buf + n, count - n);
-    }
-    
-}
-
-inline void writetosocket(int sockd, byte *buf, int count)
-{
-    int n = 0;
-    while( n < count )
-    {
-        n += write( sockd, buf + n, count - n);
-    }    
-}
 
 
 
@@ -504,12 +484,12 @@ void * thread_work_fn( void * args)
         
         //read the key
         tuple.key = (byte*) malloc(*tuple.keylen);
-        readfromsocket(*(item->data->workitem), (byte*) tuple.key, *tuple.keylen);
+        logserver::readfromsocket(*(item->data->workitem), (byte*) tuple.key, *tuple.keylen);
         //read the data
         if(!tuple.isDelete() && opcode != logserver::OP_FIND)
         {
             tuple.data = (byte*) malloc(*tuple.datalen);
-            readfromsocket(*(item->data->workitem), (byte*) tuple.data, *tuple.datalen);
+            logserver::readfromsocket(*(item->data->workitem), (byte*) tuple.data, *tuple.datalen);
         }
         else
             tuple.data = 0;
@@ -570,7 +550,7 @@ void * thread_work_fn( void * args)
             assert(n == sizeof(uint8_t));
 
             //send the tuple
-            writetosocket(*(item->data->workitem), (byte*) dt->keylen, dt->byte_length());
+            logserver::writetosocket(*(item->data->workitem), (byte*) dt->keylen, dt->byte_length());
 
             //free datatuple
             free(dt->keylen);
@@ -643,7 +623,7 @@ void * thread_work_fn( void * args)
     }
     pthread_mutex_unlock(item->data->th_mut);
 
-
+    return NULL;
 }
                        
 
