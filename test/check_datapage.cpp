@@ -3,7 +3,7 @@
 #include <iostream>
 #include <sstream>
 #include <logstore.h>
-#include <datapage.cpp> // XXX
+#include <datapage.h>
 
 #include <assert.h>
 #include <limits.h>

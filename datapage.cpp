@@ -86,7 +86,7 @@ void DataPage<TUPLE>::initialize(int xid)
 }
 
 template <class TUPLE>
-inline bool DataPage<TUPLE>::append(int xid, TUPLE const & dat)
+bool DataPage<TUPLE>::append(int xid, TUPLE const & dat)
 {
     assert(byte_offset >= HEADER_SIZE);
     assert(fix_pcount >= 1);

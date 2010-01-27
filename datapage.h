@@ -59,7 +59,7 @@ public:
 
     ~DataPage();
 
-    inline bool append(int xid, TUPLE const & dat);
+    bool append(int xid, TUPLE const & dat);
     bool recordRead(int xid, typename TUPLE::key_t key, size_t keySize,  TUPLE ** buf);
 
     inline uint16_t recordCount(int xid);

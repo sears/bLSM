@@ -4,8 +4,8 @@
 #include <iostream>
 #include <sstream>
 #include "logstore.h"
-#include "datapage.cpp"
-#include "logiterators.cpp"
+#include "datapage.h"
+#include "logiterators.h"
 #include <assert.h>
 #include <limits.h>
 #include <math.h>

@@ -1,19 +1,12 @@
-
-
-
 #include <string.h>
 #include <assert.h>
 #include <math.h>
 #include <ctype.h>
 
-
 #include "merger.h"
 #include "logstore.h"
 #include "logiterators.h"
-
-
 #include "datapage.cpp"
-
 
 #include <stasis/page/slotted.h>
 

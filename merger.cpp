@@ -2,7 +2,7 @@
 #include <math.h>
 #include "merger.h"
 #include "logiterators.cpp"
-#include "datapage.cpp"
+#include "datapage.h"
 //pageid_t merge_scheduler::C0_MEM_SIZE = 1000 * 1000 * 1000;
 
 //template <> struct merger_args<rbtree_t>;

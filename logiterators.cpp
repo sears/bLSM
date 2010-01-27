@@ -1,10 +1,5 @@
-
 #include "logstore.h"
-//#include "datapage.cpp"
 #include "logiterators.h"
-
-
- 
 
 //template <class MEMTREE, class TUPLE>
 /*
