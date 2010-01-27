@@ -18,10 +18,9 @@
 
 #include "check_util.h"
 
-//template class DataPage<datatuple>;
 template class treeIterator<datatuple>;
 
-void insertProbeIter(int  NUM_ENTRIES)
+void insertProbeIter(size_t NUM_ENTRIES)
 {
     srand(1000);
     unlink("storefile.txt");
@@ -76,7 +75,7 @@ void insertProbeIter(int  NUM_ENTRIES)
     DataPage<datatuple> *dp=0;
     int64_t datasize = 0;
     std::vector<pageid_t> dsp;
-    for(int i = 0; i < NUM_ENTRIES; i++)
+    for(size_t i = 0; i < NUM_ENTRIES; i++)
     {
         //prepare the key
         datatuple newtuple;        
@@ -84,7 +83,7 @@ void insertProbeIter(int  NUM_ENTRIES)
         newtuple.keylen = &keylen;
         
         newtuple.key = (datatuple::key_t) malloc(keylen);
-        for(int j=0; j<keylen-1; j++)
+        for(size_t j=0; j<keylen-1; j++)
             newtuple.key[j] = key_arr[i][j];
         newtuple.key[keylen-1]='\0';
 
@@ -93,7 +92,7 @@ void insertProbeIter(int  NUM_ENTRIES)
         newtuple.datalen = &datalen;
         
         newtuple.data = (datatuple::data_t) malloc(datalen);
-        for(int j=0; j<datalen-1; j++)
+        for(size_t j=0; j<datalen-1; j++)
             newtuple.data[j] = data_arr[i][j];
         newtuple.data[datalen-1]='\0';
 
@@ -132,7 +131,7 @@ void insertProbeIter(int  NUM_ENTRIES)
     printf("\nTREE STRUCTURE\n");
     lt->print_tree(xid);
     
-    printf("Total data set length: %d\n", datasize);
+    printf("Total data set length: %lld\n", datasize);
     printf("Storage utilization: %.2f\n", (datasize+.0) / (PAGE_SIZE * npages));
     printf("Number of datapages: %d\n", dpages);
     printf("Writes complete.\n");
@@ -147,7 +146,7 @@ void insertProbeIter(int  NUM_ENTRIES)
     printf("Stage 2: Sequentially reading %d tuples\n", NUM_ENTRIES);
 
     
-    int tuplenum = 0;
+    size_t tuplenum = 0;
     treeIterator<datatuple> tree_itr(tree_root);
 
 
@@ -177,7 +176,7 @@ void insertProbeIter(int  NUM_ENTRIES)
         //get the key
         uint32_t keylen = key_arr[ri].length()+1;        
         datatuple::key_t rkey = (datatuple::key_t) malloc(keylen);
-        for(int j=0; j<keylen-1; j++)
+        for(size_t j=0; j<keylen-1; j++)
             rkey[j] = key_arr[ri][j];
         rkey[keylen-1]='\0';
 

@@ -10,99 +10,11 @@
 #include <sys/time.h>
 #include <time.h>
 #include <sys/types.h> 
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h> 
 
 #include "check_util.h"
 
 #undef begin
 #undef end
-
-datatuple * sendTuple(std::string & servername, int serverport, uint8_t opcode,  datatuple &tuple)
-{
-    struct sockaddr_in serveraddr;
-    struct hostent *server;
-    
-    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-
-    if (sockfd < 0) 
-    {
-        printf("ERROR opening socket.\n");
-        return 0;
-    }
-    
-    server = gethostbyname(servername.c_str());
-    if (server == NULL) {
-        fprintf(stderr,"ERROR, no such host as %s\n", servername.c_str());
-        exit(0);
-    }
-
-    /* build the server's Internet address */
-    bzero((char *) &serveraddr, sizeof(serveraddr));
-    serveraddr.sin_family = AF_INET;
-    bcopy((char *)server->h_addr, 
-	  (char *)&serveraddr.sin_addr.s_addr, server->h_length);
-    serveraddr.sin_port = htons(serverport);
-
-    /* connect: create a connection with the server */
-    if (connect(sockfd, (sockaddr*) &serveraddr, sizeof(serveraddr)) < 0)
-    {
-        printf("ERROR connecting\n");
-        return 0;
-    }
-
-
-    //send the opcode
-    int n = write(sockfd, (byte*) &opcode, sizeof(uint8_t));
-    assert(n == sizeof(uint8_t));
-
-    //send the tuple
-    n = write(sockfd, (byte*) tuple.keylen, sizeof(uint32_t));
-    assert( n == sizeof(uint32_t));
-
-    n = write(sockfd, (byte*) tuple.datalen, sizeof(uint32_t));
-    assert( n == sizeof(uint32_t));
-
-    logserver::writetosocket(sockfd, (byte*) tuple.key, *tuple.keylen);
-    if(!tuple.isDelete() && *tuple.datalen != 0)
-        logserver::writetosocket(sockfd, (byte*) tuple.data, *tuple.datalen);
-
-    //read the reply code
-    uint8_t rcode;
-    n = read(sockfd, (byte*) &rcode, sizeof(uint8_t));
-
-    if(rcode == logserver::OP_SENDING_TUPLE)
-    {
-        datatuple *rcvdtuple = (datatuple*)malloc(sizeof(datatuple));
-        //read the keylen
-        rcvdtuple->keylen = (uint32_t*) malloc(sizeof(uint32_t));
-        n = read(sockfd, (byte*) rcvdtuple->keylen, sizeof(uint32_t));
-        assert(n == sizeof(uint32_t));
-        //read the datalen
-        rcvdtuple->datalen = (uint32_t*) malloc(sizeof(uint32_t));
-        n = read(sockfd, (byte*) rcvdtuple->datalen, sizeof(uint32_t));
-        assert(n == sizeof(uint32_t));
-        //read key
-        rcvdtuple->key = (byte*) malloc(*rcvdtuple->keylen);
-        logserver::readfromsocket(sockfd, (byte*) rcvdtuple->key, *rcvdtuple->keylen);
-        if(!rcvdtuple->isDelete())
-        {
-            //read key
-            rcvdtuple->data = (byte*) malloc(*rcvdtuple->datalen);
-            logserver::readfromsocket(sockfd, (byte*) rcvdtuple->data, *rcvdtuple->datalen);
-        }
-
-        close(sockfd);
-        return rcvdtuple;
-    }
-    else
-        assert(rcode == logserver::OP_SUCCESS);
-    
-    close(sockfd);
-    return 0;
-}
-
 
 void insertProbeIter(int  NUM_ENTRIES)
 {
@@ -291,10 +203,6 @@ void insertProbeIter(int  NUM_ENTRIES)
     }
     printf("found %d\n", found_tuples);
 
-    
-
-
-    
     key_arr->clear();
     //data_arr->clear();
     delete key_arr;
