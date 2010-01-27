@@ -43,7 +43,7 @@ void logserver::startserver(logtable *ltable)
     pthread_cond_init(selcond, 0);
     
     //initialize threads
-    for(int i=0; i<nthreads; i++)
+    for(size_t i=0; i<nthreads; i++)
     {
         struct pthread_item *worker_th = new pthread_item;
         th_list.push_back(worker_th);
@@ -118,7 +118,7 @@ void logserver::stopserver()
     
     //set the system running flag to false
     sys_alive = false;
-    for(int i=0; i<nthreads; i++)    
+    for(size_t i=0; i<nthreads; i++)
     {
         pthread_item *idle_th = th_list[i];
         
@@ -272,7 +272,7 @@ void logserver::eventLoop()
         #endif
 
         pthread_mutex_lock(qlock);
-        for(int i=0; i<sel_list.size(); i++ )
+        for(size_t i=0; i<sel_list.size(); i++ )
         {
             int currsock = sel_list[i];
 

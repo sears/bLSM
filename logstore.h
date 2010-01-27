@@ -278,15 +278,15 @@ public:
     static void close(int xid, lladdIterator_t *it);
 
     
-    static inline int key (int xid, lladdIterator_t *it, byte **key)
+    static inline size_t key (int xid, lladdIterator_t *it, byte **key)
         {
             logtreeIterator_s * impl = (logtreeIterator_s*)it->impl;
             *key = (byte*)(impl->t+1);
-            return (int) impl->current.size - sizeof(indexnode_rec);        
+            return impl->current.size - sizeof(indexnode_rec);
         }
     
     
-    static inline int value(int xid, lladdIterator_t *it, byte **value)
+    static inline size_t value(int xid, lladdIterator_t *it, byte **value)
         {
             logtreeIterator_s * impl = (logtreeIterator_s*)it->impl;
             *value = (byte*)&(impl->t->ptr);

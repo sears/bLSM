@@ -18,7 +18,7 @@
 
 #include "check_util.h"
 
-void insertProbeIter(int  NUM_ENTRIES)
+void insertProbeIter(size_t NUM_ENTRIES)
 {
     srand(1000);
     unlink("storefile.txt");
@@ -78,7 +78,7 @@ void insertProbeIter(int  NUM_ENTRIES)
     int64_t datasize = 0;
     std::vector<pageid_t> dsp;
     gettimeofday(&start_tv,0);
-    for(int i = 0; i < NUM_ENTRIES; i++)
+    for(size_t i = 0; i < NUM_ENTRIES; i++)
     {
         //prepare the key
         datatuple newtuple;        
@@ -125,7 +125,7 @@ void insertProbeIter(int  NUM_ENTRIES)
 
     printf("\nTREE STRUCTURE\n");
     //ltable.get_tree_c1()->print_tree(xid);
-    printf("datasize: %d\n", datasize);
+    printf("datasize: %lld\n", (long long)datasize);
     //sleep(20);
 
     Tcommit(xid);

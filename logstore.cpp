@@ -18,9 +18,6 @@ const RegionAllocConf_t logtree::REGION_ALLOC_STATIC_INITIALIZER = { {0,0,-1}, 0
 const RegionAllocConf_t
 logtable::DATAPAGE_REGION_ALLOC_STATIC_INITIALIZER = { {0,0,-1}, 0, -1, -1, 50000 };
 
-#undef DEBUG
-#define DEBUG(...) \
-
 //printf(__VA_ARGS__); fflush(NULL)
 
 #define LOGTREE_ROOT_PAGE SLOTTED_PAGE

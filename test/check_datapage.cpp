@@ -20,7 +20,7 @@
 template class DataPage<datatuple>;
 
 
-void insertProbeIter(int  NUM_ENTRIES)
+void insertProbeIter(size_t NUM_ENTRIES)
 {
     srand(1000);
     unlink("storefile.txt");
@@ -75,7 +75,7 @@ void insertProbeIter(int  NUM_ENTRIES)
     DataPage<datatuple> *dp=0;
     int64_t datasize = 0;
     std::vector<pageid_t> dsp;
-    for(int i = 0; i < NUM_ENTRIES; i++)
+    for(size_t i = 0; i < NUM_ENTRIES; i++)
     {
         //prepare the key
         datatuple newtuple;        
@@ -83,7 +83,7 @@ void insertProbeIter(int  NUM_ENTRIES)
         newtuple.keylen = &keylen;
         
         newtuple.key = (datatuple::key_t) malloc(keylen);
-        for(int j=0; j<keylen-1; j++)
+        for(size_t j=0; j<keylen-1; j++)
             newtuple.key[j] = key_arr[i][j];
         newtuple.key[keylen-1]='\0';
 
@@ -92,7 +92,7 @@ void insertProbeIter(int  NUM_ENTRIES)
         newtuple.datalen = &datalen;
         
         newtuple.data = (datatuple::data_t) malloc(datalen);
-        for(int j=0; j<datalen-1; j++)
+        for(size_t j=0; j<datalen-1; j++)
             newtuple.data[j] = data_arr[i][j];
         newtuple.data[datalen-1]='\0';
 
@@ -125,7 +125,7 @@ void insertProbeIter(int  NUM_ENTRIES)
         
     }
 
-    printf("Total data set length: %d\n", datasize);
+    printf("Total data set length: %lld\n", (long long)datasize);
     printf("Storage utilization: %.2f\n", (datasize+.0) / (PAGE_SIZE * pcount * dpages));
     printf("Number of datapages: %d\n", dpages);
     printf("Writes complete.\n");

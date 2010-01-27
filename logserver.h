@@ -178,7 +178,7 @@ private:
 
     int server_port;
     
-    int nthreads;
+    size_t nthreads;
 
     bool sys_alive;
     

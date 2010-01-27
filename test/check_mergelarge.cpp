@@ -18,7 +18,7 @@
 
 #include "check_util.h"
 
-void insertProbeIter(int  NUM_ENTRIES)
+void insertProbeIter(size_t NUM_ENTRIES)
 {
     srand(1000);
     unlink("storefile.txt");
@@ -74,7 +74,7 @@ void insertProbeIter(int  NUM_ENTRIES)
     int64_t datasize = 0;
     std::vector<pageid_t> dsp;
     gettimeofday(&start_tv,0);
-    for(int i = 0; i < NUM_ENTRIES; i++)
+    for(size_t i = 0; i < NUM_ENTRIES; i++)
     {
         //prepare the key
         datatuple newtuple;        

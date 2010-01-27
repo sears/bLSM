@@ -136,7 +136,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
     while(logtreeIterator::next(xid, it)) {
         byte * key;
         byte **key_ptr = &key;
-        int keysize = logtreeIterator::key(xid, it, (byte**)key_ptr);
+        size_t keysize = logtreeIterator::key(xid, it, (byte**)key_ptr);
         
         pageid_t *value;
         pageid_t **value_ptr = &value;
@@ -196,8 +196,8 @@ void insertProbeIter_int(int  NUM_ENTRIES)
         //currkey[]='\0';
       
         printf("\n#########\ni=%d\nkey:\t%d\nkeylen:%d\n",i,*((int32_t*)currkey),keylen);
-        long pagenum = logtree::findPage(xid, tree, currkey, keylen);
-        printf("pagenum:%d\n", pagenum);
+        pageid_t pagenum = logtree::findPage(xid, tree, currkey, keylen);
+        printf("pagenum:%lld\n", (long long)pagenum);
         assert(pagenum == -1 || pagenum == oldpagenum || oldpagenum == -1);
         printf("TlsmAppendPage %d\n",i);
 
@@ -215,7 +215,7 @@ void insertProbeIter_int(int  NUM_ENTRIES)
       
         pagenum = logtree::findPage(xid, tree, currkey,keylen);
         oldpagenum = pagenum;
-        printf("pagenum:%d\n", pagenum);      
+        printf("pagenum:%lld\n", (long long)pagenum);
         assert(pagenum == i + OFFSET);
         free(currkey);
     }
@@ -235,8 +235,8 @@ void insertProbeIter_int(int  NUM_ENTRIES)
         memcpy(currkey, (byte*)(&i), keylen);
 
         printf("\n#########\ni=%d\nkey:\t%d\nkeylen:%d\n",i,*((int32_t*)currkey),keylen);
-        long pagenum = logtree::findPage(xid, tree, currkey, keylen);
-        printf("pagenum:%d\n", pagenum);      
+        pageid_t pagenum = logtree::findPage(xid, tree, currkey, keylen);
+        printf("pagenum:%lld\n", (long long) pagenum);
         assert(pagenum == i + OFFSET);
         free(currkey);
     }

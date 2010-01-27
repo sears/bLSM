@@ -18,7 +18,7 @@
 
 #include "check_util.h"
 
-void insertProbeIter(int  NUM_ENTRIES)
+void insertProbeIter(size_t NUM_ENTRIES)
 {
     srand(1000);
     //unlink("storefile.txt");
@@ -30,7 +30,7 @@ void insertProbeIter(int  NUM_ENTRIES)
     
     //data generation
     typedef std::vector<std::string> key_v_t;
-    const static int max_partition_size = 100000;
+    const static size_t max_partition_size = 100000;
     int KEY_LEN = 100;
     std::vector<key_v_t*> *key_v_list = new std::vector<key_v_t*>;
     int list_size = NUM_ENTRIES / max_partition_size + 1;
@@ -136,7 +136,7 @@ void insertProbeIter(int  NUM_ENTRIES)
     std::vector<pageid_t> dsp;
     std::vector<int> del_list;
     gettimeofday(&start_tv,0);
-    for(int i = 0; i < NUM_ENTRIES; i++)
+    for(size_t i = 0; i < NUM_ENTRIES; i++)
     {
         //prepare the key
         datatuple newtuple;        

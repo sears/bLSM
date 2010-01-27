@@ -46,7 +46,7 @@ int merge_scheduler::addlogtable(logtable *ltable)
 
 merge_scheduler::~merge_scheduler()
 {
-    for(int i=0; i<mergedata.size(); i++)
+    for(size_t i=0; i<mergedata.size(); i++)
     {
         logtable *ltable = mergedata[i].first;
         logtable_mergedata *mdata = mergedata[i].second;
@@ -95,7 +95,7 @@ merge_scheduler::~merge_scheduler()
 void merge_scheduler::shutdown()
 {
     //signal shutdown
-    for(int i=0; i<mergedata.size(); i++)
+    for(size_t i=0; i<mergedata.size(); i++)
     {
         logtable *ltable = mergedata[i].first;
         logtable_mergedata *mdata = mergedata[i].second;
@@ -113,7 +113,7 @@ void merge_scheduler::shutdown()
 
     }
 
-    for(int i=0; i<mergedata.size(); i++)
+    for(size_t i=0; i<mergedata.size(); i++)
     {
         logtable_mergedata *mdata = mergedata[i].second;
         
