@@ -1,17 +1,6 @@
 #include "logstore.h"
 #include "logiterators.h"
 
-//template <class MEMTREE, class TUPLE>
-/*
-template <>
-const byte* toByteArray<std::set<datatuple,datatuple>, datatuple>(
-    memTreeIterator<std::set<datatuple,datatuple>, datatuple> * const t)
-{
-    return (*(t->it_)).to_bytes();
-}
-*/
-
-
 /////////////////////////////////////////////////////////////////////
 // tree iterator implementation
 /////////////////////////////////////////////////////////////////////
@@ -28,20 +17,9 @@ treeIterator<TUPLE>::treeIterator(recordid tree) :
 template <class TUPLE>
 treeIterator<TUPLE>::treeIterator(recordid tree, TUPLE& key) :
     tree_(tree),
-    //scratch_(),
-    lsmIterator_(logtreeIterator::openAt(-1,tree,key.get_key()))//toByteArray())),
-    //slot_(0)
+    lsmIterator_(logtreeIterator::openAt(-1,tree,key.get_key()))
 {
     init_helper();
-
-    /*
-    treeIterator * end = this->end();
-    for(;*this != *end && **this < key; ++(*this))
-    {
-        DEBUG("treeIterator was not at the given TUPLE");
-    }
-    delete end;
-    */
 
 }
 
@@ -126,70 +104,9 @@ TUPLE * treeIterator<TUPLE>::getnext()
             readTuple = dp_itr->getnext(-1); 
             assert(readTuple);
         }
-        else
-        {
-            // TODO: what is this?
-            //past end of iterator!  "end" should contain the pageid of the
-            // last leaf, and 1+ numslots on that page.
-            //abort();            
-        }
+      // else readTuple is null.  We're done.
     }
     
-    return curr_tuple=readTuple;
+    curr_tuple = readTuple;
+    return curr_tuple;
 }
-
-
-
-/*
-template <class TUPLE>
-treeIterator<TUPLE>::treeIterator(treeIteratorHandle* tree, TUPLE& key) :
-    tree_(tree?tree->r_:NULLRID),
-    scratch_(),
-    lsmIterator_(logtreeIterator::openAt(-1,tree?tree->r_:NULLRID,key.get_key())),//toByteArray())),
-    slot_(0)
-{
-    init_helper();
-    if(lsmIterator_) {
-        treeIterator * end = this->end();
-        for(;*this != *end && **this < key; ++(*this)) { }
-        delete end;
-    } else {
-        this->slot_ = 0;
-        this->pageid_ = 0;
-    }
-}
-
-template <class TUPLE>
-treeIterator<TUPLE>::treeIterator(recordid tree, TUPLE &scratch) :
-    tree_(tree),
-    scratch_(scratch),
-    lsmIterator_(logtreeIterator::open(-1,tree)),
-    slot_(0)
-{
-    init_helper();
-}
-
-template <class TUPLE>
-treeIterator<TUPLE>::treeIterator(treeIteratorHandle* tree) :
-    tree_(tree?tree->r_:NULLRID),
-    scratch_(),
-    lsmIterator_(logtreeIterator::open(-1,tree?tree->r_:NULLRID)),
-    slot_(0)
-{
-    init_helper();
-}
-
-template <class TUPLE>
-treeIterator<TUPLE>::treeIterator(treeIterator& t) :
-    tree_(t.tree_),
-    scratch_(t.scratch_),    
-    lsmIterator_(t.lsmIterator_?logtreeIterator::copy(-1,t.lsmIterator_):0),
-    slot_(t.slot_),
-    pageid_(t.pageid_),
-    p_((Page*)((t.p_)?loadPage(-1,t.p_->id):0))
-    //currentPage_((PAGELAYOUT*)((p_)?p_->impl:0))
-{
-    if(p_)
-        readlock(p_->rwlatch,0);
-}
-*/

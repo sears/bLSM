@@ -1232,7 +1232,6 @@ void logtable::insertTuple(struct datatuple &tuple)
     //static int count = LATCH_INTERVAL;
     //static int tsize = 0; //number of tuples
     //static int64_t tree_bytes = 0; //number of bytes
-    static const size_t isize = sizeof(uint32_t);
 
     //lock the red-black tree
     readlock(mergedata->header_lock,0);
@@ -1256,25 +1255,10 @@ void logtable::insertTuple(struct datatuple &tuple)
     }
     else //no tuple with same key exists in mem-tree
     {
-    
-        //create a copy    
-        datatuple t;
-        byte *arr = (byte*) malloc(tuple.byte_length());
-        
-        t.keylen = (uint32_t*) arr;
-        *t.keylen = *tuple.keylen;
-        t.datalen = (uint32_t*) (arr+isize);
-        *t.datalen = *tuple.datalen;
-        t.key = (datatuple::key_t) (arr+isize+isize);
-        memcpy((byte*)t.key, (byte*)tuple.key, *t.keylen);
-        if(!tuple.isDelete())
-        {
-            t.data = (datatuple::data_t) (arr+isize+isize+ *(t.keylen));
-            memcpy((byte*)t.data, (byte*)tuple.data, *t.datalen);
-        }
-        else
-            t.data = 0;
-    
+
+    	datatuple t;
+    	t.clone(tuple);
+
         //insert tuple into the rbtree        
         tree_c0->insert(t);
         tsize++;

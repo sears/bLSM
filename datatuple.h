@@ -18,6 +18,7 @@ typedef struct datatuple
 {
     typedef uchar* key_t;
     typedef uchar* data_t;
+    static const size_t isize = sizeof(uint32_t);
     uint32_t *keylen;    //key length should be size of string + 1 for \n
     uint32_t *datalen; 
     key_t key;
@@ -31,6 +32,26 @@ typedef struct datatuple
             return strcmp((char*)lhs.key,(char*)rhs.key) < 0;
             //return (*((int32_t*)lhs.key)) <= (*((int32_t*)rhs.key));
         }
+
+    void clone(const datatuple& tuple) {
+		//create a copy
+
+    	byte * arr = (byte*) malloc(tuple.byte_length());
+
+		keylen = (uint32_t*) arr;
+		*keylen = *tuple.keylen;
+		datalen = (uint32_t*) (arr+isize);
+		*datalen = *tuple.datalen;
+		key = (datatuple::key_t) (arr+isize+isize);
+		memcpy((byte*)key, (byte*)tuple.key, *keylen);
+		if(!tuple.isDelete())
+		{
+			data = (datatuple::data_t) (arr+isize+isize+ *keylen);
+			memcpy((byte*)data, (byte*)tuple.data, *datalen);
+		}
+		else
+			data = 0;
+    }
 
     /**
      * return -1 if k1 < k2

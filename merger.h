@@ -50,7 +50,7 @@ struct merger_args
     logtree ** out_tree;
     void * out_tree_allocer;
 
-    treeIterator<datatuple>::treeIteratorHandle *my_tree;
+    recordid my_tree;
     
     recordid tree;    
 };
@@ -104,21 +104,14 @@ public:
 
 void* memMergeThread(void* arg);
 
-//merges and returns the number of data pages used
+template <class ITA, class ITB>
 int64_t merge_iterators(int xid,
-                     treeIterator<datatuple> *itrA,
-                     memTreeIterator<rbtree_t, datatuple> * itrB,
-                     logtable *ltable,
-                    logtree *scratch_tree,
-                    int64_t &npages);
-
-                     
-int64_t merge_iterators(int xid,
-                    treeIterator<datatuple> *itrA,
-                    treeIterator<datatuple> *itrB,
+                    ITA *itrA,
+                    ITB *itrB,
                     logtable *ltable,
                     logtree *scratch_tree,
-                    int64_t &npages);
+                    int64_t &npages,
+                    bool dropDeletes);
 
 
 void* diskMergeThread(void* arg);

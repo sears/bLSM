@@ -187,7 +187,7 @@ void merge_scheduler::startlogtable(int index)
             allocer_scratch, //in_tree_allocer
             0, //out_tree
             0, //out_tree_allocer
-            new treeIterator<datatuple>::treeIteratorHandle(ltable->get_tree_c2()->get_root_rec()),        // my_tree
+            ltable->get_tree_c2()->get_root_rec(), // my_tree
             ltable->get_table_rec() //tree
                 };
 
@@ -227,7 +227,7 @@ void merge_scheduler::startlogtable(int index)
             0,
             block1_scratch,
             allocer_scratch,
-            new treeIterator<datatuple>::treeIteratorHandle(ltable->get_tree_c1()->get_root_rec()),
+            ltable->get_tree_c1()->get_root_rec(),
             ltable->get_table_rec() //tree
         };
     
@@ -250,7 +250,7 @@ void* memMergeThread(void*arg)
     int xid;// = Tbegin();
 
     merger_args<rbtree_t> * a = (merger_args<rbtree_t>*)(arg);    
-    assert(a->my_tree->r_.size != -1);
+    assert(a->my_tree.size != -1);
 
     logtable * ltable = a->ltable;
     
@@ -307,14 +307,13 @@ void* memMergeThread(void*arg)
         uint64_t insertedTuples=0;
         int64_t mergedPages=0;
         
-        assert(a->my_tree->r_.size != -1);
+        assert(a->my_tree.size != -1);
         
         //create the iterators
-        treeIterator<datatuple> *itrA = new treeIterator<datatuple>(a->my_tree->r_);
+        treeIterator<datatuple> *itrA = new treeIterator<datatuple>(a->my_tree);
         memTreeIterator<rbtree_t, datatuple> *itrB =
-            new memTreeIterator<rbtree_t, datatuple>(*a->in_tree);
-        memTreeIterator<rbtree_t, datatuple> *itrBend = itrB->end();
-        
+        		new memTreeIterator<rbtree_t, datatuple>(*a->in_tree);
+
         //Tcommit(xid);
         xid = Tbegin();
         
@@ -335,11 +334,10 @@ void* memMergeThread(void*arg)
         printf("mmt:\tMerging:\n");
 
         int64_t npages = 0;
-        mergedPages = merge_iterators(xid, itrA, itrB, ltable, scratch_tree, npages);
+        mergedPages = merge_iterators<typeof(*itrA),typeof(*itrB)>(xid, itrA, itrB, ltable, scratch_tree, npages, false);
       
         delete itrA;
         delete itrB;
-        delete itrBend;
         
         //force write the new region to disk
         recordid scratch_alloc_state = scratch_tree->get_tree_state();        
@@ -376,7 +374,7 @@ void* memMergeThread(void*arg)
         
         // free old my_tree here
         //TODO: check
-        logtree::free_region_rid(xid, a->my_tree->r_, logtree::dealloc_region_rid, oldAllocState);
+        logtree::free_region_rid(xid, a->my_tree, logtree::dealloc_region_rid, oldAllocState);
 
         
         //TlsmFree(xid,a->my_tree->r_,logtree::dealloc_region_rid,oldAllocState);
@@ -423,7 +421,7 @@ void* memMergeThread(void*arg)
             
             *(recordid*)(a->pageAllocState) = empty_tree->get_tree_state();
 
-            a->my_tree->r_ = empty_tree->get_root_rec();
+            a->my_tree = empty_tree->get_root_rec();
 
             ltable->set_tree_c1(empty_tree);
 
@@ -444,7 +442,7 @@ void* memMergeThread(void*arg)
         {
             printf("mmt:\tnot signaling C2 for merge\n");
             *(recordid*)a->pageAllocState = scratch_alloc_state;      
-            a->my_tree->r_ = scratch_root;
+            a->my_tree = scratch_root;
         }
 
         rbtree_ptr_t deltree = *a->in_tree;
@@ -480,12 +478,13 @@ void* memMergeThread(void*arg)
 
 }
 
+
 void *diskMergeThread(void*arg)
 {
     int xid;// = Tbegin();
 
     merger_args<logtree> * a = (merger_args<logtree>*)(arg);    
-    assert(a->my_tree->r_.size != -1);
+    assert(a->my_tree.size != -1);
 
     logtable * ltable = a->ltable;
     
@@ -530,10 +529,10 @@ void *diskMergeThread(void*arg)
         uint64_t insertedTuples=0;
         int64_t mergedPages=0;
         
-        assert(a->my_tree->r_.size != -1);
+        assert(a->my_tree.size != -1);
         
         //create the iterators
-        treeIterator<datatuple> *itrA = new treeIterator<datatuple>(a->my_tree->r_);
+        treeIterator<datatuple> *itrA = new treeIterator<datatuple>(a->my_tree);
         treeIterator<datatuple> *itrB =
             new treeIterator<datatuple>((*a->in_tree)->get_root_rec());
         
@@ -559,7 +558,7 @@ void *diskMergeThread(void*arg)
         printf("dmt:\tMerging:\n");
 
         int64_t npages = 0;
-        mergedPages = merge_iterators(xid, itrA, itrB, ltable, scratch_tree, npages);
+        mergedPages = merge_iterators<typeof(*itrA),typeof(*itrB)>(xid, itrA, itrB, ltable, scratch_tree, npages, true);
       
         delete itrA;
         delete itrB;        
@@ -602,7 +601,7 @@ void *diskMergeThread(void*arg)
         
         // free old my_tree here
         //TODO: check
-        logtree::free_region_rid(xid, a->my_tree->r_, logtree::dealloc_region_rid, oldAllocState);        
+        logtree::free_region_rid(xid, a->my_tree, logtree::dealloc_region_rid, oldAllocState);
         //TlsmFree(xid,a->my_tree->r_,logtree::dealloc_region_rid,oldAllocState);
         
         //TODO: check
@@ -612,7 +611,7 @@ void *diskMergeThread(void*arg)
         
         
         *(recordid*)a->pageAllocState = scratch_alloc_state;      
-        a->my_tree->r_ = scratch_root;
+        a->my_tree = scratch_root;
         
         //// ----------- Free in_tree
         //TODO: check
@@ -643,97 +642,17 @@ void *diskMergeThread(void*arg)
 
 }
 
+template <class ITA, class ITB>
 int64_t merge_iterators(int xid,
-                     treeIterator<datatuple> *itrA,
-                     memTreeIterator<rbtree_t, datatuple> * itrB,
-                     logtable *ltable,
-                    logtree *scratch_tree,
-                    int64_t &npages )
-{
-    int64_t dpages = 0;
-    //int npages = 0;
-    int64_t ntuples = 0;
-    DataPage<datatuple> *dp = 0;
-
-    memTreeIterator<rbtree_t, datatuple> *itrBend = itrB->end();
-    datatuple *t1 = itrA->getnext();
-    
-    while(*itrB != *itrBend)
-    {
-        datatuple t2 = **itrB;
-        DEBUG("tuple\t%lld: keylen %d datalen %d\n", ntuples, *t2.keylen,*t2.datalen );        
-
-        while(t1 != 0 && datatuple::compare(t1->key, t2.key) < 0) // t1 is less than t2
-        {
-            //insert t1
-            dp = insertTuple(xid, dp, *t1, ltable, scratch_tree, ltable->get_dpstate1(),
-                         dpages, npages);
-
-            free(t1->keylen);
-            free(t1);            
-            ntuples++;      
-            //advance itrA
-            t1 = itrA->getnext();
-        }
-
-        if(t1 != 0 && datatuple::compare(t1->key, t2.key) == 0)
-        {
-            datatuple *mtuple = ltable->gettuplemerger()->merge(t1,&t2);
-            //insert merged tuple
-            dp = insertTuple(xid, dp, *mtuple, ltable, scratch_tree, ltable->get_dpstate1(),
-                             dpages, npages);
-            free(t1->keylen);
-            free(t1);
-            t1 = itrA->getnext();  //advance itrA
-            free(mtuple->keylen);
-            free(mtuple);
-        }
-        else
-        {
-            //insert t2
-            dp = insertTuple(xid, dp, t2, ltable, scratch_tree, ltable->get_dpstate1(),
-                             dpages, npages);
-            //free(t2.keylen); //cannot free here it may still be read through a lookup
-        }
-        
-        ntuples++;        
-        ++(*itrB);        
-    }
-
-    while(t1 != 0) // t1 is less than t2
-        {
-            dp = insertTuple(xid, dp, *t1, ltable, scratch_tree, ltable->get_dpstate1(),
-                             dpages, npages);
-
-            free(t1->keylen);
-            free(t1);        
-            ntuples++;      
-            //advance itrA
-            t1 = itrA->getnext();
-        }
-        
-        
-    delete itrBend;
-    if(dp!=NULL)
-        delete dp;
-    DEBUG("dpages: %d\tnpages: %d\tntuples: %d\n", dpages, npages, ntuples);
-    fflush(stdout);
-
-
-    return dpages;
-
-}
-
-
-int64_t merge_iterators(int xid,
-                        treeIterator<datatuple> *itrA, //iterator on c2
-                        treeIterator<datatuple> *itrB, //iterator on c1
+                        ITA *itrA, //iterator on c1 or c2
+                        ITB *itrB, //iterator on c0 or c1, respectively
                         logtable *ltable,
                         logtree *scratch_tree,
-                        int64_t &npages)
+                        int64_t &npages,
+                        bool dropDeletes  // should be true iff this is biggest component
+                        )
 {
     int64_t dpages = 0;
-    //int npages = 0;
     int64_t ntuples = 0;
     DataPage<datatuple> *dp = 0;
 
@@ -764,7 +683,7 @@ int64_t merge_iterators(int xid,
             datatuple *mtuple = ltable->gettuplemerger()->merge(t1,t2);
             
             //insert merged tuple, drop deletes
-            if(!mtuple->isDelete())
+            if(dropDeletes && !mtuple->isDelete())
                 dp = insertTuple(xid, dp, *mtuple, ltable, scratch_tree, ltable->get_dpstate2(),
                                  dpages, npages);
             
@@ -779,6 +698,7 @@ int64_t merge_iterators(int xid,
             //insert t2
             dp = insertTuple(xid, dp, *t2, ltable, scratch_tree, ltable->get_dpstate2(),
                              dpages, npages);
+            // cannot free any tuples here; they may still be read through a lookup
         }
         
         free(t2->keylen);
@@ -786,7 +706,7 @@ int64_t merge_iterators(int xid,
         ntuples++;
     }
 
-    while(t1 != 0) 
+    while(t1 != 0) // t1 is less than t2
         {
             dp = insertTuple(xid, dp, *t1, ltable, scratch_tree, ltable->get_dpstate2(),
                              dpages, npages);
@@ -801,7 +721,6 @@ int64_t merge_iterators(int xid,
     if(dp!=NULL)
         delete dp;
     DEBUG("dpages: %d\tnpages: %d\tntuples: %d\n", dpages, npages, ntuples);
-    fflush(stdout);
     
     return dpages;
 
