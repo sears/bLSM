@@ -11,6 +11,9 @@
 #include <time.h>
 #include <sys/types.h> 
 
+#include "../tcpclient.h"
+#include "../network.h"
+
 #include "check_util.h"
 
 #undef begin
@@ -23,8 +26,11 @@ static int svrport = 32432;
 void insertProbeIter(size_t NUM_ENTRIES)
 {
     srand(1000);
-    std::string servername = svrname; //"sherpa4";
-    int serverport = svrport; //32432;
+//    std::string servername = svrname; //"sherpa4";
+  //  int serverport = svrport; //32432;
+
+    logstore_handle_t * l = logstore_client_open(svrname, svrport, 100);
+
 
     double delete_freq = .05;
     double update_freq = .15;
@@ -144,11 +150,13 @@ void insertProbeIter(size_t NUM_ENTRIES)
         gettimeofday(&ti_st,0);        
 
         //send the data
-        datatuple * ret = sendTuple(servername, serverport, logserver::OP_INSERT, newtuple);
+//        datatuple * ret = sendTuple(servername, serverport, OP_INSERT, newtuple);
+        datatuple * ret = logstore_client_op(l, OP_INSERT, newtuple);
         assert(ret);
         
         gettimeofday(&ti_end,0);
-        insert_time += tv_to_double(ti_end) - tv_to_double(ti_st);
+//        insert_time += tv_to_double(ti_end) - tv_to_double(ti_st);
+        insert_time ++; // XXX
 
         free(newtuple.key);
         free(newtuple.data);
@@ -159,12 +167,13 @@ void insertProbeIter(size_t NUM_ENTRIES)
     }
     gettimeofday(&stop_tv,0);
     printf("insert time: %6.1f\n", insert_time);
-    printf("insert time: %6.1f\n", (tv_to_double(stop_tv) - tv_to_double(start_tv)));
+    printf("insert time: %6.1f\n", -1.0); // XXX (tv_to_double(stop_tv) - tv_to_double(start_tv)));
     printf("#deletions: %d\n#updates: %d\n", delcount, upcount);
 
     
 
     printf("Stage 2: Looking up %d keys:\n", NUM_ENTRIES);
+
 
     int found_tuples=0;
     for(int i=NUM_ENTRIES-1; i>=0; i--)
@@ -186,7 +195,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         memcpy((byte*)searchtuple.key, (*key_arr)[ri].c_str(), keylen);
 
         //find the key with the given tuple
-        datatuple *dt = sendTuple(servername, serverport, logserver::OP_FIND,
+        datatuple *dt = logstore_client_op(l, OP_FIND, //servername, serverport, OP_FIND,
                                   searchtuple);
         
         assert(dt!=0);
@@ -213,8 +222,10 @@ void insertProbeIter(size_t NUM_ENTRIES)
     delete key_arr;
     //delete data_arr;
     
+    logstore_client_close(l);
+
     gettimeofday(&stop_tv,0);
-    printf("run time: %6.1f\n", (tv_to_double(stop_tv) - tv_to_double(start_tv)));
+    printf("run time: %6.1f\n", -1.0); // XXX (tv_to_double(stop_tv) - tv_to_double(start_tv)));
     
 }
 

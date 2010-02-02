@@ -34,6 +34,12 @@ MACRO(CREATE_EXECUTABLE NAME)
   TARGET_LINK_LIBRARIES(${NAME} ${COMMON_LIBRARIES})
 ENDMACRO(CREATE_EXECUTABLE)
 
+MACRO(CREATE_CLIENT_EXECUTABLE NAME)
+  ADD_EXECUTABLE(${NAME} ${NAME}.cpp)
+  TARGET_LINK_LIBRARIES(${NAME} ${CLIENT_LIBRARIES})
+ENDMACRO(CREATE_EXECUTABLE)
+
+
 # Output the config.h file
 #CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/../stasis/
@@ -42,6 +48,8 @@ INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/../stasis/
 		    /usr/include)
 # set linker path for this and all subdirs
 LINK_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/../stasis/build/src/stasis ${CMAKE_CURRENT_BINARY_DIR})
+
+SET(CLIENT_LIBRARIES logstore_client)
 
 IF ( "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" )
   SET(COMMON_LIBRARIES logstore stasis m pthread stdc++)
@@ -62,5 +70,5 @@ ENDIF ( "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" )
 #CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 
 ADD_LIBRARY(logstore logserver.cpp logstore.cpp logiterators.cpp datapage.cpp merger.cpp tuplemerger.cpp)
-
+ADD_LIBRARY(logstore_client tcpclient.cpp datapage.cpp)
 CREATE_EXECUTABLE(server)

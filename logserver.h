@@ -94,17 +94,17 @@ class logserver
 {
 public:
     //server codes
-    static uint8_t OP_SUCCESS;
-    static uint8_t OP_FAIL;
-    static uint8_t OP_SENDING_TUPLE;
-
-    //client codes
-    static uint8_t OP_FIND;
-    static uint8_t OP_INSERT;
-
-    static uint8_t OP_DONE;
-    
-    static uint8_t OP_INVALID;
+//    static uint8_t OP_SUCCESS;
+//    static uint8_t OP_FAIL;
+//    static uint8_t OP_SENDING_TUPLE;
+//
+//    //client codes
+//    static uint8_t OP_FIND;
+//    static uint8_t OP_INSERT;
+//
+//    static uint8_t OP_DONE;
+//
+//    static uint8_t OP_INVALID;
     
 public:
     logserver(int nthreads, int server_port){
@@ -139,32 +139,6 @@ public:
 
     void stopserver();
     
-    
-public:
-
-    // XXX utility methods, pull out into some other class.
-
-    static inline void readfromsocket(int sockd, byte *buf, int count)
-    {
-
-        int n = 0;
-        while( n < count )
-        {
-            n += read( sockd, buf + n, count - n);
-        }
-
-    }
-
-    static inline void writetosocket(int sockd, byte *buf, int count)
-    {
-        int n = 0;
-        while( n < count )
-        {
-            n += write( sockd, buf + n, count - n);
-        }
-    }
-
-
 private:
 
     //main loop of server

@@ -6,6 +6,8 @@
 
 #include "logstore.h"
 
+#include "network.h"
+
 #include <sys/types.h> 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -18,19 +20,6 @@
 #undef end
 #undef try
 
-
-//server codes
-uint8_t logserver::OP_SUCCESS = 1;
-uint8_t logserver::OP_FAIL = 2;
-uint8_t logserver::OP_SENDING_TUPLE = 3;
-
-//client codes
-uint8_t logserver::OP_FIND = 4;
-uint8_t logserver::OP_INSERT = 5;
-
-uint8_t logserver::OP_DONE = 6;
-
-uint8_t logserver::OP_INVALID = 32;
 
 void *serverLoop(void *args);
 
@@ -441,14 +430,14 @@ void * thread_work_fn( void * args)
         uint8_t opcode;
         ssize_t n = read(*(item->data->workitem), &opcode, sizeof(uint8_t));
         if(n == 0) {
-        	opcode = logserver::OP_DONE;
+        	opcode = OP_DONE;
         	n = sizeof(uint8_t);
         	printf("Obsolescent client closed connection uncleanly\n");
         }
         assert( n == sizeof(uint8_t));
-        assert( opcode < logserver::OP_INVALID );
+        assert( opcode < OP_INVALID );
 
-        if( opcode == logserver::OP_DONE ) //close the conn on failure
+        if( opcode == OP_DONE ) //close the conn on failure
         {
             pthread_mutex_lock(item->data->qlock);            
             printf("client done. conn closed. (%d, %d, %d, %d)\n",
@@ -489,12 +478,12 @@ void * thread_work_fn( void * args)
         
         //read the key
         tuple.key = (byte*) malloc(*tuple.keylen);
-        logserver::readfromsocket(*(item->data->workitem), (byte*) tuple.key, *tuple.keylen);
+        readfromsocket(*(item->data->workitem), (char*) tuple.key, *tuple.keylen);
         //read the data
-        if(!tuple.isDelete() && opcode != logserver::OP_FIND)
+        if(!tuple.isDelete() && opcode != OP_FIND)
         {
             tuple.data = (byte*) malloc(*tuple.datalen);
-            logserver::readfromsocket(*(item->data->workitem), (byte*) tuple.data, *tuple.datalen);
+            readfromsocket(*(item->data->workitem), (char*) tuple.data, *tuple.datalen);
         }
         else
             tuple.data = 0;
@@ -503,7 +492,7 @@ void * thread_work_fn( void * args)
         //pthread_mutex_lock(item->data->table_lock);
         //readlock(item->data->table_lock,0);
         
-        if(opcode == logserver::OP_INSERT)
+        if(opcode == OP_INSERT)
         {
             //insert/update/delete
             item->data->ltable->insertTuple(tuple);
@@ -511,12 +500,12 @@ void * thread_work_fn( void * args)
             //pthread_mutex_unlock(item->data->table_lock);
             //unlock(item->data->table_lock);
             //step 4: send response
-            uint8_t rcode = logserver::OP_SUCCESS;
+            uint8_t rcode = OP_SUCCESS;
             n = write(*(item->data->workitem), &rcode, sizeof(uint8_t));
             assert(n == sizeof(uint8_t));
             
         }
-        else if(opcode == logserver::OP_FIND)
+        else if(opcode == OP_FIND)
         {
             //find the tuple
             datatuple *dt = item->data->ltable->findTuple(-1, tuple.key, *tuple.keylen);
@@ -550,12 +539,12 @@ void * thread_work_fn( void * args)
             }
 
             //send the reply code
-            uint8_t rcode = logserver::OP_SENDING_TUPLE;
+            uint8_t rcode = OP_SENDING_TUPLE;
             n = write(*(item->data->workitem), &rcode, sizeof(uint8_t));
             assert(n == sizeof(uint8_t));
 
             //send the tuple
-            logserver::writetosocket(*(item->data->workitem), (byte*) dt->keylen, dt->byte_length());
+            writetosocket(*(item->data->workitem), (char*) dt->keylen, dt->byte_length());
 
             //free datatuple
             free(dt->keylen);
