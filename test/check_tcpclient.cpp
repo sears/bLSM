@@ -16,11 +16,15 @@
 #undef begin
 #undef end
 
+
+static char * svrname = "localhost";
+static int svrport = 32432;
+
 void insertProbeIter(size_t NUM_ENTRIES)
 {
     srand(1000);
-    std::string servername = "sherpa4";
-    int serverport = 32432;
+    std::string servername = svrname; //"sherpa4";
+    int serverport = svrport; //32432;
 
     double delete_freq = .05;
     double update_freq = .15;
@@ -140,7 +144,8 @@ void insertProbeIter(size_t NUM_ENTRIES)
         gettimeofday(&ti_st,0);        
 
         //send the data
-        sendTuple(servername, serverport, logserver::OP_INSERT, newtuple);
+        datatuple * ret = sendTuple(servername, serverport, logserver::OP_INSERT, newtuple);
+        assert(ret);
         
         gettimeofday(&ti_end,0);
         insert_time += tv_to_double(ti_end) - tv_to_double(ti_st);
@@ -217,8 +222,14 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
 /** @test
  */
-int main()
+int main(int argc, char* argv[])
 {
+	if(argc > 1) {
+		svrname = argv[1];
+	}
+	if(argc > 2) {
+		svrport = atoi(argv[2]);
+	}
     //insertProbeIter(25000);
     insertProbeIter(100000);
     /*

@@ -440,6 +440,11 @@ void * thread_work_fn( void * args)
         //step 1: read the opcode
         uint8_t opcode;
         ssize_t n = read(*(item->data->workitem), &opcode, sizeof(uint8_t));
+        if(n == 0) {
+        	opcode = logserver::OP_DONE;
+        	n = sizeof(uint8_t);
+        	printf("Obsolescent client closed connection uncleanly\n");
+        }
         assert( n == sizeof(uint8_t));
         assert( opcode < logserver::OP_INVALID );
 

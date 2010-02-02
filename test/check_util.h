@@ -162,13 +162,14 @@ datatuple * sendTuple(std::string & servername, int serverport, uint8_t opcode, 
 
     if (sockfd < 0)
     {
-        printf("ERROR opening socket.\n");
+        perror("ERROR opening socket.\n");
         return 0;
     }
 
     server = gethostbyname(servername.c_str());
     if (server == NULL) {
         fprintf(stderr,"ERROR, no such host as %s\n", servername.c_str());
+        close(sockfd);
         exit(0);
     }
 
@@ -182,7 +183,8 @@ datatuple * sendTuple(std::string & servername, int serverport, uint8_t opcode, 
     /* connect: create a connection with the server */
     if (connect(sockfd, (sockaddr*) &serveraddr, sizeof(serveraddr)) < 0)
     {
-        printf("ERROR connecting\n");
+    	perror("ERROR connecting\n");
+        close(sockfd);
         return 0;
     }
 
@@ -206,6 +208,8 @@ datatuple * sendTuple(std::string & servername, int serverport, uint8_t opcode, 
     uint8_t rcode;
     n = read(sockfd, (byte*) &rcode, sizeof(uint8_t));
 
+    datatuple * ret;
+
     if(rcode == logserver::OP_SENDING_TUPLE)
     {
         datatuple *rcvdtuple = (datatuple*)malloc(sizeof(datatuple));
@@ -227,14 +231,15 @@ datatuple * sendTuple(std::string & servername, int serverport, uint8_t opcode, 
             logserver::readfromsocket(sockfd, (byte*) rcvdtuple->data, *rcvdtuple->datalen);
         }
 
-        close(sockfd);
-        return rcvdtuple;
+        ret = rcvdtuple;
+    } else if(rcode == logserver::OP_SUCCESS) {
+       	ret = &tuple;
+    } else {
+    	ret = 0;
     }
-    else
-        assert(rcode == logserver::OP_SUCCESS);
 
     close(sockfd);
-    return 0;
+    return ret;
 }
 
 
