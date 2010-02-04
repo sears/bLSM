@@ -21,15 +21,16 @@ private:
     typedef typename MEMTREE::const_iterator MTITER;
 
 public:
-    memTreeIterator( MEMTREE *s ) : first_(true), it_(s->begin()), itend_(s->end()) { }
-    memTreeIterator( MEMTREE *s, TUPLE &key ) : first_(true), it_(s->find(key)), itend_(s->end()) { }
+    memTreeIterator( MEMTREE *s ) : first_(true), done_(false), it_(s->begin()), itend_(s->end()) { }
+    memTreeIterator( MEMTREE *s, TUPLE &key ) : first_(true), done_(false), it_(s->find(key)), itend_(s->end()) { }
 
     ~memTreeIterator() { }
 
     TUPLE* getnext() {
-    	if(it_==itend_) { return NULL; }
-    	if(first_) { first_ = 0;} else { it_++; }
-    	TUPLE *t = new TUPLE();
+       	if(done_) { return NULL; }
+       	if(first_) { first_ = 0;} else { it_++; }
+		if(it_==itend_) { done_= true; return NULL; }
+		TUPLE *t = new TUPLE();
     	t->clone(*it_);
     	return t;
     }
@@ -41,6 +42,7 @@ private:
   int operator-(memTreeIterator & t) { abort(); }
 private:
   bool first_;
+  bool done_;
   MTITER it_;
   MTITER itend_;
 };
