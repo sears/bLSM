@@ -516,13 +516,13 @@ void * thread_work_fn( void * args)
             #ifdef STATS_ENABLED
 
             if(dt == 0)
-                printf("key not found:\t%s\n", datatuple::key_to_str(tuple.key).c_str());
+                DEBUG("key not found:\t%s\n", datatuple::key_to_str(tuple.key).c_str());
             else if( *dt->datalen != 1024)
-                printf("data len for\t%s:\t%d\n", datatuple::key_to_str(tuple.key).c_str(),
+                DEBUG("data len for\t%s:\t%d\n", datatuple::key_to_str(tuple.key).c_str(),
                        *dt->datalen);
 
             if(datatuple::compare(tuple.key, dt->key) != 0)
-                printf("key not equal:\t%s\t%s\n", datatuple::key_to_str(tuple.key).c_str(),
+                DEBUG("key not equal:\t%s\t%s\n", datatuple::key_to_str(tuple.key).c_str(),
                        datatuple::key_to_str(dt->key).c_str());
             
             #endif
