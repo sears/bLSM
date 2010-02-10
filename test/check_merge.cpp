@@ -72,34 +72,14 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     struct timeval start_tv, stop_tv, ti_st, ti_end;
     double insert_time = 0;
-    int dpages = 0;
-    int npages = 0;
-    DataPage<datatuple> *dp=0;
     int64_t datasize = 0;
     std::vector<pageid_t> dsp;
     gettimeofday(&start_tv,0);
     for(size_t i = 0; i < NUM_ENTRIES; i++)
     {
         //prepare the key
-        datatuple newtuple;        
-        uint32_t keylen = (*key_arr)[i].length()+1;
-        newtuple.keylen = &keylen;
-        
-        newtuple.key = (datatuple::key_t) malloc(keylen);
-        memcpy((byte*)newtuple.key, (*key_arr)[i].c_str(), keylen);
-        //for(int j=0; j<keylen-1; j++)
-        //    newtuple.key[j] = (*key_arr)[i][j];
-        //newtuple.key[keylen-1]='\0';
+        datatuple *newtuple = datatuple::create((*key_arr)[i].c_str(), (*key_arr)[i].length()+1,(*data_arr)[i].c_str(), (*data_arr)[i].length()+1);
 
-        //prepare the data
-        uint32_t datalen = (*data_arr)[i].length()+1;
-        newtuple.datalen = &datalen;        
-        newtuple.data = (datatuple::data_t) malloc(datalen);
-        memcpy((byte*)newtuple.data, (*data_arr)[i].c_str(), datalen);
-//        for(int j=0; j<datalen-1; j++)
-//            newtuple.data[j] = (*data_arr)[i][j];
-//        newtuple.data[datalen-1]='\0';        
-        
         /*
         printf("key: \t, keylen: %u\ndata:  datalen: %u\n",
                //newtuple.key,
@@ -108,15 +88,14 @@ void insertProbeIter(size_t NUM_ENTRIES)
                *newtuple.datalen);
                */
         
-        datasize += newtuple.byte_length();
+        datasize += newtuple->byte_length();
 
         gettimeofday(&ti_st,0);        
         ltable.insertTuple(newtuple);
         gettimeofday(&ti_end,0);
         insert_time += tv_to_double(ti_end) - tv_to_double(ti_st);
 
-        free(newtuple.key);
-        free(newtuple.data);
+        datatuple::freetuple(newtuple);
         
     }
     gettimeofday(&stop_tv,0);
@@ -155,11 +134,10 @@ void insertProbeIter(size_t NUM_ENTRIES)
         assert(dt!=0);
         //if(dt!=0)
         {
-        found_tuples++;
-        assert(*(dt->keylen) == (*key_arr)[ri].length()+1);
-        assert(*(dt->datalen) == (*data_arr)[ri].length()+1);
-        free(dt->keylen);
-        free(dt);
+			found_tuples++;
+			assert(dt->keylen() == (*key_arr)[ri].length()+1);
+			assert(dt->datalen() == (*data_arr)[ri].length()+1);
+			datatuple::freetuple(dt);
         }
         dt = 0;
         free(rkey);

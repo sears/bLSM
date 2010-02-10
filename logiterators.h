@@ -30,9 +30,8 @@ public:
        	if(done_) { return NULL; }
        	if(first_) { first_ = 0;} else { it_++; }
 		if(it_==itend_) { done_= true; return NULL; }
-		TUPLE *t = new TUPLE();
-    	t->clone(*it_);
-    	return t;
+
+    	return (*it_)->create_copy();
     }
 
 

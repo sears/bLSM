@@ -3,12 +3,13 @@
 #include "merger.h"
 #include "logiterators.cpp"
 #include "datapage.h"
+
 //pageid_t merge_scheduler::C0_MEM_SIZE = 1000 * 1000 * 1000;
 
 //template <> struct merger_args<rbtree_t>;
 //template <> struct merger_args<logtree>;
 inline DataPage<datatuple>*
-insertTuple(int xid, DataPage<datatuple> *dp, datatuple &t,
+insertTuple(int xid, DataPage<datatuple> *dp, datatuple *t,
             logtable *ltable,
             logtree * ltree,
             recordid & dpstate,
@@ -124,8 +125,9 @@ void merge_scheduler::shutdown()
 
 }
 
-void merge_scheduler::startlogtable(int index)
+void merge_scheduler::startlogtable(int index, int64_t MAX_C0_SIZE)
 {
+
     logtable * ltable = mergedata[index].first;
     struct logtable_mergedata *mdata = mergedata[index].second;
 
@@ -157,6 +159,8 @@ void merge_scheduler::startlogtable(int index)
     *ridp = ltable->get_tree_c2()->get_tree_state(); //h.bigTreeAllocState;
     recordid * oldridp = new recordid;
     *oldridp = NULLRID;
+
+    ltable->max_c0_size = MAX_C0_SIZE;
 
     logtree ** block1_scratch = new logtree*;
     *block1_scratch=0;
@@ -391,12 +395,12 @@ void* memMergeThread(void*arg)
         double target_R = *(a->r_i);
         double new_c1_size = npages * PAGE_SIZE;
         assert(target_R >= MIN_R);
-        if( (new_c1_size / MAX_C0_SIZE > target_R) ||
+        if( (new_c1_size / ltable->max_c0_size > target_R) ||
             (a->max_size && new_c1_size > a->max_size ) )
         {
             printf("mmt:\tsignaling C2 for merge\n");
             printf("mmt:\tnew_c1_size %.2f\tMAX_C0_SIZE %lld\ta->max_size %lld\t targetr %.2f \n", new_c1_size,
-                   MAX_C0_SIZE, a->max_size, target_R);
+                   ltable->max_c0_size, a->max_size, target_R);
             
             // XXX need to report backpressure here!
             while(*a->out_tree) {
@@ -454,22 +458,10 @@ void* memMergeThread(void*arg)
         
         //TODO: get the freeing outside of the lock
         //// ----------- Free in_tree
-        for(rbtree_t::iterator delitr=deltree->begin();
-            delitr != deltree->end(); delitr++)
-            free((*delitr).keylen);
-        
-        delete deltree;        
+        logtable::tearDownTree(deltree);
         //deltree = 0;       
 
 
-        /*
-        for(rbtree_t::iterator delitr=(*a->in_tree)->begin();
-            delitr != (*a->in_tree)->end(); delitr++)
-            free((*delitr).keylen);
-        
-        delete *a->in_tree;        
-        *a->in_tree = 0;       
-        */
     }
 
     //pthread_mutex_unlock(a->block_ready_mut);
@@ -580,7 +572,7 @@ void *diskMergeThread(void*arg)
         merge_count++;        
         *a->my_tree_size = mergedPages;
         //update the current optimal R value
-        *(a->r_i) = std::max(MIN_R, sqrt( (npages * 1.0) / (MAX_C0_SIZE/PAGE_SIZE) ) );
+        *(a->r_i) = std::max(MIN_R, sqrt( (npages * 1.0) / (ltable->max_c0_size/PAGE_SIZE) ) );
         
         printf("dmt:\tmerge_count %d\t#written pages: %lld\n optimal r %.2f", merge_count, npages, *(a->r_i));
 
@@ -664,55 +656,50 @@ int64_t merge_iterators(int xid,
         DEBUG("tuple\t%lld: keylen %d datalen %d\n",
                ntuples, *(t2->keylen),*(t2->datalen) );        
 
-        while(t1 != 0 && datatuple::compare(t1->key, t2->key) < 0) // t1 is less than t2
+        while(t1 != 0 && datatuple::compare(t1->key(), t2->key()) < 0) // t1 is less than t2
         {
             //insert t1
-            dp = insertTuple(xid, dp, *t1, ltable, scratch_tree,
+            dp = insertTuple(xid, dp, t1, ltable, scratch_tree,
                              ltable->get_dpstate2(),
                              dpages, npages);
 
-            free(t1->keylen);
-            free(t1);            
+            datatuple::freetuple(t1);
             ntuples++;      
             //advance itrA
             t1 = itrA->getnext();
         }
 
-        if(t1 != 0 && datatuple::compare(t1->key, t2->key) == 0)
+        if(t1 != 0 && datatuple::compare(t1->key(), t2->key()) == 0)
         {
             datatuple *mtuple = ltable->gettuplemerger()->merge(t1,t2);
             
             //insert merged tuple, drop deletes
             if(dropDeletes && !mtuple->isDelete())
-                dp = insertTuple(xid, dp, *mtuple, ltable, scratch_tree, ltable->get_dpstate2(),
+                dp = insertTuple(xid, dp, mtuple, ltable, scratch_tree, ltable->get_dpstate2(),
                                  dpages, npages);
             
-            free(t1->keylen);
-            free(t1);
+            datatuple::freetuple(t1);
             t1 = itrA->getnext();  //advance itrA
-            free(mtuple->keylen);
-            free(mtuple);
+            datatuple::freetuple(mtuple);
         }
         else
         {        
             //insert t2
-            dp = insertTuple(xid, dp, *t2, ltable, scratch_tree, ltable->get_dpstate2(),
+            dp = insertTuple(xid, dp, t2, ltable, scratch_tree, ltable->get_dpstate2(),
                              dpages, npages);
             // cannot free any tuples here; they may still be read through a lookup
         }
-        
-        free(t2->keylen);
-        free(t2);
+
+        datatuple::freetuple(t2);
         ntuples++;
     }
 
     while(t1 != 0) // t1 is less than t2
         {
-            dp = insertTuple(xid, dp, *t1, ltable, scratch_tree, ltable->get_dpstate2(),
+            dp = insertTuple(xid, dp, t1, ltable, scratch_tree, ltable->get_dpstate2(),
                              dpages, npages);
 
-            free(t1->keylen);
-            free(t1);        
+            datatuple::freetuple(t1);
             ntuples++;      
             //advance itrA
             t1 = itrA->getnext();
@@ -727,9 +714,8 @@ int64_t merge_iterators(int xid,
 }
 
 
-
 inline DataPage<datatuple>*
-insertTuple(int xid, DataPage<datatuple> *dp, datatuple &t,
+insertTuple(int xid, DataPage<datatuple> *dp, datatuple *t,
             logtable *ltable,
             logtree * ltree,
             recordid & dpstate,

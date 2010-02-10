@@ -7,12 +7,8 @@
 #include "logstore.h"
 #include "logiterators.h"
 
-typedef std::set<datatuple, datatuple> rbtree_t;
-typedef rbtree_t* rbtree_ptr_t;
-
 //TODO: 400 bytes overhead per tuple, this is nuts, check if this is true...
 static const int RB_TREE_OVERHEAD = 400;
-static const int64_t MAX_C0_SIZE = 800 *1024*1024; //max size of c0
 static const double MIN_R = 3.0;
 //T is either logtree or red-black tree
 template <class T>
@@ -91,7 +87,7 @@ public:
     ~merge_scheduler();
     
     int addlogtable(logtable * ltable);
-    void startlogtable(int index);
+    void startlogtable(int index, int64_t MAX_C0_SIZE = 100*1024*1024);
 
     struct logtable_mergedata *getMergeData(int index){return mergedata[index].second;}
 

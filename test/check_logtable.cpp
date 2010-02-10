@@ -77,32 +77,10 @@ void insertProbeIter(size_t NUM_ENTRIES)
     std::vector<pageid_t> dsp;
     for(size_t i = 0; i < NUM_ENTRIES; i++)
     {
-        //prepare the key
-        datatuple newtuple;        
-        uint32_t keylen = key_arr[i].length()+1;
-        newtuple.keylen = &keylen;
-        
-        newtuple.key = (datatuple::key_t) malloc(keylen);
-        for(size_t j=0; j<keylen-1; j++)
-            newtuple.key[j] = key_arr[i][j];
-        newtuple.key[keylen-1]='\0';
+        //prepare the tuple
+        datatuple* newtuple = datatuple::create(key_arr[i].c_str(), key_arr[i].length()+1, data_arr[i].c_str(), data_arr[i].length()+1);
 
-        //prepare the data
-        uint32_t datalen = data_arr[i].length()+1;
-        newtuple.datalen = &datalen;
-        
-        newtuple.data = (datatuple::data_t) malloc(datalen);
-        for(size_t j=0; j<datalen-1; j++)
-            newtuple.data[j] = data_arr[i][j];
-        newtuple.data[datalen-1]='\0';
-
-//        printf("key: \t, keylen: %u\ndata:  datalen: %u\n",
-               //newtuple.key,
-//               *newtuple.keylen,
-               //newtuple.data,
-//               *newtuple.datalen);
-
-        datasize += newtuple.byte_length();
+        datasize += newtuple->byte_length();
 
         if(dp == NULL)
         {
@@ -122,10 +100,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
             }
         }
 
-        free(newtuple.key);
-        free(newtuple.data);
-        
-        
+        datatuple::freetuple(newtuple);
     }
 
     printf("\nTREE STRUCTURE\n");
@@ -139,12 +114,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     Tcommit(xid);
     xid = Tbegin();
 
-
-
-
-
     printf("Stage 2: Sequentially reading %d tuples\n", NUM_ENTRIES);
-
     
     size_t tuplenum = 0;
     treeIterator<datatuple> tree_itr(tree_root);
@@ -153,11 +123,10 @@ void insertProbeIter(size_t NUM_ENTRIES)
     datatuple *dt=0;
     while( (dt=tree_itr.getnext()) != NULL)
     {
-        assert(*(dt->keylen) == key_arr[tuplenum].length()+1);
-        assert(*(dt->datalen) == data_arr[tuplenum].length()+1);
+        assert(dt->keylen() == key_arr[tuplenum].length()+1);
+        assert(dt->datalen() == data_arr[tuplenum].length()+1);
         tuplenum++;
-        free(dt->keylen);
-        free(dt);
+        datatuple::freetuple(dt);
         dt = 0;
     }
 
@@ -173,21 +142,12 @@ void insertProbeIter(size_t NUM_ENTRIES)
         //randomly pick a key
         int ri = rand()%key_arr.size();
 
-        //get the key
-        uint32_t keylen = key_arr[ri].length()+1;        
-        datatuple::key_t rkey = (datatuple::key_t) malloc(keylen);
-        for(size_t j=0; j<keylen-1; j++)
-            rkey[j] = key_arr[ri][j];
-        rkey[keylen-1]='\0';
-
-        //find the key with the given tuple
-        datatuple *dt = ltable.findTuple(xid, rkey, keylen, lt);
+		datatuple *dt = ltable.findTuple(xid, (const datatuple::key_t) key_arr[ri].c_str(), (size_t)key_arr[ri].length()+1, lt);
 
         assert(dt!=0);
-        assert(*(dt->keylen) == key_arr[ri].length()+1);
-        assert(*(dt->datalen) == data_arr[ri].length()+1);
-        free(dt->keylen);
-        free(dt);
+        assert(dt->keylen() == key_arr[ri].length()+1);
+        assert(dt->datalen() == data_arr[ri].length()+1);
+        datatuple::freetuple(dt);
         dt = 0;        
     }
 

@@ -8,6 +8,7 @@
 #include "logiterators.h"
 #include "datapage.cpp"
 
+#include <stasis/page.h>
 #include <stasis/page/slotted.h>
 
 /////////////////////////////////////////////////////////////////
@@ -292,7 +293,7 @@ recordid logtree::appendPage(int xid, recordid tree, pageid_t & rmLeafID,
   Page *p = loadPage(xid, tree.page);
   writelock(p->rwlatch, 0);
   //logtree_state *s = (logtree_state*)p->impl;
-  
+
   tree.slot = 0;
   //tree.size = sizeof(lsmTreeNodeRecord)+keySize;
 
@@ -367,20 +368,27 @@ recordid logtree::appendPage(int xid, recordid tree, pageid_t & rmLeafID,
           // NOTE: stasis_record_free call goes to slottedFree in slotted.c
           // this function only reduces the numslots when you call it
           // with the last slot. so thats why i go backwards here.
-          for(int i = *stasis_page_slotted_numslots_ptr(p)-1; i>FIRST_SLOT; i--)
+	  printf("slots %d (%d) keysize=%lld\n", (int)*stasis_page_slotted_numslots_ptr(p), (int)FIRST_SLOT+1, (long long int)keySize);
+	  assert(*stasis_page_slotted_numslots_ptr(p) >= FIRST_SLOT+1);
+	  for(int i = *stasis_page_slotted_numslots_ptr(p)-1; i>FIRST_SLOT; i--)
           {
+	    assert(*stasis_page_slotted_numslots_ptr(p) > FIRST_SLOT+1);
               const indexnode_rec *nr = (const indexnode_rec*)readRecord(xid,p,i,0);
               int reclen = readRecordLength(xid, p, i);
               recordid tmp_rec= {p->id, i, reclen};
               stasis_record_free(xid, p, tmp_rec);              
-          }
+	  }
           
           //TODO: could change with stasis_slotted_page_initialize(...);
+	  // TODO: fsck?
+	  //	  stasis_page_slotted_initialize_page(p);
+
           // reinsert first.
-          
           recordid pFirstSlot = { p->id, FIRST_SLOT, readRecordLength(xid, p, FIRST_SLOT)};
-          
-          assert(*stasis_page_slotted_numslots_ptr(p) == FIRST_SLOT+1);
+          if(*stasis_page_slotted_numslots_ptr(p) != FIRST_SLOT+1) {
+	    printf("slots %d (%d)\n", *stasis_page_slotted_numslots_ptr(p), (int)FIRST_SLOT+1);
+	    assert(*stasis_page_slotted_numslots_ptr(p) == FIRST_SLOT+1);
+	  }
       
           indexnode_rec *nr
               = (indexnode_rec*)stasis_record_write_begin(xid, p, pFirstSlot);
@@ -833,6 +841,21 @@ logtable::logtable()
     
 }
 
+void logtable::tearDownTree(rbtree_ptr_t tree) {
+    datatuple * t = 0;
+    for(rbtree_t::iterator delitr  = tree->begin();
+                           delitr != tree->end();
+                           delitr++) {
+    	if(t) {
+    		datatuple::freetuple(t);
+    	}
+    	t = *delitr;
+    	tree->erase(delitr);
+    }
+	if(t) { datatuple::freetuple(t); }
+    delete tree;
+}
+
 logtable::~logtable()
 {
     if(tree_c1 != NULL)        
@@ -842,23 +865,10 @@ logtable::~logtable()
 
     if(tree_c0 != NULL)
     {
-        for(rbtree_t::iterator delitr=tree_c0->begin();
-            delitr != tree_c0->end(); delitr++)
-            free((*delitr).keylen);
-
-        delete tree_c0;
+    	tearDownTree(tree_c0);
     }
 
     delete tmerger;
-    
-    /*
-    if(rbtree_mut)
-        delete rbtree_mut;
-    if(tree_c0)
-        delete tree_c0;
-    if(input_needed)
-        delete input_needed;
-    */
 }
 
 recordid logtable::allocTable(int xid)
@@ -917,7 +927,7 @@ void logtable::flushTable()
     while(*mergedata->old_c0) {
         unlock(mergedata->header_lock);
 //        pthread_mutex_lock(mergedata->rbtree_mut);
-        if(tree_bytes >= MAX_C0_SIZE)
+        if(tree_bytes >= max_c0_size)
             pthread_cond_wait(mergedata->input_needed_cond, mergedata->rbtree_mut);
         else
         {
@@ -974,13 +984,10 @@ void logtable::flushTable()
 
 }
 
-datatuple * logtable::findTuple(int xid, datatuple::key_t key, size_t keySize)
+datatuple * logtable::findTuple(int xid, const datatuple::key_t key, size_t keySize)
 {
     //prepare a search tuple
-    datatuple search_tuple;
-    search_tuple.keylen = (uint32_t*)malloc(sizeof(uint32_t));
-    *(search_tuple.keylen) = keySize;
-    search_tuple.key = key;
+	datatuple *search_tuple = datatuple::create(key, keySize);
 
     readlock(mergedata->header_lock,0);
     pthread_mutex_lock(mergedata->rbtree_mut);
@@ -992,10 +999,7 @@ datatuple * logtable::findTuple(int xid, datatuple::key_t key, size_t keySize)
     if(rbitr != tree_c0->end())
     {
         DEBUG("tree_c0 size %d\n", tree_c0->size());
-        datatuple tuple = *rbitr;
-        byte *barr = (byte*)malloc(tuple.byte_length());
-        memcpy(barr, (byte*)tuple.keylen, tuple.byte_length());
-        ret_tuple = datatuple::from_bytes(barr);
+        ret_tuple = (*rbitr)->create_copy();
     }
 
     bool done = false;
@@ -1006,22 +1010,19 @@ datatuple * logtable::findTuple(int xid, datatuple::key_t key, size_t keySize)
         rbitr = (*(mergedata->old_c0))->find(search_tuple);
         if(rbitr != (*(mergedata->old_c0))->end())
         {
-            datatuple tuple = *rbitr;
+            datatuple *tuple = *rbitr;
 
-            if(tuple.isDelete())  //tuple deleted          
+            if(tuple->isDelete())  //tuple deleted
                 done = true;  //return ret_tuple            
             else if(ret_tuple != 0)  //merge the two
             {
-                datatuple *mtuple = tmerger->merge(&tuple, ret_tuple);  //merge the two
-                free(ret_tuple->keylen); //free tuple from current tree
-                free(ret_tuple);
+                datatuple *mtuple = tmerger->merge(tuple, ret_tuple);  //merge the two
+                datatuple::freetuple(ret_tuple); //free tuple from current tree
                 ret_tuple = mtuple; //set return tuple to merge result
             }
             else //key first found in old mem tree
             {
-                byte *barr = (byte*)malloc(tuple.byte_length());
-                memcpy(barr, (byte*)tuple.keylen, tuple.byte_length());
-                ret_tuple = datatuple::from_bytes(barr);                
+            	ret_tuple = tuple->create_copy();
             }
             //we cannot free tuple from old-tree 'cos it is not a copy
         }            
@@ -1042,8 +1043,7 @@ datatuple * logtable::findTuple(int xid, datatuple::key_t key, size_t keySize)
             else if(ret_tuple != 0) //merge the two
             {
                 datatuple *mtuple = tmerger->merge(tuple_c1, ret_tuple);  //merge the two
-                free(ret_tuple->keylen); //free tuple from before
-                free(ret_tuple);
+                datatuple::freetuple(ret_tuple);  //free tuple from before
                 ret_tuple = mtuple; //set return tuple to merge result            
             }            
             else //found for the first time
@@ -1057,8 +1057,7 @@ datatuple * logtable::findTuple(int xid, datatuple::key_t key, size_t keySize)
 
             if(!use_copy)
             {
-                free(tuple_c1->keylen); //free tuple from tree c1
-                free(tuple_c1);
+                datatuple::freetuple(tuple_c1); //free tuple from tree c1
             }
         }
     }
@@ -1078,8 +1077,7 @@ datatuple * logtable::findTuple(int xid, datatuple::key_t key, size_t keySize)
             else if(ret_tuple != 0) //merge the two
             {
                 datatuple *mtuple = tmerger->merge(tuple_oc1, ret_tuple);  //merge the two
-                free(ret_tuple->keylen); //free tuple from before
-                free(ret_tuple);
+                datatuple::freetuple(ret_tuple); //free tuple from before
                 ret_tuple = mtuple; //set return tuple to merge result            
             }
             else //found for the first time
@@ -1093,8 +1091,7 @@ datatuple * logtable::findTuple(int xid, datatuple::key_t key, size_t keySize)
 
             if(!use_copy)
             {
-                free(tuple_oc1->keylen); //free tuple from tree old c1
-                free(tuple_oc1);
+            	datatuple::freetuple(tuple_oc1); //free tuple from tree old c1
             }
         }        
     }
@@ -1113,31 +1110,25 @@ datatuple * logtable::findTuple(int xid, datatuple::key_t key, size_t keySize)
             else if(ret_tuple != 0)
             {
                 datatuple *mtuple = tmerger->merge(tuple_c2, ret_tuple);  //merge the two
-                free(ret_tuple->keylen); //free tuple from before
-                free(ret_tuple);
+                datatuple::freetuple(ret_tuple); //free tuple from before
                 ret_tuple = mtuple; //set return tuple to merge result            
             }
             else //found for the first time
             {
                 use_copy = true;
                 ret_tuple = tuple_c2;                
-                //byte *barr = (byte*)malloc(tuple_c2->byte_length());
-                //memcpy(barr, (byte*)tuple_c2->keylen, tuple_c2->byte_length());
-                //ret_tuple = datatuple::from_bytes(barr);
             }
 
             if(!use_copy)
             {
-                free(tuple_c2->keylen); //free tuple from tree c2
-                free(tuple_c2);
+            	datatuple::freetuple(tuple_c2);  //free tuple from tree c2
             }
         }        
     }     
 
     //pthread_mutex_unlock(mergedata->rbtree_mut);
     unlock(mergedata->header_lock);
-    free(search_tuple.keylen);
-    
+    datatuple::freetuple(search_tuple);
     return ret_tuple;
 
 }
@@ -1149,10 +1140,7 @@ datatuple * logtable::findTuple(int xid, datatuple::key_t key, size_t keySize)
 datatuple * logtable::findTuple_first(int xid, datatuple::key_t key, size_t keySize)
 {
     //prepare a search tuple
-    datatuple search_tuple;
-    search_tuple.keylen = (uint32_t*)malloc(sizeof(uint32_t));
-    *(search_tuple.keylen) = keySize;
-    search_tuple.key = key;
+    datatuple * search_tuple = datatuple::create(key, keySize);
         
     pthread_mutex_lock(mergedata->rbtree_mut);
 
@@ -1163,10 +1151,7 @@ datatuple * logtable::findTuple_first(int xid, datatuple::key_t key, size_t keyS
     if(rbitr != tree_c0->end())
     {
         DEBUG("tree_c0 size %d\n", tree_c0->size());
-        datatuple tuple = *rbitr;
-        byte *barr = (byte*)malloc(tuple.byte_length());
-        memcpy(barr, (byte*)tuple.keylen, tuple.byte_length());        
-        ret_tuple = datatuple::from_bytes(barr);
+        ret_tuple = (*rbitr)->create_copy();
         
     }
     else
@@ -1179,10 +1164,7 @@ datatuple * logtable::findTuple_first(int xid, datatuple::key_t key, size_t keyS
             rbitr = (*(mergedata->old_c0))->find(search_tuple);
             if(rbitr != (*(mergedata->old_c0))->end())
             {
-                datatuple tuple = *rbitr;
-                byte *barr = (byte*)malloc(tuple.byte_length());
-                memcpy(barr, (byte*)tuple.keylen, tuple.byte_length());
-                ret_tuple = datatuple::from_bytes(barr);                
+                ret_tuple = (*rbitr)->create_copy();
             }            
         }
 
@@ -1221,13 +1203,13 @@ datatuple * logtable::findTuple_first(int xid, datatuple::key_t key, size_t keyS
      
 
     pthread_mutex_unlock(mergedata->rbtree_mut);
-    free(search_tuple.keylen);
+    datatuple::freetuple(search_tuple);
     
     return ret_tuple;
 
 }
 
-void logtable::insertTuple(struct datatuple &tuple)
+void logtable::insertTuple(datatuple *tuple)
 {
     //static int count = LATCH_INTERVAL;
     //static int tsize = 0; //number of tuples
@@ -1240,29 +1222,27 @@ void logtable::insertTuple(struct datatuple &tuple)
     rbtree_t::iterator rbitr = tree_c0->find(tuple);
     if(rbitr != tree_c0->end())
     {        
-        datatuple pre_t = *rbitr;
+        datatuple *pre_t = *rbitr;
         //do the merging
-        datatuple *new_t = tmerger->merge(&pre_t, &tuple);
+        datatuple *new_t = tmerger->merge(pre_t, tuple);
         tree_c0->erase(pre_t); //remove the previous tuple        
 
-        tree_c0->insert( *new_t); //insert the new tuple
+        tree_c0->insert(new_t); //insert the new tuple
 
         //update the tree size (+ new_t size - pre_t size)
-        tree_bytes += (new_t->byte_length() - pre_t.byte_length());
-                
-        free(pre_t.keylen); //free the previous tuple
-        free(new_t); // frees the malloc(sizeof(datatuple)) coming from merge
+        tree_bytes += (new_t->byte_length() - pre_t->byte_length());
+
+        datatuple::freetuple(pre_t); //free the previous tuple
     }
     else //no tuple with same key exists in mem-tree
     {
 
-    	datatuple t;
-    	t.clone(tuple);
+    	datatuple *t = tuple->create_copy();
 
         //insert tuple into the rbtree        
         tree_c0->insert(t);
         tsize++;
-        tree_bytes += t.byte_length() + RB_TREE_OVERHEAD;
+        tree_bytes += t->byte_length() + RB_TREE_OVERHEAD;
 
     }
 
@@ -1276,7 +1256,7 @@ void logtable::insertTuple(struct datatuple &tuple)
      }
     */
 
-    if(tree_bytes >= MAX_C0_SIZE )
+    if(tree_bytes >= max_c0_size )
     {
         DEBUG("tree size before merge %d tuples %lld bytes.\n", tsize, tree_bytes);
         pthread_mutex_unlock(mergedata->rbtree_mut);
@@ -1300,7 +1280,7 @@ void logtable::insertTuple(struct datatuple &tuple)
 }
 
 
-DataPage<datatuple>* logtable::insertTuple(int xid, struct datatuple &tuple, recordid &dpstate, logtree *ltree)
+DataPage<datatuple>* logtable::insertTuple(int xid, datatuple *tuple, recordid &dpstate, logtree *ltree)
 {
 
     //create a new data page    
@@ -1326,8 +1306,8 @@ DataPage<datatuple>* logtable::insertTuple(int xid, struct datatuple &tuple, rec
     //insert the record key and id of the first page of the datapage to the logtree
     Tread(xid,ltree->get_tree_state(), &alloc_conf);
     logtree::appendPage(xid, ltree->get_root_rec(), ltree->lastLeaf,
-                        tuple.get_key(),
-                        *tuple.keylen,
+                        tuple->key(),
+                        tuple->keylen(),
                         ltree->alloc_region,
                         &alloc_conf,
                         dp->get_start_pid()
@@ -1507,6 +1487,7 @@ int logtreeIterator::next(int xid, lladdIterator_t *it)
     }
     else
     {
+    	assert(!impl->p);
         if(impl->t != NULL)
             free(impl->t);
         impl->t = 0;

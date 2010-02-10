@@ -1,167 +1,147 @@
 #ifndef _DATATUPLE_H_
 #define _DATATUPLE_H_
 
-
-typedef unsigned char uchar;
-
 #include <string>
-
-//#define byte unsigned char
 typedef unsigned char byte;
 #include <cstring>
-
-//#include <stdio.h>
-//#include <stdlib.h>
-//#include <errno.h>
+#include <assert.h>
 
 typedef struct datatuple
 {
-    typedef uchar* key_t;
-    typedef uchar* data_t;
-    static const size_t isize = sizeof(uint32_t);
-    uint32_t *keylen;    //key length should be size of string + 1 for \n
-    uint32_t *datalen; 
-    key_t key;
-    data_t data;
+public:
+	typedef uint32_t len_t ;
+	typedef unsigned char* key_t ;
+	typedef unsigned char* data_t ;
+private:
+	static const len_t DELETE = ((len_t)0) - 1;
+	len_t datalen_;
+	byte* key_;
+	byte* data_; // aliases key.  data_ - 1 should be the \0 terminating key_.
+
+  datatuple* sanity_check() {
+    assert(keylen() < 3000);
+    return this;
+  }
+public:
+
+	inline len_t keylen() const {
+		return data_ - key_;
+	}
+	inline len_t datalen() const {
+		return (datalen_ == DELETE) ? 0 : datalen_;
+	}
+
+    //returns the length of the byte array representation
+    len_t byte_length() const {
+		return sizeof(len_t) + sizeof(len_t) + keylen() + datalen();
+    }
+    static len_t length_from_header(len_t keylen, len_t datalen) {
+    	return keylen + ((datalen == DELETE) ? 0 : datalen);
+    }
+
+    inline key_t key() const {
+		return key_;
+	}
+	inline data_t data() const {
+		return data_;
+	}
 
     //this is used by the stl set
-    bool operator() (const datatuple& lhs, const datatuple& rhs) const
-        {
-            //std::basic_string<uchar> s1(lhs.key);
-            //std::basic_string<uchar> s2(rhs.key);
-            return strcmp((char*)lhs.key,(char*)rhs.key) < 0;
-            //return (*((int32_t*)lhs.key)) <= (*((int32_t*)rhs.key));
-        }
-
-    void clone(const datatuple& tuple) {
-		//create a copy
-
-    	byte * arr = (byte*) malloc(tuple.byte_length());
-
-		keylen = (uint32_t*) arr;
-		*keylen = *tuple.keylen;
-		datalen = (uint32_t*) (arr+isize);
-		*datalen = *tuple.datalen;
-		key = (datatuple::key_t) (arr+isize+isize);
-		memcpy((byte*)key, (byte*)tuple.key, *keylen);
-		if(!tuple.isDelete())
-		{
-			data = (datatuple::data_t) (arr+isize+isize+ *keylen);
-			memcpy((byte*)data, (byte*)tuple.data, *datalen);
-		}
-		else
-			data = 0;
-    }
+    bool operator() (const datatuple* lhs, const datatuple* rhs) const {
+		return compare(lhs->key(), rhs->key()) < 0; //strcmp((char*)lhs.key(),(char*)rhs.key()) < 0;
+	}
 
     /**
      * return -1 if k1 < k2
      * 0 if k1 == k2
      * 1 of k1 > k2
     **/
-    static int compare(const key_t k1,const key_t k2)
-        {            
-            //for char* ending with \0
-            return strcmp((char*)k1,(char*)k2);
+    static int compare(const byte* k1,const byte* k2) {
+		// XXX string comparison is probably not the right approach.
+		//for char* ending with \0
+		return strcmp((char*)k1,(char*)k2);
+	}
 
-            //for int32_t
-            //printf("%d\t%d\n",(*((int32_t*)k1)) ,(*((int32_t*)k2)));
-            //return (*((int32_t*)k1)) <= (*((int32_t*)k2));
-        }
+    inline void setDelete() {
+		datalen_ = DELETE;
+	}
 
-    void setDelete()
-        {
-            *datalen = UINT_MAX;
-        }
+    inline bool isDelete() const {
+		return datalen_ == DELETE;
+	}
 
-    inline bool isDelete() const
-        {
-            return *datalen == UINT_MAX;
-        }
+    static std::string key_to_str(const byte* k) {
+		//for strings
+		return std::string((char*)k);
+		//for int
+		/*
+		std::ostringstream ostr;
+		ostr << *((int32_t*)k);
+		return ostr.str();
+		*/
+	}
 
-    static std::string key_to_str(const byte* k)
-        {
-            //for strings
-            return std::string((char*)k);
-            //for int
-            /*
-            std::ostringstream ostr;
-            ostr << *((int32_t*)k);            
-            return ostr.str();
-            */
-        }
+    //copy the tuple.  does a deep copy of the contents.
+    datatuple* create_copy() const {
+        return create(key(), keylen(), data(), datalen_)->sanity_check();
+    }
 
-    //returns the length of the byte array representation
-    int32_t byte_length() const{
-        static const size_t isize = sizeof(uint32_t);
-        if(isDelete())
-            return isize + *keylen + isize; 
-        else
-            return isize + *keylen + isize + (*datalen);
+
+    static datatuple* create(const void* key, len_t keylen) {
+      return create(key, keylen, 0, DELETE)->sanity_check();
+    }
+    static datatuple* create(const void* key, len_t keylen, const void* data, len_t datalen) {
+    	datatuple *ret = (datatuple*)malloc(sizeof(datatuple));
+    	ret->key_      = (byte*)malloc(length_from_header(keylen, datalen));
+    	memcpy(ret->key_, key, keylen);
+    	ret->data_ = ret->key_ + keylen;  // need to set this even if delete, since it encodes the key length.
+    	if(datalen != DELETE) {
+    		memcpy(ret->data_, data, datalen);
+    	}
+    	ret->datalen_ = datalen;
+    	return ret->sanity_check();
     }
 
     //format: key length _   data length _ key _ data
     byte * to_bytes() const {
-        static const size_t isize = sizeof(uint32_t);
-        byte * ret;
-        if(!isDelete())
-            ret = (byte*) malloc(isize + *keylen + isize + *datalen);
-        else
-            ret = (byte*) malloc(isize + *keylen + isize);
-        
-        memcpy(ret, (byte*)(keylen), isize);        
-        memcpy(ret+isize, (byte*)(datalen), isize);
-        memcpy(ret+isize+isize, key, *keylen);
-        if(!isDelete())
-            memcpy(ret+isize+isize+*keylen, data, *datalen);
+    	byte *ret = (byte*)malloc(byte_length());
+    	((len_t*)ret)[0] = keylen();
+    	((len_t*)ret)[1] = datalen_;
+    	memcpy(((len_t*)ret)+2, key_, length_from_header(keylen(), datalen_));
         return ret;
     }
 
-    //does not copy the data again
-    //just sets the pointers in the datatuple to
-    //right positions in the given arr
-    
-    static datatuple* from_bytes(const byte * arr)
-        {
-            static const size_t isize = sizeof(uint32_t);
-            datatuple *dt = (datatuple*) malloc(sizeof(datatuple));
+    const byte* get_bytes(len_t *keylen, len_t *datalen) const {
+        *keylen  = this->keylen();
+    	*datalen = datalen_;
+    	return key_;
+    }
 
-            dt->keylen = (uint32_t*) arr;
-            dt->datalen = (uint32_t*) (arr+isize);
-            dt->key = (key_t) (arr+isize+isize);
-            if(!dt->isDelete())
-                dt->data = (data_t) (arr+isize+isize+ *(dt->keylen));
-            else
-                dt->data = 0;
+    //format of buf: key _ data.  The caller needs to 'peel' off key length and data length for this call.
+    static datatuple* from_bytes(len_t keylen, len_t datalen, byte* buf) {
+    	datatuple *dt = (datatuple*) malloc(sizeof(datatuple));
+    	dt->datalen_ = datalen;
+    	dt->key_ = buf;
+    	dt->data_ = dt->key_ + keylen;
+    	return dt->sanity_check();
+    }
+    static datatuple* from_bytes(byte* buf) {
+    	datatuple *dt = (datatuple*) malloc(sizeof(datatuple));
+    	len_t keylen = ((len_t*)buf)[0];
+    	dt->datalen_ = ((len_t*)buf)[1];
+    	len_t buflen = length_from_header(keylen, dt->datalen_);
+    	dt->key_ = (byte*)malloc(buflen);
+    	memcpy(dt->key_,((len_t*)buf)+2,buflen);
+    	dt->data_ = dt->key_ + keylen;
 
-            return dt;
-        }
-    /*
-    static datatuple form_tuple(const byte * arr)
-        {
-            static const size_t isize = sizeof(uint32_t);
-            datatuple dt;
+    	return dt->sanity_check();
+    }
 
-            dt.keylen = (uint32_t*) arr;
-            dt.datalen = (uint32_t*) (arr+isize);
-            dt.key = (key_t) (arr+isize+isize);
-            if(!dt.isDelete())
-                dt.data = (data_t) (arr+isize+isize+ *(dt.keylen));
-            else
-                dt.data = 0;
+    static inline void freetuple(datatuple* dt) {
+        free(dt->key_);
+        free(dt);
+    }
 
-            return dt;
-        }
-    */
-    
-    byte * get_key() { return (byte*) key; }
-    byte * get_data() { return (byte*) data; }
-
-    //releases only the tuple
-    static void release(datatuple *dt)
-        {
-            free(dt);
-        }
-    
 } datatuple;
 
 

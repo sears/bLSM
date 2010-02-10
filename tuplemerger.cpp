@@ -1,6 +1,8 @@
 #include "tuplemerger.h"
 #include "logstore.h"
 
+// XXX make the imputs 'const'
+// XXX test / reason about this...
 datatuple* tuplemerger::merge(datatuple *t1, datatuple *t2)
 {
     assert(!t1->isDelete() || !t2->isDelete()); //both cannot be delete
@@ -9,11 +11,11 @@ datatuple* tuplemerger::merge(datatuple *t1, datatuple *t2)
 
     if(t1->isDelete()) //delete - t2
     {
-        t = datatuple::from_bytes(t2->to_bytes());
+        t = t2->create_copy();
     }
     else if(t2->isDelete())
     {
-        t = datatuple::from_bytes(t2->to_bytes());
+        t = t2->create_copy();
     }
     else //neither is a delete
     {
@@ -32,26 +34,15 @@ datatuple* tuplemerger::merge(datatuple *t1, datatuple *t2)
  **/
 datatuple* append_merger(datatuple *t1, datatuple *t2)
 {
-    static const size_t isize = sizeof(uint32_t);
-    struct datatuple *t = (datatuple*) malloc(sizeof(datatuple));
 
-    byte *arr = (byte*)malloc(t1->byte_length() + *t2->datalen);
+	assert(!(t1->isDelete() || t2->isDelete()));
+    datatuple::len_t keylen = t1->keylen();
+    datatuple::len_t datalen = t1->datalen() + t2->datalen();
+    byte * data = (byte*)malloc(datalen);
+    memcpy(data, t1->data(), t1->datalen());
+    memcpy(data + t1->datalen(), t2->data(), t2->datalen());
 
-    t->keylen = (uint32_t*) arr;
-    *(t->keylen) = *(t1->keylen);
-
-    t->datalen = (uint32_t*) (arr+isize);
-    *(t->datalen) = *(t1->datalen) + *(t2->datalen);
-    
-    t->key = (datatuple::key_t) (arr+isize+isize);
-    memcpy((byte*)t->key, (byte*)t1->key, *(t1->keylen));
-    
-    t->data = (datatuple::data_t) (arr+isize+isize+ *(t1->keylen));
-    memcpy((byte*)t->data, (byte*)t1->data, *(t1->datalen));
-    memcpy(((byte*)t->data) + *(t1->datalen), (byte*)t2->data, *(t2->datalen));
-        
-    return t;
-
+	return datatuple::create(t1->key(), keylen, data, datalen);
 }
 
 /**
@@ -62,23 +53,5 @@ datatuple* append_merger(datatuple *t1, datatuple *t2)
  **/
 datatuple* replace_merger(datatuple *t1, datatuple *t2)
 {
-    static const size_t isize = sizeof(uint32_t);
-    struct datatuple *t = (datatuple*) malloc(sizeof(datatuple));
-
-    byte *arr = (byte*)malloc(t2->byte_length());
-
-    t->keylen = (uint32_t*) arr;
-    *(t->keylen) = *(t2->keylen);
-
-    t->datalen = (uint32_t*) (arr+isize);
-    *(t->datalen) = *(t2->datalen);
-    
-    t->key = (datatuple::key_t) (arr+isize+isize);
-    memcpy((byte*)t->key, (byte*)t2->key, *(t2->keylen));
-    
-    t->data = (datatuple::data_t) (arr+isize+isize+ *(t2->keylen));
-    memcpy((byte*)t->data, (byte*)t2->data, *(t2->datalen));
-        
-    return t;
-
+	return t2->create_copy();
 }

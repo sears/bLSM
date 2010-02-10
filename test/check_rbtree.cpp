@@ -20,7 +20,8 @@
 
 void insertProbeIter(size_t NUM_ENTRIES)
 {
-
+	unlink("logfile.txt");
+	unlink("storefile.txt");
     //data generation
     std::vector<std::string> data_arr;
     std::vector<std::string> key_arr;
@@ -38,45 +39,18 @@ void insertProbeIter(size_t NUM_ENTRIES)
     if(data_arr.size() > NUM_ENTRIES)
         data_arr.erase(data_arr.begin()+NUM_ENTRIES, data_arr.end());
     
-    std::set<datatuple, datatuple> rbtree;
+    rbtree_t rbtree;
+
     int64_t datasize = 0;
     std::vector<pageid_t> dsp;
     for(size_t i = 0; i < NUM_ENTRIES; i++)
     {
         //prepare the key
-        datatuple newtuple;        
-        uint32_t keylen = key_arr[i].length()+1;
-        newtuple.keylen = (uint32_t*)malloc(sizeof(uint32_t));
-        *newtuple.keylen = keylen;
-        
-        newtuple.key = (datatuple::key_t) malloc(keylen);
-        for(size_t j=0; j<keylen-1; j++)
-            newtuple.key[j] = key_arr[i][j];
-        newtuple.key[keylen-1]='\0';
+        datatuple *newtuple = datatuple::create(key_arr[i].c_str(), key_arr[i].length()+1,data_arr[i].c_str(), data_arr[i].length()+1);
 
-        //prepare the data
-        uint32_t datalen = data_arr[i].length()+1;
-        newtuple.datalen = (uint32_t*)malloc(sizeof(uint32_t));
-        *newtuple.datalen = datalen;
-        
-        newtuple.data = (datatuple::data_t) malloc(datalen);
-        for(size_t j=0; j<datalen-1; j++)
-            newtuple.data[j] = data_arr[i][j];
-        newtuple.data[datalen-1]='\0';
-
-        /*
-        printf("key: \t, keylen: %u\ndata:  datalen: %u\n",
-               //newtuple.key,
-               *newtuple.keylen,
-               //newtuple.data,
-               *newtuple.datalen);
-               */
-        
-        datasize += newtuple.byte_length();
+        datasize += newtuple->byte_length();
 
         rbtree.insert(newtuple);
-        
-        
     }
 
     printf("\nTREE STRUCTURE\n");
@@ -88,47 +62,29 @@ void insertProbeIter(size_t NUM_ENTRIES)
     int found_tuples=0;
     for(int i=NUM_ENTRIES-1; i>=0; i--)
     {        
+        //find the key with the given tuple
         int ri = i;
 
-        //get the key
-        uint32_t keylen = key_arr[ri].length()+1;        
-        datatuple::key_t rkey = (datatuple::key_t) malloc(keylen);
-        for(size_t j=0; j<keylen-1; j++)
-            rkey[j] = key_arr[ri][j];
-        rkey[keylen-1]='\0';
-
-        //find the key with the given tuple
-
         //prepare a search tuple
-        datatuple search_tuple;
-        search_tuple.keylen = (uint32_t*)malloc(sizeof(uint32_t));
-        *(search_tuple.keylen) = keylen;
-        search_tuple.key = rkey;
+        datatuple *search_tuple = datatuple::create(key_arr[ri].c_str(), key_arr[ri].length()+1);
         
-        
-        datatuple *ret_tuple=0; 
         //step 1: look in tree_c0
 
         rbtree_t::iterator rbitr = rbtree.find(search_tuple);
         if(rbitr != rbtree.end())
         {
-            datatuple tuple = *rbitr;
-            byte *barr = tuple.to_bytes();
-            ret_tuple = datatuple::from_bytes(barr);
+            datatuple *tuple = *rbitr;
 
             found_tuples++;
-            assert(*(ret_tuple->keylen) == key_arr[ri].length()+1);
-            assert(*(ret_tuple->datalen) == data_arr[ri].length()+1);
-            free(barr);
-            free(ret_tuple);        
+            assert(tuple->keylen() == key_arr[ri].length()+1);
+            assert(tuple->datalen() == data_arr[ri].length()+1);
         }
         else
         {
             printf("Not in scratch_tree\n");
         }
         
-        free(search_tuple.keylen);
-        free(rkey);
+        datatuple::freetuple(search_tuple);
     }
     printf("found %d\n", found_tuples);    
 }

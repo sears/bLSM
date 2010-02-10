@@ -41,7 +41,8 @@ double tv_to_double(struct timeval tv);
 
 struct logtable_mergedata;
 
-
+typedef std::set<datatuple*, datatuple> rbtree_t;
+typedef rbtree_t* rbtree_ptr_t;
 
 typedef struct RegionAllocConf_t
 {
@@ -174,11 +175,11 @@ public:
     ~logtable();
 
     //user access functions
-    datatuple * findTuple(int xid, datatuple::key_t key, size_t keySize);
+    datatuple * findTuple(int xid, const datatuple::key_t key, size_t keySize);
 
     datatuple * findTuple_first(int xid, datatuple::key_t key, size_t keySize);
     
-    void insertTuple(struct datatuple &tuple);
+    void insertTuple(struct datatuple *tuple);
 
 
     //other class functions
@@ -186,9 +187,11 @@ public:
 
     void flushTable();    
     
-    DataPage<datatuple>* insertTuple(int xid, struct datatuple &tuple, recordid &dpstate,logtree *ltree);
+    static inline void tearDownTree(rbtree_ptr_t t);
 
-    datatuple * findTuple(int xid, datatuple::key_t key, size_t keySize,  logtree *ltree);
+    DataPage<datatuple>* insertTuple(int xid, datatuple *tuple, recordid &dpstate,logtree *ltree);
+
+    datatuple * findTuple(int xid, const datatuple::key_t key, size_t keySize,  logtree *ltree);
 
     inline recordid & get_table_rec(){return table_rec;}
     
@@ -198,8 +201,6 @@ public:
     inline void set_tree_c1(logtree *t){tree_c1=t;}
     inline void set_tree_c2(logtree *t){tree_c2=t;}
     
-    typedef std::set<datatuple, datatuple> rbtree_t;
-    typedef rbtree_t* rbtree_ptr_t;
     inline rbtree_ptr_t get_tree_c0(){return tree_c0;}
     
     void set_tree_c0(rbtree_ptr_t newtree){tree_c0 = newtree;}
@@ -233,6 +234,8 @@ public:
 
     logtable_mergedata * mergedata;
     
+    int64_t max_c0_size;
+
 private:
 
     

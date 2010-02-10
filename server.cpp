@@ -38,19 +38,14 @@ void terminate (int param)
   exit(0);
 }
 
-void insertProbeIter(int  NUM_ENTRIES)
+void initialize_server()
 {
     //signal handling
     void (*prev_fn)(int);
 
     prev_fn = signal (SIGINT,terminate);
-    //if (prev_fn==SIG_IGN)
-    //signal (SIGTERM,SIG_IGN);
-
     
-    sync();
-    
-    bufferManagerNonBlockingSlowHandleType = IO_HANDLE_PFILE;
+    bufferManagerFileHandleType = BUFFER_MANAGER_FILE_HANDLE_PFILE;
 
     Tinit();
 
@@ -58,8 +53,6 @@ void insertProbeIter(int  NUM_ENTRIES)
 
     mscheduler = new merge_scheduler;    
     logtable ltable;
-
-    
 
     int pcount = 40;
     ltable.set_fixed_page_count(pcount);
@@ -71,16 +64,13 @@ void insertProbeIter(int  NUM_ENTRIES)
     int lindex = mscheduler->addlogtable(&ltable);
     ltable.setMergeData(mscheduler->getMergeData(lindex));
     
-    mscheduler->startlogtable(lindex);
-
+    int64_t c0_size = 1024 * 1024 * 10;
+    printf("warning: running w/ tiny c0 for testing"); // XXX
+    mscheduler->startlogtable(lindex, c0_size);
 
     lserver = new logserver(10, 32432);
 
     lserver->startserver(&ltable);
-
-    
-//    Tdeinit();
-    
     
 }
 
@@ -90,18 +80,7 @@ void insertProbeIter(int  NUM_ENTRIES)
  */
 int main()
 {
-    //insertProbeIter(25000);
-    insertProbeIter(10000);
-    /*
-    insertProbeIter(5000);
-    insertProbeIter(2500);
-    insertProbeIter(1000);
-    insertProbeIter(500);
-    insertProbeIter(1000);
-    insertProbeIter(100);
-    insertProbeIter(10);
-    */
-    
-    return 0;
+	initialize_server();
+	abort();  // can't get here.
 }
 

@@ -59,7 +59,7 @@ public:
 
     ~DataPage();
 
-    bool append(int xid, TUPLE const & dat);
+    bool append(int xid, TUPLE const * dat);
     bool recordRead(int xid, typename TUPLE::key_t key, size_t keySize,  TUPLE ** buf);
 
     inline uint16_t recordCount(int xid);
@@ -89,10 +89,10 @@ private:
     void incrementPageCount(int xid, pageid_t pid, int add=1);
 
     bool writebytes(int xid, int count, byte *data);
-    inline void readbytes(int xid, int32_t offset, int count, byte **data=0);
+    inline void readbytes(int xid, int32_t offset, int count, byte *data);
 
 private:
-    int pcount;
+    int32_t pcount;
     pageid_t *pidarr;
     int32_t byte_offset;//points to the next free byte
 

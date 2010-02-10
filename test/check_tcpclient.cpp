@@ -26,8 +26,6 @@ static int svrport = 32432;
 void insertProbeIter(size_t NUM_ENTRIES)
 {
     srand(1000);
-//    std::string servername = svrname; //"sherpa4";
-  //  int serverport = svrport; //32432;
 
     logstore_handle_t * l = logstore_client_open(svrname, svrport, 100);
 
@@ -97,12 +95,8 @@ void insertProbeIter(size_t NUM_ENTRIES)
     }
     key_v_list->clear();
     delete key_v_list;
-    
-//    preprandstr(NUM_ENTRIES, data_arr, 10*8192);
-
     printf("key arr size: %d\n", key_arr->size());
 
-    //removeduplicates(key_arr);
     if(key_arr->size() > NUM_ENTRIES)
         key_arr->erase(key_arr->begin()+NUM_ENTRIES, key_arr->end());
     
@@ -122,35 +116,21 @@ void insertProbeIter(size_t NUM_ENTRIES)
     for(size_t i = 0; i < NUM_ENTRIES; i++)
     {
         //prepare the key
-        datatuple newtuple;        
-        uint32_t keylen = (*key_arr)[i].length()+1;
-        newtuple.keylen = &keylen;
-        
-        newtuple.key = (datatuple::key_t) malloc(keylen);
-        memcpy((byte*)newtuple.key, (*key_arr)[i].c_str(), keylen);
+        datatuple::len_t keylen = (*key_arr)[i].length()+1;
 
         //prepare the data
         std::string ditem;
         getnextdata(ditem, 8192);
-        uint32_t datalen = ditem.length()+1;
-        newtuple.datalen = &datalen;        
-        newtuple.data = (datatuple::data_t) malloc(datalen);
-        memcpy((byte*)newtuple.data, ditem.c_str(), datalen);
+        datatuple::len_t datalen = ditem.length()+1;
 
-        /*
-        printf("key: \t, keylen: %u\ndata:  datalen: %u\n",
-               //newtuple.key,
-               *newtuple.keylen,
-               //newtuple.data,
-               *newtuple.datalen);
-               */
-        
-        datasize += newtuple.byte_length();
+        datatuple* newtuple = datatuple::create((*key_arr)[i].c_str(), keylen,
+						ditem.c_str(), datalen);
 
-        gettimeofday(&ti_st,0);        
+        datasize += newtuple->byte_length();
+
+        gettimeofday(&ti_st,0);
 
         //send the data
-//        datatuple * ret = sendTuple(servername, serverport, OP_INSERT, newtuple);
         datatuple * ret = logstore_client_op(l, OP_INSERT, newtuple);
         assert(ret);
         
@@ -158,8 +138,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 //        insert_time += tv_to_double(ti_end) - tv_to_double(ti_st);
         insert_time ++; // XXX
 
-        free(newtuple.key);
-        free(newtuple.data);
+        datatuple::freetuple(newtuple);
 
         if(i % 10000 == 0 && i > 0)
             printf("%d / %d inserted.\n", i, NUM_ENTRIES);
@@ -177,56 +156,40 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     int found_tuples=0;
     for(int i=NUM_ENTRIES-1; i>=0; i--)
-    {        
-        int ri = i;        
+    {
+        int ri = i;
         //printf("key index%d\n", i);
-        fflush(stdout);
-        
+        //fflush(stdout);
+
         //get the key
-        uint32_t keylen = (*key_arr)[ri].length()+1;        
-        datatuple searchtuple;
-        searchtuple.keylen = (uint32_t*)malloc(2*sizeof(uint32_t) + keylen);
-        *searchtuple.keylen = keylen;
+        datatuple::len_t keylen = (*key_arr)[ri].length()+1;
+        datatuple::len_t datalen = 0;
 
-        searchtuple.datalen = searchtuple.keylen + 1;
-        *searchtuple.datalen = 0;
-
-        searchtuple.key = (datatuple::key_t)(searchtuple.keylen + 2);
-        memcpy((byte*)searchtuple.key, (*key_arr)[ri].c_str(), keylen);
+        datatuple* searchtuple = datatuple::create((*key_arr)[ri].c_str(), keylen);
 
         //find the key with the given tuple
-        datatuple *dt = logstore_client_op(l, OP_FIND, //servername, serverport, OP_FIND,
-                                  searchtuple);
-        
+        datatuple *dt = logstore_client_op(l, OP_FIND, searchtuple);
+
         assert(dt!=0);
         assert(!dt->isDelete());
         found_tuples++;
-        assert(*(dt->keylen) == (*key_arr)[ri].length()+1);
+        assert(dt->keylen() == (*key_arr)[ri].length()+1);
 
         //free dt
-        free(dt->keylen);
-        free(dt->datalen);
-        free(dt->key);
-        free(dt->data);        
-        free(dt);
-        
+        datatuple::freetuple(dt);
         dt = 0;
 
-        free(searchtuple.keylen);        
-        
+        datatuple::freetuple(searchtuple);
     }
     printf("found %d\n", found_tuples);
 
     key_arr->clear();
-    //data_arr->clear();
     delete key_arr;
-    //delete data_arr;
-    
+
     logstore_client_close(l);
 
     gettimeofday(&stop_tv,0);
     printf("run time: %6.1f\n", -1.0); // XXX (tv_to_double(stop_tv) - tv_to_double(start_tv)));
-    
 }
 
 

@@ -78,23 +78,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     for(size_t i = 0; i < NUM_ENTRIES; i++)
     {
         //prepare the key
-        datatuple newtuple;        
-        uint32_t keylen = key_arr[i].length()+1;
-        newtuple.keylen = &keylen;
-        
-        newtuple.key = (datatuple::key_t) malloc(keylen);
-        for(size_t j=0; j<keylen-1; j++)
-            newtuple.key[j] = key_arr[i][j];
-        newtuple.key[keylen-1]='\0';
-
-        //prepare the data
-        uint32_t datalen = data_arr[i].length()+1;
-        newtuple.datalen = &datalen;
-        
-        newtuple.data = (datatuple::data_t) malloc(datalen);
-        for(size_t j=0; j<datalen-1; j++)
-            newtuple.data[j] = data_arr[i][j];
-        newtuple.data[datalen-1]='\0';
+        datatuple *newtuple = datatuple::create(key_arr[i].c_str(), key_arr[i].length()+1, data_arr[i].c_str(), data_arr[i].length()+1);
 
         /*
         printf("key: \t, keylen: %u\ndata:  datalen: %u\n",
@@ -103,7 +87,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
                //newtuple.data,
                *newtuple.datalen);
                */
-        datasize += newtuple.byte_length();
+        datasize += newtuple->byte_length();
         if(dp==NULL || !dp->append(xid, newtuple))
         {
             dpages++;
@@ -145,46 +129,19 @@ void insertProbeIter(size_t NUM_ENTRIES)
         datatuple *dt=0;
         while( (dt=itr.getnext(xid)) != NULL)
             {
-                assert(*(dt->keylen) == key_arr[tuplenum].length()+1);
-                assert(*(dt->datalen) == data_arr[tuplenum].length()+1);
+                assert(dt->keylen() == key_arr[tuplenum].length()+1);
+                assert(dt->datalen() == data_arr[tuplenum].length()+1);
                 tuplenum++;
-                free(dt->keylen);
-                free(dt);
+                datatuple::freetuple(dt);
                 dt = 0;
             }
 
     }
     
     printf("Reads completed.\n");
-/*
-    
-    int64_t count = 0;
-    lladdIterator_t * it = logtreeIterator::open(xid, tree);
-
-    while(logtreeIterator::next(xid, it)) {
-        byte * key;
-        byte **key_ptr = &key;
-        int keysize = logtreeIterator::key(xid, it, (byte**)key_ptr);
-        
-        pageid_t *value;
-        pageid_t **value_ptr = &value;
-        int valsize = lsmTreeIterator_value(xid, it, (byte**)value_ptr);
-        //printf("keylen %d key %s\n", keysize, (char*)(key)) ;
-        assert(valsize == sizeof(pageid_t));
-        assert(!mycmp(std::string((char*)key), arr[count]) && !mycmp(arr[count],std::string((char*)key)));
-        assert(keysize == arr[count].length()+1);
-        count++;
-    }
-    assert(count == NUM_ENTRIES);
-
-    logtreeIterator::close(xid, it);
-
-    
-    */
-
   
-        Tcommit(xid);
-        Tdeinit();
+	Tcommit(xid);
+	Tdeinit();
 }
 
 

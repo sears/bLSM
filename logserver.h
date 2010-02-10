@@ -81,31 +81,14 @@ struct serverth_data
     std::queue<int> *ready_queue;
 
     pthread_cond_t *selcond;
-    
-    pthread_mutex_t *qlock;
-    
-    
 
+    pthread_mutex_t *qlock;
 };
 
-void * thread_work_fn( void *);    
+void * thread_work_fn( void *);
 
 class logserver
 {
-public:
-    //server codes
-//    static uint8_t OP_SUCCESS;
-//    static uint8_t OP_FAIL;
-//    static uint8_t OP_SENDING_TUPLE;
-//
-//    //client codes
-//    static uint8_t OP_FIND;
-//    static uint8_t OP_INSERT;
-//
-//    static uint8_t OP_DONE;
-//
-//    static uint8_t OP_INVALID;
-    
 public:
     logserver(int nthreads, int server_port){
         this->nthreads = nthreads;

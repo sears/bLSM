@@ -45,6 +45,11 @@ void logserver::startserver(logtable *ltable)
         worker_data->ready_queue = &ready_queue;
         worker_data->work_queue = &work_queue;
 
+#ifdef STATS_ENABLED
+        worker_data->num_reqs = 0;
+#endif
+
+
         worker_data->qlock = qlock;
 
         worker_data->selcond = selcond;
@@ -340,14 +345,14 @@ void *serverLoop(void *args)
     }
     
     //start listening on the server socket
-    //second arg is the max number of coonections waiting in queue
+    //second arg is the max number of connections waiting in queue
     if(listen(sockfd,SOMAXCONN)==-1)
     {
         printf("ERROR on listen.\n");
          return 0;
     }
 
-    printf("LSM Server listenning...\n");
+    printf("LSM Server listening...\n");
 
     *(sdata->server_socket) = sockfd;
     int flag, result;
@@ -427,22 +432,23 @@ void * thread_work_fn( void * args)
         }
 
         //step 1: read the opcode
-        uint8_t opcode;
-        ssize_t n = read(*(item->data->workitem), &opcode, sizeof(uint8_t));
-        if(n == 0) {
+        network_op_t opcode = readopfromsocket(*(item->data->workitem), LOGSTORE_CLIENT_REQUEST);
+        if(opcode == LOGSTORE_CONN_CLOSED_ERROR) {
         	opcode = OP_DONE;
-        	n = sizeof(uint8_t);
         	printf("Obsolescent client closed connection uncleanly\n");
         }
-        assert( n == sizeof(uint8_t));
-        assert( opcode < OP_INVALID );
 
-        if( opcode == OP_DONE ) //close the conn on failure
+        if( opcode == OP_DONE || (opiserror(opcode))) //close the conn on failure
         {
-            pthread_mutex_lock(item->data->qlock);            
-            printf("client done. conn closed. (%d, %d, %d, %d)\n",
-                   n, errno, *(item->data->workitem), item->data->work_queue->size());
-            close(*(item->data->workitem));
+            pthread_mutex_lock(item->data->qlock);
+            if(opiserror(opcode)) {
+            	printf("network error. conn closed. (%d, %d, %d, %d)\n",
+            		   opcode, errno, *(item->data->workitem), item->data->work_queue->size());
+            } else {
+            	printf("client done. conn closed. (%d, %d)\n",
+					   *(item->data->workitem), item->data->work_queue->size());
+            }
+			close(*(item->data->workitem));
                 
             if(item->data->work_queue->size() > 0)
             {
@@ -464,30 +470,8 @@ void * thread_work_fn( void * args)
         }
 
         
-        //step 2: read the tuple from client        
-        datatuple tuple;
-        tuple.keylen = (uint32_t*)malloc(sizeof(uint32_t));
-        tuple.datalen = (uint32_t*)malloc(sizeof(uint32_t));
-        
-        //read the key length
-        n = read(*(item->data->workitem), tuple.keylen, sizeof(uint32_t));
-        assert( n == sizeof(uint32_t));
-        //read the data length
-        n = read(*(item->data->workitem), tuple.datalen, sizeof(uint32_t));
-        assert( n == sizeof(uint32_t));
-        
-        //read the key
-        tuple.key = (byte*) malloc(*tuple.keylen);
-        readfromsocket(*(item->data->workitem), (char*) tuple.key, *tuple.keylen);
-        //read the data
-        if(!tuple.isDelete() && opcode != OP_FIND)
-        {
-            tuple.data = (byte*) malloc(*tuple.datalen);
-            readfromsocket(*(item->data->workitem), (char*) tuple.data, *tuple.datalen);
-        }
-        else
-            tuple.data = 0;
-
+        //step 2: read the tuple from client
+        datatuple * tuple = readtuplefromsocket(*(item->data->workitem));
         //step 3: process the tuple
         //pthread_mutex_lock(item->data->table_lock);
         //readlock(item->data->table_lock,0);
@@ -500,67 +484,61 @@ void * thread_work_fn( void * args)
             //pthread_mutex_unlock(item->data->table_lock);
             //unlock(item->data->table_lock);
             //step 4: send response
-            uint8_t rcode = OP_SUCCESS;
-            n = write(*(item->data->workitem), &rcode, sizeof(uint8_t));
-            assert(n == sizeof(uint8_t));
-            
+            uint8_t rcode = LOGSTORE_RESPONSE_SUCCESS;
+            int err = writeoptosocket(*(item->data->workitem), LOGSTORE_RESPONSE_SUCCESS);
+            if(err) {
+            	perror("could not respond to client");
+            }
         }
         else if(opcode == OP_FIND)
         {
             //find the tuple
-            datatuple *dt = item->data->ltable->findTuple(-1, tuple.key, *tuple.keylen);
+            datatuple *dt = item->data->ltable->findTuple(-1, tuple->key(), tuple->keylen());
             //unlock the lsmlock
             //pthread_mutex_unlock(item->data->table_lock);
             //unlock(item->data->table_lock);
 
             #ifdef STATS_ENABLED
 
-            if(dt == 0)
-                DEBUG("key not found:\t%s\n", datatuple::key_to_str(tuple.key).c_str());
-            else if( *dt->datalen != 1024)
-                DEBUG("data len for\t%s:\t%d\n", datatuple::key_to_str(tuple.key).c_str(),
-                       *dt->datalen);
+            if(dt == 0) {
+                DEBUG("key not found:\t%s\n", datatuple::key_to_str(tuple.key()).c_str());
+            } else if( dt->datalen() != 1024) {
+                DEBUG("data len for\t%s:\t%d\n", datatuple::key_to_str(tuple.key()).c_str(),
+                       dt->datalen);
+                if(datatuple::compare(tuple->key(), dt->key()) != 0) {
+                    DEBUG("key not equal:\t%s\t%s\n", datatuple::key_to_str(tuple.key()).c_str(),
+                           datatuple::key_to_str(dt->key).c_str());
+                }
 
-            if(datatuple::compare(tuple.key, dt->key) != 0)
-                DEBUG("key not equal:\t%s\t%s\n", datatuple::key_to_str(tuple.key).c_str(),
-                       datatuple::key_to_str(dt->key).c_str());
-            
+            }
             #endif
             
-            if(dt == 0)  //tuple deleted
+            bool dt_needs_free;
+            if(dt == 0)  //tuple does not exist.
             {
-                dt = (datatuple*) malloc(sizeof(datatuple));
-                dt->keylen = (uint32_t*) malloc(2*sizeof(uint32_t) + *tuple.keylen);
-                *dt->keylen = *tuple.keylen;
-                dt->datalen = dt->keylen + 1;
-                dt->key = (datatuple::key_t) (dt->datalen+1);
-                memcpy((byte*) dt->key, (byte*) tuple.key, *tuple.keylen);
-                dt->setDelete();
+            	dt = tuple;
+            	dt->setDelete();
+            	dt_needs_free = false;
+            } else {
+            	dt_needs_free = true;
             }
 
             //send the reply code
-            uint8_t rcode = OP_SENDING_TUPLE;
-            n = write(*(item->data->workitem), &rcode, sizeof(uint8_t));
-            assert(n == sizeof(uint8_t));
+            int err = writeoptosocket(*(item->data->workitem), LOGSTORE_RESPONSE_SENDING_TUPLES);
 
             //send the tuple
-            writetosocket(*(item->data->workitem), (char*) dt->keylen, dt->byte_length());
+            writetupletosocket(*(item->data->workitem), dt);
 
             //free datatuple
-            free(dt->keylen);
-            free(dt);
+            if(dt_needs_free) {
+            	datatuple::freetuple(dt);
+            }
         }
 
-        //close the socket
-        //close(*(item->data->workitem));
-
         //free the tuple
-        free(tuple.keylen);
-        free(tuple.datalen);
-        free(tuple.key);
-        free(tuple.data);
+        datatuple::freetuple(tuple);
 
-        //printf("socket %d: work completed.", *(item->data->workitem));
+		//printf("socket %d: work completed.", *(item->data->workitem));
         
         pthread_mutex_lock(item->data->qlock);
         
@@ -619,5 +597,3 @@ void * thread_work_fn( void * args)
 
     return NULL;
 }
-                       
-

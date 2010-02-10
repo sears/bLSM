@@ -21,8 +21,8 @@
 void insertProbeIter(size_t NUM_ENTRIES)
 {
     srand(1000);
-    //unlink("storefile.txt");
-    //unlink("logfile.txt");
+    unlink("storefile.txt");
+    unlink("logfile.txt");
 
     sync();
     double delete_freq = .05;
@@ -91,11 +91,8 @@ void insertProbeIter(size_t NUM_ENTRIES)
     key_v_list->clear();
     delete key_v_list;
     
-//    preprandstr(NUM_ENTRIES, data_arr, 10*8192);
-
     printf("key arr size: %d\n", key_arr->size());
 
-    //removeduplicates(key_arr);
     if(key_arr->size() > NUM_ENTRIES)
         key_arr->erase(key_arr->begin()+NUM_ENTRIES, key_arr->end());
     
@@ -138,45 +135,21 @@ void insertProbeIter(size_t NUM_ENTRIES)
     gettimeofday(&start_tv,0);
     for(size_t i = 0; i < NUM_ENTRIES; i++)
     {
-        //prepare the key
-        datatuple newtuple;        
-        uint32_t keylen = (*key_arr)[i].length()+1;
-        newtuple.keylen = &keylen;
-        
-        newtuple.key = (datatuple::key_t) malloc(keylen);
-        memcpy((byte*)newtuple.key, (*key_arr)[i].c_str(), keylen);
-        //for(int j=0; j<keylen-1; j++)
-        //    newtuple.key[j] = (*key_arr)[i][j];
-        //newtuple.key[keylen-1]='\0';
-
         //prepare the data
         std::string ditem;
         getnextdata(ditem, 8192);
-        uint32_t datalen = ditem.length()+1;
-        newtuple.datalen = &datalen;        
-        newtuple.data = (datatuple::data_t) malloc(datalen);
-        memcpy((byte*)newtuple.data, ditem.c_str(), datalen);
-//        for(int j=0; j<datalen-1; j++)
-//            newtuple.data[j] = (*data_arr)[i][j];
-//        newtuple.data[datalen-1]='\0';        
+
+        //prepare the key
+        datatuple *newtuple = datatuple::create((*key_arr)[i].c_str(), (*key_arr)[i].length()+1, ditem.c_str(), ditem.length()+1);
         
-        /*
-        printf("key: \t, keylen: %u\ndata:  datalen: %u\n",
-               //newtuple.key,
-               *newtuple.keylen,
-               //newtuple.data,
-               *newtuple.datalen);
-               */
-        
-        datasize += newtuple.byte_length();
+        datasize += newtuple->byte_length();
 
         gettimeofday(&ti_st,0);        
         ltable.insertTuple(newtuple);
         gettimeofday(&ti_end,0);
         insert_time += tv_to_double(ti_end) - tv_to_double(ti_st);
 
-        free(newtuple.key);
-        free(newtuple.data);
+        datatuple::freetuple(newtuple);
 
         double rval = ((rand() % 100)+.0)/100;        
         if( rval < delete_freq) //delete a key 
@@ -185,22 +158,15 @@ void insertProbeIter(size_t NUM_ENTRIES)
             if(del_index >= 0 && std::find(del_list.begin(), del_list.end(), del_index) == del_list.end())
             {
                 delcount++;
-                datatuple deltuple;        
-                keylen = (*key_arr)[del_index].length()+1;
-                deltuple.keylen = &keylen;
-        
-                deltuple.key = (datatuple::key_t) malloc(keylen);
-                memcpy((byte*)deltuple.key, (*key_arr)[del_index].c_str(), keylen);
 
-                deltuple.datalen = &datalen;        
-                deltuple.setDelete();
+                datatuple *deltuple = datatuple::create((*key_arr)[del_index].c_str(), (*key_arr)[del_index].length()+1);
 
                 gettimeofday(&ti_st,0);        
                 ltable.insertTuple(deltuple);
                 gettimeofday(&ti_end,0);
                 insert_time += tv_to_double(ti_end) - tv_to_double(ti_st);
 
-                free(deltuple.key);
+                datatuple::freetuple(deltuple);
 
                 del_list.push_back(del_index);
                 
@@ -211,28 +177,17 @@ void insertProbeIter(size_t NUM_ENTRIES)
             int up_index = i - (rand()%50); //update one of the last inserted 50 elements
             if(up_index >= 0 && std::find(del_list.begin(), del_list.end(), up_index) == del_list.end()) 
             {//only update non-deleted elements
-                upcount++;
-                datatuple uptuple;        
-                keylen = (*key_arr)[up_index].length()+1;
-                uptuple.keylen = &keylen;
-        
-                uptuple.key = (datatuple::key_t) malloc(keylen);
-                memcpy((byte*)uptuple.key, (*key_arr)[up_index].c_str(), keylen);
-                
                 getnextdata(ditem, 512);
-                datalen = ditem.length()+1;
-                uptuple.datalen = &datalen;        
-                uptuple.data = (datatuple::data_t) malloc(datalen);
-                memcpy((byte*)uptuple.data, ditem.c_str(), datalen);
-                
+
+                upcount++;
+                datatuple *uptuple = datatuple::create((*key_arr)[up_index].c_str(), (*key_arr)[up_index].length()+1,
+													   ditem.c_str(), ditem.length()+1);
                 gettimeofday(&ti_st,0);        
                 ltable.insertTuple(uptuple);
                 gettimeofday(&ti_end,0);
                 insert_time += tv_to_double(ti_end) - tv_to_double(ti_st);
 
-                free(uptuple.key);
-                free(uptuple.data);
-                
+                datatuple::freetuple(uptuple);
             }            
 
         }
@@ -244,9 +199,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     printf("#deletions: %d\n#updates: %d\n", delcount, upcount);
 
     printf("\nTREE STRUCTURE\n");
-    //ltable.get_tree_c1()->print_tree(xid);
     printf("datasize: %lld\n", datasize);
-    //sleep(20);
 
     Tcommit(xid);
     xid = Tbegin();
@@ -259,16 +212,11 @@ void insertProbeIter(size_t NUM_ENTRIES)
     for(int i=NUM_ENTRIES-1; i>=0; i--)
     {        
         int ri = i;
-        //printf("key index%d\n", i);
-        fflush(stdout);
 
         //get the key
         uint32_t keylen = (*key_arr)[ri].length()+1;        
         datatuple::key_t rkey = (datatuple::key_t) malloc(keylen);
         memcpy((byte*)rkey, (*key_arr)[ri].c_str(), keylen);
-        //for(int j=0; j<keylen-1; j++)
-        //rkey[j] = (*key_arr)[ri][j];
-        //rkey[keylen-1]='\0';
 
         //find the key with the given tuple
         datatuple *dt = ltable.findTuple(xid, rkey, keylen);
@@ -278,19 +226,16 @@ void insertProbeIter(size_t NUM_ENTRIES)
             assert(dt!=0);
             assert(!dt->isDelete());
             found_tuples++;
-            assert(*(dt->keylen) == (*key_arr)[ri].length()+1);
-            //assert(*(dt->datalen) == (*data_arr)[ri].length()+1);
-            free(dt->keylen);
-            free(dt);
+            assert(dt->keylen() == (*key_arr)[ri].length()+1);
+            datatuple::freetuple(dt);
         }
         else
         {
             if(dt!=0)
             {
-                assert(*(dt->keylen) == (*key_arr)[ri].length()+1);
+                assert(dt->keylen() == (*key_arr)[ri].length()+1);
                 assert(dt->isDelete());
-                free(dt->keylen);
-                free(dt);
+                datatuple::freetuple(dt);
             }
         }
         dt = 0;
@@ -326,7 +271,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
  */
 int main()
 {
-    //insertProbeIter(25000);
+//    insertProbeIter(25000);
     insertProbeIter(400000);
     /*
     insertProbeIter(5000);

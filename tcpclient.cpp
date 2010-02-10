@@ -78,12 +78,17 @@ logstore_handle_t * logstore_client_open(const char *host, int portnum, int time
     return ret;
 }
 
+static inline void close_conn(logstore_handle_t *l) {
+	printf("read/write err.. conn closed.\n");
+	close(l->server_socket); //close the connection
+    l->server_socket = -1;
+}
 datatuple *
 logstore_client_op(logstore_handle_t *l,
 //		  int *server_socket,
 //          struct sockaddr_in serveraddr,
 //          struct hostent *server,
-          uint8_t opcode,  datatuple &tuple)
+          uint8_t opcode,  datatuple * tuple)
 {
 
     if(l->server_socket < 0)
@@ -122,60 +127,27 @@ logstore_client_op(logstore_handle_t *l,
     }
 
 
+
     //send the opcode
-    int n = write(l->server_socket, (byte*) &opcode, sizeof(uint8_t));
-    assert(n == sizeof(uint8_t));
+    if( writetosocket(l->server_socket, &opcode, sizeof(opcode))  ) { close_conn(l); return 0; }
 
     //send the tuple
-    n = write(l->server_socket, (byte*) tuple.keylen, sizeof(uint32_t));
-    assert( n == sizeof(uint32_t));
+    if( writetupletosocket(l->server_socket, tuple)               ) { close_conn(l); return 0; }
 
-    n = write(l->server_socket, (byte*) tuple.datalen, sizeof(uint32_t));
-    assert( n == sizeof(uint32_t));
+    network_op_t rcode = readopfromsocket(l->server_socket,LOGSTORE_SERVER_RESPONSE);
 
-    writetosocket(l->server_socket, (char*) tuple.key, *tuple.keylen);
-    if(!tuple.isDelete() && *tuple.datalen != 0)
-        writetosocket(l->server_socket, (char*) tuple.data, *tuple.datalen);
+    if( opiserror(rcode)                                          ) { close_conn(l); return 0; }
 
-    //printf("\nssocket %d ", *server_socket);
-    //read the reply code
-    uint8_t rcode;
-    n = read(l->server_socket, (byte*) &rcode, sizeof(uint8_t));
-    if( n <= 0 )
-    {
-        printf("read err.. conn closed.\n");
-        close(l->server_socket); //close the connection
-        l->server_socket = -1;
-        return 0;
-    }
-
-    //printf("rdone\n");
     datatuple * ret;
-    if(rcode == OP_SENDING_TUPLE)
-    {
-        datatuple *rcvdtuple = (datatuple*)malloc(sizeof(datatuple));
-        //read the keylen
-        rcvdtuple->keylen = (uint32_t*) malloc(sizeof(uint32_t));
-        n = read(l->server_socket, (char*) rcvdtuple->keylen, sizeof(uint32_t));
-        assert(n == sizeof(uint32_t));
-        //read the datalen
-        rcvdtuple->datalen = (uint32_t*) malloc(sizeof(uint32_t));
-        n = read(l->server_socket, (byte*) rcvdtuple->datalen, sizeof(uint32_t));
-        assert(n == sizeof(uint32_t));
-        //read key
-        rcvdtuple->key = (byte*) malloc(*rcvdtuple->keylen);
-        readfromsocket(l->server_socket, (char*) rcvdtuple->key, *rcvdtuple->keylen);
-        if(!rcvdtuple->isDelete())
-        {
-            //read key
-            rcvdtuple->data = (byte*) malloc(*rcvdtuple->datalen);
-            readfromsocket(l->server_socket, (char*) rcvdtuple->data, *rcvdtuple->datalen);
-        }
 
-        ret = rcvdtuple;
-    } else if(rcode == OP_SUCCESS) {
-    	ret = &tuple;
+    if(rcode == LOGSTORE_RESPONSE_SENDING_TUPLES)
+    {
+    	ret = readtuplefromsocket(l->server_socket);
+
+    } else if(rcode == LOGSTORE_RESPONSE_SUCCESS) {
+    	ret = tuple;
     } else {
+    	assert(rcode == LOGSTORE_RESPONSE_FAIL); // if this is an invalid response, we should have noticed above
     	ret = 0;
     }
 

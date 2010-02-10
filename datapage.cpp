@@ -86,13 +86,13 @@ void DataPage<TUPLE>::initialize(int xid)
 }
 
 template <class TUPLE>
-bool DataPage<TUPLE>::append(int xid, TUPLE const & dat)
+bool DataPage<TUPLE>::append(int xid, TUPLE const * dat)
 {
     assert(byte_offset >= HEADER_SIZE);
     assert(fix_pcount >= 1);
     
     //check if there is enough space (for the data length + data)
-    int32_t blen = dat.byte_length() + sizeof(int32_t);    
+    int32_t blen = dat->byte_length() + sizeof(int32_t);
     if(PAGE_SIZE * fix_pcount - byte_offset < blen)
     {
         //check if the record is too large
@@ -118,7 +118,7 @@ bool DataPage<TUPLE>::append(int xid, TUPLE const & dat)
     byte_offset += sizeof(int32_t);
 
     //write the data
-    byte * barr = dat.to_bytes();
+    byte * barr = dat->to_bytes();
     if(!writebytes(xid, dsize, barr)) //if write fails, undo the previous write
     {        
         byte_offset -= sizeof(int32_t);        
@@ -127,7 +127,8 @@ bool DataPage<TUPLE>::append(int xid, TUPLE const & dat)
         if(PAGE_SIZE - (byte_offset % PAGE_SIZE) >= sizeof(int32_t))
         {
             dsize = 0;
-            writebytes(xid, sizeof(int32_t), (byte*)(&dsize));//this will succeed, since there is enough space on the page
+            int succ = writebytes(xid, sizeof(int32_t), (byte*)(&dsize));//this will succeed, since there is enough space on the page
+            assert(succ);
         }        
         return false;
     }
@@ -138,7 +139,9 @@ bool DataPage<TUPLE>::append(int xid, TUPLE const & dat)
     if(PAGE_SIZE - (byte_offset % PAGE_SIZE) >= sizeof(int32_t))
     {
         dsize = 0;
-        writebytes(xid, sizeof(int32_t), (byte*)(&dsize));//this will succeed, since there is enough space on the page
+        int succ = writebytes(xid, sizeof(int32_t), (byte*)(&dsize));//this will succeed, since there is enough space on the page
+        assert(succ);
+
     }
     
     return true;
@@ -205,12 +208,11 @@ bool DataPage<TUPLE>::recordRead(int xid, typename TUPLE::key_t key, size_t keyS
     int match = -1;
     while((*buf=itr.getnext(xid)) != 0)
         {
-            match = TUPLE::compare((*buf)->get_key(), key);
+            match = TUPLE::compare((*buf)->key(), key);
             
             if(match<0) //keep searching
             {
-                free((*buf)->keylen);
-                free(*buf);                
+                datatuple::freetuple(*buf);
                 *buf=0;
             }
             else if(match==0) //found
@@ -219,8 +221,7 @@ bool DataPage<TUPLE>::recordRead(int xid, typename TUPLE::key_t key, size_t keyS
             }
             else // match > 0, then does not exist
             {
-                free((*buf)->keylen);
-                free(*buf);
+               datatuple::freetuple(*buf);
                 *buf = 0;
                 break;
             }
@@ -230,12 +231,9 @@ bool DataPage<TUPLE>::recordRead(int xid, typename TUPLE::key_t key, size_t keyS
 }
 
 template <class TUPLE>
-void DataPage<TUPLE>::readbytes(int xid, int32_t offset, int count, byte **data)
+void DataPage<TUPLE>::readbytes(int xid, int32_t offset, int count, byte *data)
 {
 
-    if(*data==NULL)
-        *data = (byte*)malloc(count);
-    
     int32_t bytes_copied = 0;
     while(bytes_copied < count)
     {
@@ -251,7 +249,7 @@ void DataPage<TUPLE>::readbytes(int xid, int32_t offset, int count, byte **data)
         int32_t copy_len = ( (PAGE_SIZE - page_offset < count - bytes_copied ) ? PAGE_SIZE - page_offset : count - bytes_copied);
 
         byte * pb_ptr = stasis_page_byte_ptr_from_start(p, page_offset);
-        memcpy((*data)+bytes_copied, pb_ptr, copy_len);
+        memcpy((data)+bytes_copied, pb_ptr, copy_len);
     
         //release the page
         unlock(p->rwlatch);
@@ -425,10 +423,11 @@ TUPLE* DataPage<TUPLE>::RecordIterator::getnext(int xid)
     readlock(p->rwlatch,0);    
 
     int32_t *dsize_ptr;
+    int32_t scratch;
     if(PAGE_SIZE - (offset % PAGE_SIZE) < sizeof(int32_t)) //int spread in two pages
     {
-        dsize_ptr = 0;
-        dp->readbytes(xid, offset, sizeof(int32_t), (byte**)(&dsize_ptr));
+        dsize_ptr = &scratch;
+        dp->readbytes(xid, offset, sizeof(int32_t), (byte*)dsize_ptr);
     }
     else //int in a single page
         dsize_ptr = (int32_t*)stasis_page_byte_ptr_from_start(p, offset % PAGE_SIZE);
@@ -442,10 +441,12 @@ TUPLE* DataPage<TUPLE>::RecordIterator::getnext(int xid)
         return 0;
     }
     
-    byte* tb=0;
-    dp->readbytes(xid, offset, *dsize_ptr, &tb);
+    byte* tb = (byte*)malloc(*dsize_ptr);
+    dp->readbytes(xid, offset, *dsize_ptr, tb);
 
-    TUPLE *tup = TUPLE::from_bytes(tb);
+    TUPLE *tup = TUPLE::from_bytes(tb);  // This version of from_bytes does not consume its argument.
+
+    free(tb);
 
     offset += *dsize_ptr;
 
@@ -484,15 +485,18 @@ void DataPage<TUPLE>::RecordIterator::advance(int xid, int count)
             readlock(p->rwlatch,0);            
         }
 
-        if(pindex == dp->pcount - 1 && (PAGE_SIZE - (offset % PAGE_SIZE) < sizeof(int32_t)))
-            return;
-
+        if(pindex == dp->pcount - 1 && (PAGE_SIZE - (offset % PAGE_SIZE) < sizeof(int32_t))) {
+        	assert(!p); // XXX Otherwise, was leaking page.  do we reach this branch in testing?
+        	return;
+        }
         int32_t *dsize_ptr=0;
-        if(PAGE_SIZE - (offset % PAGE_SIZE) < sizeof(int32_t)) //int spread in two pages        
-            dp->readbytes(xid, offset, sizeof(int32_t), (byte**)(&dsize_ptr));        
-        else //int in a single page
+        int32_t scratch;
+        if(PAGE_SIZE - (offset % PAGE_SIZE) < sizeof(int32_t)) { //int spread in two pages
+            dsize_ptr = &scratch;
+        	dp->readbytes(xid, offset, sizeof(int32_t), (byte*)dsize_ptr);
+        } else { //int in a single page
             dsize_ptr = (int32_t*)stasis_page_byte_ptr_from_start(p, offset % PAGE_SIZE);
-        
+        }
         offset += sizeof(int32_t);
                 
         if(*dsize_ptr == 0) //no more keys
