@@ -308,7 +308,6 @@ void* memMergeThread(void*arg)
             continue;
         }
       
-        uint64_t insertedTuples=0;
         int64_t mergedPages=0;
         
         assert(a->my_tree.size != -1);
@@ -517,8 +516,6 @@ void *diskMergeThread(void*arg)
             break;
         }
         
-      
-        uint64_t insertedTuples=0;
         int64_t mergedPages=0;
         
         assert(a->my_tree.size != -1);

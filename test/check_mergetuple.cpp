@@ -127,10 +127,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     struct timeval start_tv, stop_tv, ti_st, ti_end;
     double insert_time = 0;
-    int dpages = 0;
-    int npages = 0;
     int delcount = 0, upcount = 0;
-    DataPage<datatuple> *dp=0;
     int64_t datasize = 0;
     std::vector<pageid_t> dsp;
     std::vector<int> del_list;

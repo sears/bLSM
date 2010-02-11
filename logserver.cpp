@@ -484,7 +484,6 @@ void * thread_work_fn( void * args)
             //pthread_mutex_unlock(item->data->table_lock);
             //unlock(item->data->table_lock);
             //step 4: send response
-            uint8_t rcode = LOGSTORE_RESPONSE_SUCCESS;
             int err = writeoptosocket(*(item->data->workitem), LOGSTORE_RESPONSE_SUCCESS);
             if(err) {
             	perror("could not respond to client");

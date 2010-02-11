@@ -373,9 +373,7 @@ recordid logtree::appendPage(int xid, recordid tree, pageid_t & rmLeafID,
 	  for(int i = *stasis_page_slotted_numslots_ptr(p)-1; i>FIRST_SLOT; i--)
           {
 	    assert(*stasis_page_slotted_numslots_ptr(p) > FIRST_SLOT+1);
-              const indexnode_rec *nr = (const indexnode_rec*)readRecord(xid,p,i,0);
-              int reclen = readRecordLength(xid, p, i);
-              recordid tmp_rec= {p->id, i, reclen};
+              recordid tmp_rec= {p->id, i, INVALID_SIZE};
               stasis_record_free(xid, p, tmp_rec);              
 	  }
           

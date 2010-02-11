@@ -29,10 +29,6 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     logstore_handle_t * l = logstore_client_open(svrname, svrport, 100);
 
-
-    double delete_freq = .05;
-    double update_freq = .15;
-    
     //data generation
     typedef std::vector<std::string> key_v_t;
     const static size_t max_partition_size = 100000;
@@ -106,8 +102,6 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     struct timeval start_tv, stop_tv, ti_st, ti_end;
     double insert_time = 0;
-    int dpages = 0;
-    int npages = 0;
     int delcount = 0, upcount = 0;
     int64_t datasize = 0;
     std::vector<pageid_t> dsp;
@@ -163,7 +157,6 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
         //get the key
         datatuple::len_t keylen = (*key_arr)[ri].length()+1;
-        datatuple::len_t datalen = 0;
 
         datatuple* searchtuple = datatuple::create((*key_arr)[ri].c_str(), keylen);
 
