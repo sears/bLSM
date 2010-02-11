@@ -30,6 +30,8 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     bufferManagerNonBlockingSlowHandleType = IO_HANDLE_PFILE;
 
+    DataPage<datatuple>::register_stasis_page_impl();
+
     Tinit();
 
     int xid = Tbegin();

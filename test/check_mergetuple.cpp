@@ -27,7 +27,9 @@ void insertProbeIter(size_t NUM_ENTRIES)
     sync();
     double delete_freq = .05;
     double update_freq = .15;
-    
+
+    DataPage<datatuple>::register_stasis_page_impl();
+
     //data generation
     typedef std::vector<std::string> key_v_t;
     const static size_t max_partition_size = 100000;

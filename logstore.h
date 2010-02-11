@@ -187,7 +187,7 @@ public:
 
     void flushTable();    
     
-    static inline void tearDownTree(rbtree_ptr_t t);
+    static void tearDownTree(rbtree_ptr_t t);
 
     DataPage<datatuple>* insertTuple(int xid, datatuple *tuple, recordid &dpstate,logtree *ltree);
 

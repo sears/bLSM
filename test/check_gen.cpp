@@ -10,7 +10,6 @@ int main(int argc, char **argv)
     sync();
 
     //    PAGELAYOUT::initPageLayout();
-    
     bufferManagerNonBlockingSlowHandleType = IO_HANDLE_PFILE;
 
     Tinit();
@@ -19,7 +18,7 @@ int main(int argc, char **argv)
 
     logtable ltable;
 
-    recordid table_root = ltable.allocTable(xid);    
+    recordid table_root = ltable.allocTable(xid);
 
     Tcommit(xid);
 
@@ -28,9 +27,9 @@ int main(int argc, char **argv)
 //    lsmTableHandle<PAGELAYOUT>* h = TlsmTableStart<PAGELAYOUT>(lsmTable, INVALID_COL);
 
     xid = Tbegin();
-    logtreeIterator::open(xid,ltable.get_tree_c2()->get_root_rec() );
+    lladdIterator_t * it = logtreeIterator::open(xid,ltable.get_tree_c2()->get_root_rec() );
+    logtreeIterator::close(xid, it);
     Tcommit(xid);
-    
 
     Tdeinit();
 

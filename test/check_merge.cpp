@@ -24,6 +24,8 @@ void insertProbeIter(size_t NUM_ENTRIES)
     unlink("storefile.txt");
     unlink("logfile.txt");
 
+    DataPage<datatuple>::register_stasis_page_impl();
+
     sync();
 
     //data generation

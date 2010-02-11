@@ -16,24 +16,14 @@ public:
     class RecordIterator
     {
     public:
-        RecordIterator(DataPage *dp)
-            {
-                offset = HEADER_SIZE;
-                this->dp = dp;
-            }
-
-        RecordIterator(const RecordIterator &rhs)
-            {
-                this->offset = rhs.offset;
-                this->dp = rhs.dp;            
-            }
+        RecordIterator(DataPage *dp) : read_offset_(0), dp(dp) { }
+        RecordIterator(const RecordIterator &rhs) : read_offset_(rhs.read_offset_), dp(rhs.dp) {}
 
         void operator=(const RecordIterator &rhs)
             {
-                this->offset = rhs.offset;
+                this->read_offset_ = rhs.read_offset_;
                 this->dp = rhs.dp;
             }
-        
 
         //returns the next tuple and also advances the iterator
         TUPLE *getnext(int xid);
@@ -42,7 +32,7 @@ public:
         void advance(int xid, int count=1);
         
         
-        int32_t offset ;
+        off_t read_offset_;
         DataPage *dp;
         
         
@@ -67,8 +57,8 @@ public:
 
     RecordIterator begin(){return RecordIterator(this);}
 
-    pageid_t get_start_pid(){return pidarr[0];}
-    int get_page_count(){return pcount;}
+    pageid_t get_start_pid(){return first_page_;}
+    int get_page_count(){return page_count_;}
 
     static pageid_t dp_alloc_region(int xid, void *conf);
     
@@ -78,33 +68,45 @@ public:
 
     static void force_region_rid(int xid, void *conf);
 
-public:
-    
+    static void register_stasis_page_impl();
+
 private:
 
     void initialize(int xid);
 
     //reads the page count information from the first page
-    int readPageCount(int xid, pageid_t pid);
-    void incrementPageCount(int xid, pageid_t pid, int add=1);
-
-    bool writebytes(int xid, int count, byte *data);
-    inline void readbytes(int xid, int32_t offset, int count, byte *data);
+    static int32_t readPageCount(int xid, pageid_t pid);
 
 private:
-    int32_t pcount;
-    pageid_t *pidarr;
-    int32_t byte_offset;//points to the next free byte
+    static const uint16_t DATA_PAGE_HEADER_SIZE = sizeof(int32_t);
+    static const uint16_t DATA_PAGE_SIZE = USABLE_SIZE_OF_PAGE - DATA_PAGE_HEADER_SIZE;
+    typedef uint32_t len_t;
 
+    static inline int32_t* page_count_ptr(Page *p) {
+    	return stasis_page_int32_ptr_from_start(p,0);
+    }
+    static inline byte * data_at_offset_ptr(Page *p, slotid_t offset) {
+    	return ((byte*)(page_count_ptr(p)+1))+offset;
+    }
+    static inline len_t * length_at_offset_ptr(Page *p, slotid_t offset) {
+    	return (len_t*)data_at_offset_ptr(p,offset);
+    }
 
-    //page alloc function
-    pageid_t (*alloc_region)(int, void*);
-    void *alloc_state;
-    int fix_pcount; //number of pages in a standard data page
-
-    static const int32_t HEADER_SIZE;
-    
-
+    inline recordid calc_chunk_from_offset(off_t offset) {
+    	recordid ret;
+    	ret.page = first_page_ + offset / DATA_PAGE_SIZE;
+    	ret.slot = offset % DATA_PAGE_SIZE;
+    	ret.size = DATA_PAGE_SIZE - ret.slot;
+	assert(ret.size);
+    	return ret;
+    }
+    size_t write_bytes(int xid, const byte * buf, size_t remaining);
+    size_t read_bytes(int xid, byte * buf, off_t offset, size_t remaining);
+    bool write_data(int xid, const byte * buf, size_t len);
+    bool read_data(int xid, byte * buf, off_t offset, size_t len);
+    bool initialize_next_page(int xid);
+    const int32_t page_count_;
+    const pageid_t first_page_;
+    off_t write_offset_; // points to the next free byte (ignoring page boundaries)
 };
-
 #endif

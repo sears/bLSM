@@ -30,6 +30,8 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     bufferManagerNonBlockingSlowHandleType = IO_HANDLE_PFILE;
 
+    DataPage<datatuple>::register_stasis_page_impl();
+
     Tinit();
 
     int xid = Tbegin();
@@ -49,28 +51,14 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     if(data_arr.size() > NUM_ENTRIES)
         data_arr.erase(data_arr.begin()+NUM_ENTRIES, data_arr.end());
-    
-    //for(int i = 0; i < NUM_ENTRIES; i++)
-    //{
-    //   printf("%s\t", arr[i].c_str());
-    //   int keylen = arr[i].length()+1;
-    //  printf("%d\n", keylen);      
-    //}
-
-
 
     recordid alloc_state = Talloc(xid,sizeof(RegionAllocConf_t));
     
     Tset(xid,alloc_state, &logtree::REGION_ALLOC_STATIC_INITIALIZER);
 
-
-    
-    
-    
-
     printf("Stage 1: Writing %d keys\n", NUM_ENTRIES);
       
-    int pcount = 10;
+    int pcount = 1000;
     int dpages = 0;
     DataPage<datatuple> *dp=0;
     int64_t datasize = 0;
@@ -80,29 +68,18 @@ void insertProbeIter(size_t NUM_ENTRIES)
         //prepare the key
         datatuple *newtuple = datatuple::create(key_arr[i].c_str(), key_arr[i].length()+1, data_arr[i].c_str(), data_arr[i].length()+1);
 
-        /*
-        printf("key: \t, keylen: %u\ndata:  datalen: %u\n",
-               //newtuple.key,
-               *newtuple.keylen,
-               //newtuple.data,
-               *newtuple.datalen);
-               */
         datasize += newtuple->byte_length();
         if(dp==NULL || !dp->append(xid, newtuple))
         {
             dpages++;
             if(dp)
                 delete dp;
-            
+
             dp = new DataPage<datatuple>(xid, pcount, &DataPage<datatuple>::dp_alloc_region_rid, &alloc_state );
-            
-            if(!dp->append(xid, newtuple))
-            {            
-                delete dp;
-                dp = new DataPage<datatuple>(xid, pcount, &DataPage<datatuple>::dp_alloc_region_rid, &alloc_state );            
-                assert(dp->append(xid, newtuple));
-            }
-               
+
+			bool succ = dp->append(xid, newtuple);
+			assert(succ);
+
             dsp.push_back(dp->get_start_pid());
         }
         

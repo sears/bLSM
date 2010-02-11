@@ -26,6 +26,8 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     sync();
 
+    DataPage<datatuple>::register_stasis_page_impl();
+
     //data generation
 //    std::vector<std::string> * data_arr = new std::vector<std::string>;
     std::vector<std::string> * key_arr = new std::vector<std::string>;

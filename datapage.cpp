@@ -1,203 +1,232 @@
 
 #include "logstore.h"
 #include "datapage.h"
+#include <stasis/page.h>
+
+static const int DATA_PAGE = USER_DEFINED_PAGE(1);
+#define MAX_PAGE_COUNT 1000 // ~ 4MB
+
+BEGIN_C_DECLS
+static void dataPageFsck(Page* p) {
+	int32_t pageCount = *stasis_page_int32_cptr_from_start(p, 0);
+	assert(pageCount >= 0);
+	assert(pageCount <= MAX_PAGE_COUNT);
+}
+static void dataPageLoaded(Page* p) {
+	dataPageFsck(p);
+}
+static void dataPageFlushed(Page* p) {
+	*stasis_page_lsn_ptr(p) = p->LSN;
+	dataPageFsck(p);
+}
+static int notSupported(int xid, Page * p) { return 0; }
+END_C_DECLS
 
 template <class TUPLE>
-const int32_t DataPage<TUPLE>::HEADER_SIZE = sizeof(int32_t);
+void DataPage<TUPLE>::register_stasis_page_impl() {
+	static page_impl pi =  {
+	    DATA_PAGE,
+	    1,
+	    0, //slottedRead,
+	    0, //slottedWrite,
+	    0,// readDone
+	    0,// writeDone
+	    0,//slottedGetType,
+	    0,//slottedSetType,
+	    0,//slottedGetLength,
+	    0,//slottedFirst,
+	    0,//slottedNext,
+	    0,//slottedLast,
+	    notSupported, // is block supported
+	    stasis_block_first_default_impl,
+	    stasis_block_next_default_impl,
+	    stasis_block_done_default_impl,
+	    0,//slottedFreespace,
+	    0,//slottedCompact,
+	    0,//slottedCompactSlotIDs,
+	    0,//slottedPreRalloc,
+	    0,//slottedPostRalloc,
+	    0,//slottedSpliceSlot,
+	    0,//slottedFree,
+	    0,//XXX page_impl_dereference_identity,
+	    dataPageLoaded, //dataPageLoaded,
+	    dataPageFlushed, //dataPageFlushed,
+	    0,//slottedCleanup
+	  };
+	stasis_page_impl_register(pi);
+
+}
+template <class TUPLE>
+int32_t DataPage<TUPLE>::readPageCount(int xid, pageid_t pid) {
+  Page *p = loadPage(xid, pid);
+  int32_t ret = *page_count_ptr(p);
+  releasePage(p);
+  return ret;
+}
+
 
 template <class TUPLE>
 DataPage<TUPLE>::DataPage(int xid, pageid_t pid):
-    alloc_region(0),
-    alloc_state(0),
-    fix_pcount(-1)
-{
-    assert(pid!=0);
-    
-    pcount = readPageCount(xid, pid);
-    
-    pidarr = (pageid_t *) malloc(sizeof(pageid_t) * pcount);
-
-    for(int i=0; i<pcount; i++)
-        pidarr[i] = i + pid;
-
-    byte_offset = HEADER_SIZE; //step over the header info
-    
-}
+    page_count_(readPageCount(xid, pid)),
+    first_page_(pid),
+    write_offset_(-1) { assert(pid!=0); }
 
 template <class TUPLE>
-DataPage<TUPLE>::DataPage(int xid, int fix_pcount, pageid_t (*alloc_region)(int, void*), void * alloc_state)
+DataPage<TUPLE>::DataPage(int xid, int fix_pcount, pageid_t (*alloc_region)(int, void*), void * alloc_state) :
+  page_count_(MAX_PAGE_COUNT), // XXX fix_pcount),
+	first_page_(alloc_region(xid, alloc_state)),
+	write_offset_(0)
 {
     assert(fix_pcount >= 1);
-    byte_offset = -1;
-
-    this->fix_pcount = fix_pcount;
-
-    if(alloc_region != 0)    
-        this->alloc_region = alloc_region;
-    if(alloc_state != 0)
-        this->alloc_state = alloc_state;
-    
     initialize(xid);
 }
 
 template<class TUPLE>
-DataPage<TUPLE>::~DataPage()
-{
-    if(pidarr)
-        free(pidarr);
-}
+DataPage<TUPLE>::~DataPage() { }
 
 
 template<class TUPLE>
 void DataPage<TUPLE>::initialize(int xid)
 {
-    //initializes to an empty datapage
-    //alloc a new page
-    pageid_t pid = alloc_region(xid, alloc_state);
-
     //load the first page
-    //Page *p = loadPage(xid, pid);
-    Page *p = loadPageOfType(xid, pid, SEGMENT_PAGE);
+    Page *p = loadUninitializedPage(xid, first_page_);
     writelock(p->rwlatch,0);
     
     //initialize header
     
     //set number of pages to 1
-    int32_t * numpages_ptr = (int32_t*)stasis_page_byte_ptr_from_start(p, 0);
-    *numpages_ptr = 1;
+    *page_count_ptr(p) = page_count_;
     
     //write 0 to first data size    
-    int32_t * size_ptr = (int32_t*)stasis_page_byte_ptr_from_start(p, HEADER_SIZE);
-    *size_ptr = 0;
+    *length_at_offset_ptr(p, write_offset_) = 0;
 
     //set the page dirty
     stasis_dirty_page_table_set_dirty((stasis_dirty_page_table_t*)stasis_runtime_dirty_page_table(), p);
     
+    p->pageType = DATA_PAGE;
+
     //release the page
     unlock(p->rwlatch);
     releasePage(p);
-    
-    //set the class variables
-    byte_offset = HEADER_SIZE;
-    pcount = 1;
-    pidarr = (pageid_t *) malloc(fix_pcount * sizeof(pageid_t));
-    pidarr[0] = pid;
-    
 }
 
+template <class TUPLE>
+size_t DataPage<TUPLE>::write_bytes(int xid, const byte * buf, size_t remaining) {
+	recordid chunk = calc_chunk_from_offset(write_offset_);
+	if(chunk.size > remaining) {
+		chunk.size = remaining;
+	}
+	if(chunk.page >= first_page_ + page_count_) {
+		chunk.size = 0; // no space
+	} else {
+		Page *p = loadPage(xid, chunk.page);
+		memcpy(data_at_offset_ptr(p, chunk.slot), buf, chunk.size);
+		writelock(p->rwlatch,0);
+		stasis_dirty_page_table_set_dirty((stasis_dirty_page_table_t*)stasis_runtime_dirty_page_table(), p);
+		unlock(p->rwlatch);
+		releasePage(p);
+		write_offset_ += chunk.size;
+	}
+	return chunk.size;
+}
+template <class TUPLE>
+size_t DataPage<TUPLE>::read_bytes(int xid, byte * buf, off_t offset, size_t remaining) {
+	recordid chunk = calc_chunk_from_offset(offset);
+	if(chunk.size > remaining) {
+		chunk.size = remaining;
+	}
+	if(chunk.page >= first_page_ + page_count_) {
+		chunk.size = 0; // eof
+	} else {
+		Page *p = loadPage(xid, chunk.page);
+		memcpy(buf, data_at_offset_ptr(p, chunk.slot), chunk.size);
+		releasePage(p);
+	}
+	return chunk.size;
+}
+
+template <class TUPLE>
+bool DataPage<TUPLE>::initialize_next_page(int xid) {
+  recordid rid = calc_chunk_from_offset(write_offset_);
+  assert(rid.slot == 0);
+  if(rid.page >= first_page_ + page_count_) {
+    return false;
+  } else {
+    Page *p = loadUninitializedPage(xid, rid.page);
+    p->pageType = DATA_PAGE;
+    *page_count_ptr(p) = 0;
+    *length_at_offset_ptr(p,0) = 0;
+    writelock(p->rwlatch, 0); //XXX this is pretty obnoxious.  Perhaps stasis shouldn't check for the latch
+    stasis_dirty_page_table_set_dirty((stasis_dirty_page_table_t*)stasis_runtime_dirty_page_table(), p);
+    unlock(p->rwlatch);
+    releasePage(p);
+    return true;
+  }
+}
+
+template <class TUPLE>
+bool DataPage<TUPLE>::write_data(int xid, const byte * buf, size_t len) {
+	while(1) {
+		assert(len > 0);
+		size_t written = write_bytes(xid, buf, len);
+		if(written == 0) {
+			return false; // fail
+		}
+		if(written == len) {
+			return true; // success
+		}
+		buf += written;
+		len -= written;
+		if(!initialize_next_page(xid)) {
+		  return false; // fail
+		}
+	}
+}
+template <class TUPLE>
+bool DataPage<TUPLE>::read_data(int xid, byte * buf, off_t offset, size_t len) {
+	while(1) {
+		assert(len > 0);
+		size_t read_count = read_bytes(xid, buf, offset, len);
+		if(read_count == 0) {
+			return false; // fail
+		}
+		if(read_count == len) {
+			return true; // success
+		}
+		buf += read_count;
+		offset += read_count;
+		len -= read_count;
+	}
+}
 template <class TUPLE>
 bool DataPage<TUPLE>::append(int xid, TUPLE const * dat)
 {
-    assert(byte_offset >= HEADER_SIZE);
-    assert(fix_pcount >= 1);
-    
-    //check if there is enough space (for the data length + data)
-    int32_t blen = dat->byte_length() + sizeof(int32_t);
-    if(PAGE_SIZE * fix_pcount - byte_offset < blen)
-    {
-        //check if the record is too large
-        // and if so do we wanna accomodate here by going over the fix_pcount
-        if(PAGE_SIZE * fix_pcount - HEADER_SIZE < blen && //record is larger than datapage           
-           PAGE_SIZE * fix_pcount - HEADER_SIZE > 2 * byte_offset)//accept if i am less than half full
-        {
-            //nothing
-        }
-        else
-        {
-            //printf("page has %d bytes left, we needed %d. (byte_offset %d)\n",
-            //PAGE_SIZE * fix_pcount - byte_offset, blen, byte_offset);
-            return false;   //not enough mana, return
-        }
-    }
+	byte * buf = dat->to_bytes(); // TODO could be more efficient; this does a malloc and memcpy.  The alternative couples us more strongly to datapage, but simplifies datapage.
+	len_t dat_len = dat->byte_length();
 
-    //write the length of the data
-    int32_t dsize = blen - sizeof(int32_t);
-    
-    if(!writebytes(xid, sizeof(int32_t), (byte*)(&dsize)))    
-        return false;    
-    byte_offset += sizeof(int32_t);
+	bool succ = write_data(xid, (const byte*)&dat_len, sizeof(dat_len));
+	if(succ) {
+	  succ = write_data(xid, buf, dat_len);
+	}
 
-    //write the data
-    byte * barr = dat->to_bytes();
-    if(!writebytes(xid, dsize, barr)) //if write fails, undo the previous write
-    {        
-        byte_offset -= sizeof(int32_t);        
-        free(barr);
-        //write 0 for the next tuple size, if there is enough space in this page
-        if(PAGE_SIZE - (byte_offset % PAGE_SIZE) >= sizeof(int32_t))
-        {
-            dsize = 0;
-            int succ = writebytes(xid, sizeof(int32_t), (byte*)(&dsize));//this will succeed, since there is enough space on the page
-            assert(succ);
-        }        
-        return false;
-    }
-    free(barr);
-    byte_offset += dsize;
+	if(succ) {
 
-    //write 0 for the next tuple size, if there is enough space in this page
-    if(PAGE_SIZE - (byte_offset % PAGE_SIZE) >= sizeof(int32_t))
-    {
-        dsize = 0;
-        int succ = writebytes(xid, sizeof(int32_t), (byte*)(&dsize));//this will succeed, since there is enough space on the page
-        assert(succ);
+	  dat_len = 0; // write terminating zero.
 
-    }
-    
-    return true;
-}
+	  succ = write_data(xid, (const byte*)&dat_len, sizeof(dat_len));
 
-template <class TUPLE>
-bool DataPage<TUPLE>::writebytes(int xid, int count, byte *data)
-{
+	  if(succ) {
+	    write_offset_ -= sizeof(dat_len); // want to overwrite zero next time around.
+	  }
 
-    int32_t bytes_copied = 0;
-    while(bytes_copied < count)
-    {
-        //load the page to copy into
-        int pindex = (byte_offset + bytes_copied) / PAGE_SIZE;
-        if(pindex == pcount) //then this page must be allocated
-        {
-            pageid_t newid = alloc_region(xid, alloc_state);
-            //check continuity
-            if(pidarr[pindex-1] != newid - 1)//so we started a new region and that is not right after the prev region in the file
-            {                
-                return false;//we cant store this
-            }
+	  // if writing the zero fails, later reads will fail as well, and assume EOF.
+	  succ = true;  // return true (the tuple has been written regardless of whether the zero fit)
 
-            //check whether we need to extend the pidarr, add fix_pcount many pageid_t slots
-            if(pindex >= fix_pcount && (pindex % fix_pcount==0))
-            {
-                pidarr = (pageid_t*)realloc(pidarr, (pindex + fix_pcount)*sizeof(pageid_t));
-            }
-            pidarr[pindex] = newid;
-            pcount++;
-            incrementPageCount(xid, pidarr[0]);
-        }
-        //Page *p = loadPage(xid, pidarr[pindex]);
-        Page *p = loadPageOfType(xid, pidarr[pindex], SEGMENT_PAGE);
-        writelock(p->rwlatch,0);
-        
-        //copy the portion of bytes we can copy in this page
-        int32_t page_offset = (byte_offset+bytes_copied) % PAGE_SIZE;
-        int32_t copy_len = ( (PAGE_SIZE - page_offset < count - bytes_copied ) ? PAGE_SIZE - page_offset: count - bytes_copied);
+	}
 
-        byte * pb_ptr = stasis_page_byte_ptr_from_start(p, page_offset);
-        memcpy(pb_ptr, data+bytes_copied  ,copy_len);
-    
-        //release the page
-        stasis_dirty_page_table_set_dirty((stasis_dirty_page_table_t*)stasis_runtime_dirty_page_table(), p);
-        unlock(p->rwlatch);
-        releasePage(p);        
-        
-        //update the copied bytes_count
-        bytes_copied += copy_len;
+	free(buf);
 
-
-    }
-
-    assert(bytes_copied == count);
-    return true;
+	return succ;
 }
 
 template <class TUPLE>
@@ -231,88 +260,10 @@ bool DataPage<TUPLE>::recordRead(int xid, typename TUPLE::key_t key, size_t keyS
 }
 
 template <class TUPLE>
-void DataPage<TUPLE>::readbytes(int xid, int32_t offset, int count, byte *data)
-{
-
-    int32_t bytes_copied = 0;
-    while(bytes_copied < count)
-    {
-        //load the page to copy from
-        int pindex = (offset + bytes_copied) / PAGE_SIZE;
-        
-        //Page *p = loadPage(xid, pidarr[pindex]);
-        Page *p = loadPageOfType(xid, pidarr[pindex], SEGMENT_PAGE);
-        readlock(p->rwlatch,0);
-        
-        //copy the portion of bytes we can copy from this page
-        int32_t page_offset = (offset+bytes_copied) % PAGE_SIZE;
-        int32_t copy_len = ( (PAGE_SIZE - page_offset < count - bytes_copied ) ? PAGE_SIZE - page_offset : count - bytes_copied);
-
-        byte * pb_ptr = stasis_page_byte_ptr_from_start(p, page_offset);
-        memcpy((data)+bytes_copied, pb_ptr, copy_len);
-    
-        //release the page
-        unlock(p->rwlatch);
-        releasePage(p);        
-        
-        //update the copied bytes_count
-        bytes_copied += copy_len;
-    }
-
-    assert(bytes_copied == count);
-}
-
-
-template <class TUPLE>
-inline int DataPage<TUPLE>::readPageCount(int xid, pageid_t pid)
-{
-
-    //Page *p = loadPage(xid, pid);
-    Page *p = loadPageOfType(xid, pid, SEGMENT_PAGE);
-    readlock(p->rwlatch,0);
-
-    int32_t numpages = *((int32_t*)stasis_page_byte_ptr_from_start(p, 0));
-    
-    unlock(p->rwlatch);
-    releasePage(p);
-
-    return numpages;
-}
-
-template <class TUPLE>
-inline void DataPage<TUPLE>::incrementPageCount(int xid, pageid_t pid, int add)
-{
-    //Page *p = loadPage(xid, pid);
-    Page *p = loadPageOfType(xid, pid, SEGMENT_PAGE);
-    writelock(p->rwlatch,0);
-
-    int32_t *numpages_ptr = (int32_t*)stasis_page_byte_ptr_from_start(p, 0);
-
-    *numpages_ptr = *numpages_ptr + add;
-
-    stasis_dirty_page_table_set_dirty((stasis_dirty_page_table_t*)stasis_runtime_dirty_page_table(), p);
-    
-    unlock(p->rwlatch);
-    releasePage(p);
-
-
-    
-}
-
-
-template <class TUPLE>
-inline uint16_t DataPage<TUPLE>::recordCount(int xid)
-{
-
-    return 0;
-}
-
-template <class TUPLE>
 pageid_t DataPage<TUPLE>::dp_alloc_region(int xid, void *conf)
 {
     RegionAllocConf_t* a = (RegionAllocConf_t*)conf;
 
-    
     if(a->nextPage == a->endOfRegion) {
         if(a->regionList.size == -1) {
             //DEBUG("nextPage: %lld\n", a->nextPage);
@@ -320,7 +271,7 @@ pageid_t DataPage<TUPLE>::dp_alloc_region(int xid, void *conf)
         DEBUG("regionList.page: %lld\n", a->regionList.page);
         DEBUG("regionList.slot: %d\n", a->regionList.slot);
         DEBUG("regionList.size: %lld\n", a->regionList.size);
-        
+
         a->regionCount = 0;
     }
         DEBUG("{%lld <- alloc region arraylist}\n", a->regionList.page);
@@ -335,21 +286,12 @@ pageid_t DataPage<TUPLE>::dp_alloc_region(int xid, void *conf)
     Tset(xid,a->regionList,&a->nextPage);
     DEBUG("next page %lld\n",a->nextPage);
   }
-    
+
   DEBUG("%lld ?= %lld\n", a->nextPage,a->endOfRegion);
   pageid_t ret = a->nextPage;
-  // Ensure the page is in buffer cache without accessing disk (this
-  // sets it to clean and all zeros if the page is not in cache).
-  // Hopefully, future reads will get a cache hit, and avoid going to
-  // disk.
+  a->nextPage = a->endOfRegion; // Allocate everything all at once.
 
-  Page * p = loadUninitializedPage(xid, ret);
-  //writelock(p->rwlatch,0);
-  p->pageType = SEGMENT_PAGE;
-  //unlock(p->rwlatch);  
-  releasePage(p);  
   DEBUG("ret %lld\n",ret);
-  (a->nextPage)++;
   return ret;
 
 }
@@ -409,105 +351,37 @@ void DataPage<TUPLE>::force_region_rid(int xid, void *conf)
 template <class TUPLE>
 TUPLE* DataPage<TUPLE>::RecordIterator::getnext(int xid)
 {
+	len_t len;
+	bool succ;
 
-    
-    int pindex = offset / PAGE_SIZE;
+	succ = dp->read_data(xid, (byte*)&len, read_offset_, sizeof(len));
+	if((!succ) || (len == 0)) { return NULL; }
+	read_offset_ += sizeof(len);
 
-    if(pindex == dp->pcount)//past end
-        return 0;
-    if(pindex == dp->pcount - 1 && (PAGE_SIZE - (offset % PAGE_SIZE) < sizeof(int32_t)))
-        return 0;
-    
-    //Page *p = loadPage(xid, dp->pidarr[pindex]);
-    Page *p = loadPageOfType(xid, dp->pidarr[pindex], SEGMENT_PAGE);
-    readlock(p->rwlatch,0);    
+	byte * buf = (byte*)malloc(len);
 
-    int32_t *dsize_ptr;
-    int32_t scratch;
-    if(PAGE_SIZE - (offset % PAGE_SIZE) < sizeof(int32_t)) //int spread in two pages
-    {
-        dsize_ptr = &scratch;
-        dp->readbytes(xid, offset, sizeof(int32_t), (byte*)dsize_ptr);
-    }
-    else //int in a single page
-        dsize_ptr = (int32_t*)stasis_page_byte_ptr_from_start(p, offset % PAGE_SIZE);
-    
-    offset += sizeof(int32_t);
-                
-    if(*dsize_ptr == 0) //no more keys
-    {            
-        unlock(p->rwlatch);
-        releasePage(p);
-        return 0;
-    }
-    
-    byte* tb = (byte*)malloc(*dsize_ptr);
-    dp->readbytes(xid, offset, *dsize_ptr, tb);
+	succ = dp->read_data(xid, buf, read_offset_, len);
 
-    TUPLE *tup = TUPLE::from_bytes(tb);  // This version of from_bytes does not consume its argument.
+	if(!succ) { read_offset_ -= sizeof(len); free(buf); return NULL; }
 
-    free(tb);
+	read_offset_ += len;
 
-    offset += *dsize_ptr;
+	TUPLE *ret = TUPLE::from_bytes(buf);
 
-    unlock(p->rwlatch);
-    releasePage(p);
+	free(buf);
 
-    return tup;
+	return ret;
 }
-
-
 
 template <class TUPLE>
 void DataPage<TUPLE>::RecordIterator::advance(int xid, int count)
 {
-
-    int pindex = -1;
-    Page *p = 0;
-    
-    for(int i=0; i<count; i++)
-    {
-        if(pindex != offset / PAGE_SIZE) //advance to new page if necessary
-        {
-            if(p!=NULL)
-            {
-                unlock(p->rwlatch);
-                releasePage(p);
-            }
-            
-            pindex = offset / PAGE_SIZE;
-
-            if(pindex == dp->pcount)//past end
-                return;
-            
-            //p = loadPage(xid, dp->pidarr[pindex]);
-            p = loadPageOfType(xid, dp->pidarr[pindex], SEGMENT_PAGE);
-            readlock(p->rwlatch,0);            
-        }
-
-        if(pindex == dp->pcount - 1 && (PAGE_SIZE - (offset % PAGE_SIZE) < sizeof(int32_t))) {
-        	assert(!p); // XXX Otherwise, was leaking page.  do we reach this branch in testing?
-        	return;
-        }
-        int32_t *dsize_ptr=0;
-        int32_t scratch;
-        if(PAGE_SIZE - (offset % PAGE_SIZE) < sizeof(int32_t)) { //int spread in two pages
-            dsize_ptr = &scratch;
-        	dp->readbytes(xid, offset, sizeof(int32_t), (byte*)dsize_ptr);
-        } else { //int in a single page
-            dsize_ptr = (int32_t*)stasis_page_byte_ptr_from_start(p, offset % PAGE_SIZE);
-        }
-        offset += sizeof(int32_t);
-                
-        if(*dsize_ptr == 0) //no more keys
-        {            
-            unlock(p->rwlatch);
-            releasePage(p);
-            return;
-        }
-
-        offset += *dsize_ptr;
-
-    }
-
+	len_t len;
+	bool succ;
+	for(int i = 0; i < count; i++) {
+	  succ = dp->read_data(xid, (byte*)&len, read_offset_, sizeof(len));
+	  if((!succ) || (len == 0)) { return; }
+	  read_offset_ += sizeof(len);
+	  read_offset_ += len;
+	}
 }

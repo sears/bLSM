@@ -47,6 +47,8 @@ void initialize_server()
     
     bufferManagerFileHandleType = BUFFER_MANAGER_FILE_HANDLE_PFILE;
 
+    DataPage<datatuple>::register_stasis_page_impl();
+
     Tinit();
 
     int xid = Tbegin();
