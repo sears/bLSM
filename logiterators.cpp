@@ -80,7 +80,7 @@ TUPLE * treeIterator<TUPLE>::getnext()
     if(dp_itr == 0)
         return 0;
     
-    TUPLE* readTuple = dp_itr->getnext(-1);
+    TUPLE* readTuple = dp_itr->getnext();
 
     
     if(!readTuple)
@@ -101,7 +101,7 @@ TUPLE * treeIterator<TUPLE>::getnext()
             dp_itr = new DPITR_T(curr_page->begin());
             
 
-            readTuple = dp_itr->getnext(-1); 
+            readTuple = dp_itr->getnext();
             assert(readTuple);
         }
       // else readTuple is null.  We're done.

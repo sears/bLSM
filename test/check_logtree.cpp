@@ -32,9 +32,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
 
     sync();
 
-    bufferManagerNonBlockingSlowHandleType = IO_HANDLE_PFILE;
-
-    Tinit();
+    logtree::init_stasis();
 
     int xid = Tbegin();
 
@@ -151,12 +149,8 @@ void insertProbeIter_str(int  NUM_ENTRIES)
 
     logtreeIterator::close(xid, it);
 
-    
-
-
-  
-        Tcommit(xid);
-        Tdeinit();
+	Tcommit(xid);
+    logtree::deinit_stasis();
 }
 
 

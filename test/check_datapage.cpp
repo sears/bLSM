@@ -28,11 +28,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     sync();
 
-    bufferManagerNonBlockingSlowHandleType = IO_HANDLE_PFILE;
-
-    DataPage<datatuple>::register_stasis_page_impl();
-
-    Tinit();
+    logtree::init_stasis();
 
     int xid = Tbegin();
 
@@ -52,6 +48,11 @@ void insertProbeIter(size_t NUM_ENTRIES)
     if(data_arr.size() > NUM_ENTRIES)
         data_arr.erase(data_arr.begin()+NUM_ENTRIES, data_arr.end());
 
+    recordid datapage_header_rid = Talloc(xid, DataPage<datatuple>::RegionAllocator::header_size);
+
+    DataPage<datatuple>::RegionAllocator * alloc
+      = new DataPage<datatuple>::RegionAllocator(xid, datapage_header_rid, 10000); // ~ 10 datapages per region.
+
     recordid alloc_state = Talloc(xid,sizeof(RegionAllocConf_t));
     
     Tset(xid,alloc_state, &logtree::REGION_ALLOC_STATIC_INITIALIZER);
@@ -69,15 +70,15 @@ void insertProbeIter(size_t NUM_ENTRIES)
         datatuple *newtuple = datatuple::create(key_arr[i].c_str(), key_arr[i].length()+1, data_arr[i].c_str(), data_arr[i].length()+1);
 
         datasize += newtuple->byte_length();
-        if(dp==NULL || !dp->append(xid, newtuple))
+        if(dp==NULL || !dp->append(newtuple))
         {
             dpages++;
             if(dp)
                 delete dp;
+	    
+            dp = new DataPage<datatuple>(xid, pcount, alloc);
 
-            dp = new DataPage<datatuple>(xid, pcount, &DataPage<datatuple>::dp_alloc_region_rid, &alloc_state );
-
-			bool succ = dp->append(xid, newtuple);
+			bool succ = dp->append(newtuple);
 			assert(succ);
 
             dsp.push_back(dp->get_start_pid());
@@ -104,7 +105,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         DataPage<datatuple> dp(xid, dsp[i]);
         DataPage<datatuple>::RecordIterator itr = dp.begin();
         datatuple *dt=0;
-        while( (dt=itr.getnext(xid)) != NULL)
+        while( (dt=itr.getnext()) != NULL)
             {
                 assert(dt->keylen() == key_arr[tuplenum].length()+1);
                 assert(dt->datalen() == data_arr[tuplenum].length()+1);
@@ -118,7 +119,8 @@ void insertProbeIter(size_t NUM_ENTRIES)
     printf("Reads completed.\n");
   
 	Tcommit(xid);
-	Tdeinit();
+
+	logtree::deinit_stasis();
 }
 
 

@@ -35,10 +35,6 @@
 #include "tuplemerger.h"
 #include "datatuple.h"
 
-
-double tv_to_double(struct timeval tv);
-
-
 struct logtable_mergedata;
 
 typedef std::set<datatuple*, datatuple> rbtree_t;
@@ -75,6 +71,9 @@ public:
 
     void print_tree(int xid);
     
+    static void init_stasis();
+    static void deinit_stasis();
+
     static pageid_t alloc_region(int xid, void *conf);
     static pageid_t alloc_region_rid(int xid, void * ridp);
     static void force_region_rid(int xid, void *conf);
@@ -134,6 +133,9 @@ public:
                                     void *allocator_state);
 
 
+    inline DataPage<datatuple>::RegionAllocator* get_alloc() { return region_alloc; }
+    inline void set_alloc(DataPage<datatuple>::RegionAllocator* a1) { region_alloc = a1; } // XXX kludge; must be a better api for this
+                                                                                           // (currently, need to get rid from dpstate. add a 'register' method that sets the rid of the region allocator?)
 
     /**
        Initialize a page for use as an internal node of the tree.
@@ -162,7 +164,7 @@ private:
     recordid tree_state;
     recordid root_rec;
 
-
+    DataPage<datatuple>::RegionAllocator* region_alloc;
 
     
 };
@@ -189,7 +191,7 @@ public:
     
     static void tearDownTree(rbtree_ptr_t t);
 
-    DataPage<datatuple>* insertTuple(int xid, datatuple *tuple, recordid &dpstate,logtree *ltree);
+    DataPage<datatuple>* insertTuple(int xid, datatuple *tuple, DataPage<datatuple>::RegionAllocator * alloc,logtree *ltree);
 
     datatuple * findTuple(int xid, const datatuple::key_t key, size_t keySize,  logtree *ltree);
 
@@ -205,8 +207,8 @@ public:
     
     void set_tree_c0(rbtree_ptr_t newtree){tree_c0 = newtree;}
 
-    inline recordid & get_dpstate1(){return tbl_header.c1_dp_state;}
-    inline recordid & get_dpstate2(){return tbl_header.c2_dp_state;}
+    inline recordid get_dpstate1(){return tbl_header.c1_dp_state;}
+    inline recordid get_dpstate2(){return tbl_header.c2_dp_state;}
 
     int get_fixed_page_count(){return fixed_page_count;}
     void set_fixed_page_count(int count){fixed_page_count = count;}
@@ -243,7 +245,7 @@ private:
 private:    
     recordid table_rec;
     struct table_header tbl_header;
-    
+
     logtree *tree_c2; //big tree
     logtree *tree_c1; //small tree
     rbtree_ptr_t tree_c0; // in-mem red black tree

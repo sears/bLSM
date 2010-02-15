@@ -12,7 +12,7 @@ inline DataPage<datatuple>*
 insertTuple(int xid, DataPage<datatuple> *dp, datatuple *t,
             logtable *ltable,
             logtree * ltree,
-            recordid & dpstate,
+	    DataPage<datatuple>::RegionAllocator* alloc,
             int64_t &dpages, int64_t &npages);
 
 int merge_scheduler::addlogtable(logtable *ltable)
@@ -325,30 +325,33 @@ void* memMergeThread(void*arg)
         recordid scratch_root = scratch_tree->create(xid);
 
         //save the old dp state values
-        RegionAllocConf_t olddp_state;        
-        Tread(xid, ltable->get_dpstate1(), &olddp_state);  
-        //reinitialize the dp state        
-        Tset(xid, ltable->get_dpstate1(), &logtable::DATAPAGE_REGION_ALLOC_STATIC_INITIALIZER);
-        
-        //pthread_mutex_unlock(a->block_ready_mut);        
+		//        RegionAllocConf_t olddp_state;
+		//        Tread(xid, ltable->get_dpstate1(), &olddp_state);
+		DataPage<datatuple>::RegionAllocator *old_alloc = ltable->get_tree_c1()->get_alloc();
+		old_alloc->done(); // XXX do this earlier
+			//reinitialize the dp state
+		scratch_tree->set_alloc(new DataPage<datatuple>::RegionAllocator(xid, ltable->get_dpstate1() /*rid of old header*/, 10000)); // XXX should not hardcode region size
+//        Tset(xid, ltable->get_dpstate1(), &logtable::DATAPAGE_REGION_ALLOC_STATIC_INITIALIZER);
+
+        //pthread_mutex_unlock(a->block_ready_mut);
         unlock(ltable->mergedata->header_lock);
-        
-        //: do the merge        
+
+        //: do the merge
         printf("mmt:\tMerging:\n");
 
         int64_t npages = 0;
         mergedPages = merge_iterators<typeof(*itrA),typeof(*itrB)>(xid, itrA, itrB, ltable, scratch_tree, npages, false);
-      
+
         delete itrA;
         delete itrB;
-        
+
         //force write the new region to disk
         recordid scratch_alloc_state = scratch_tree->get_tree_state();        
         //TlsmForce(xid,scratch_root,logtree::force_region_rid, &scratch_alloc_state);
         // XXX When called by merger_check (at least), we hold a pin on a page that should be forced.  This causes stasis to abort() the process.
         logtree::force_region_rid(xid, &scratch_alloc_state);
         //force write the new datapages
-        DataPage<datatuple>::force_region_rid(xid, &ltable->get_dpstate1());
+        scratch_tree->get_alloc()->force_regions(xid);
 
         //writes complete
         //now automically replace the old c1 with new c1
@@ -378,12 +381,9 @@ void* memMergeThread(void*arg)
         // free old my_tree here
         //TODO: check
         logtree::free_region_rid(xid, a->my_tree, logtree::dealloc_region_rid, oldAllocState);
-
         
-        //TlsmFree(xid,a->my_tree->r_,logtree::dealloc_region_rid,oldAllocState);
-        //TODO: check
         //free the old data pages
-        DataPage<datatuple>::dealloc_region_rid(xid, &olddp_state);
+        old_alloc->dealloc_regions(xid);
 
         Tcommit(xid);
         //xid = Tbegin();
@@ -533,11 +533,17 @@ void *diskMergeThread(void*arg)
         recordid scratch_root = scratch_tree->create(xid);
 
         //save the old dp state values
-        RegionAllocConf_t olddp_state;  
-        Tread(xid, ltable->get_dpstate2(), &olddp_state);  
+        DataPage<datatuple>::RegionAllocator *old_alloc1 = ltable->get_tree_c1()->get_alloc();
+        DataPage<datatuple>::RegionAllocator *old_alloc2 = ltable->get_tree_c2()->get_alloc();
+
         //reinitialize the dp state
         //TODO: maybe you want larger regions for the second tree?
-        Tset(xid, ltable->get_dpstate2(), &logtable::DATAPAGE_REGION_ALLOC_STATIC_INITIALIZER);
+//        foo XXX Tset(xid, ltable->get_dpstate2(), &logtable::DATAPAGE_REGION_ALLOC_STATIC_INITIALIZER);
+
+        //DataPage<datatuple>::RegionAllocator *newAlloc2 = new DataPage<datatuple>::RegionAllocator(xid, ltable->get_dpstate2(), 10000); // XXX don't hardcode region length
+
+		scratch_tree->set_alloc(new DataPage<datatuple>::RegionAllocator(xid, ltable->get_dpstate2() /*rid of old header*/, 10000)); // XXX should not hardcode region size
+
         
         //pthread_mutex_unlock(a->block_ready_mut);
         unlock(ltable->mergedata->header_lock);
@@ -558,7 +564,7 @@ void *diskMergeThread(void*arg)
         //TlsmForce(xid,scratch_root,logtree::force_region_rid, &scratch_alloc_state);
         logtree::force_region_rid(xid, &scratch_alloc_state);
         //force write the new datapages
-        DataPage<datatuple>::force_region_rid(xid, &ltable->get_dpstate2());
+        scratch_tree->get_alloc()->force_regions(xid);
 
 
         //writes complete
@@ -586,18 +592,13 @@ void *diskMergeThread(void*arg)
         printf("dmt:\tUpdated C2's position on disk to %lld\n",scratch_root.page);
         Tset(xid, a->tree, &h);
         
-
-        
         // free old my_tree here
         //TODO: check
         logtree::free_region_rid(xid, a->my_tree, logtree::dealloc_region_rid, oldAllocState);
         //TlsmFree(xid,a->my_tree->r_,logtree::dealloc_region_rid,oldAllocState);
         
-        //TODO: check
         //free the old data pages
-        DataPage<datatuple>::dealloc_region_rid(xid, &olddp_state);        
-
-        
+        old_alloc2->dealloc_regions(xid);
         
         *(recordid*)a->pageAllocState = scratch_alloc_state;      
         a->my_tree = scratch_root;
@@ -607,11 +608,12 @@ void *diskMergeThread(void*arg)
         logtree::free_region_rid(xid, (*a->in_tree)->get_root_rec(),
                                  logtree::dealloc_region_rid,
                                  &((*a->in_tree)->get_tree_state()));
+        old_alloc1->dealloc_regions(xid);  // XXX make sure that both of these are 'unlinked' before this happens
         //TlsmFree(xid,a->my_tree->r_,logtree::dealloc_region_rid,oldAllocState);
         
         //TODO: check
         //free the old data pages
-        DataPage<datatuple>::dealloc_region_rid(xid, a->in_tree_allocer);//TODO:    
+//        DataPage<datatuple>::dealloc_region_rid(xid, a->in_tree_allocer);//TODO:
 
         Tcommit(xid);
         
@@ -657,7 +659,7 @@ int64_t merge_iterators(int xid,
         {
             //insert t1
             dp = insertTuple(xid, dp, t1, ltable, scratch_tree,
-                             ltable->get_dpstate2(),
+                             scratch_tree->get_alloc(), // XXX inserTuple should do this for us
                              dpages, npages);
 
             datatuple::freetuple(t1);
@@ -672,7 +674,7 @@ int64_t merge_iterators(int xid,
             
             //insert merged tuple, drop deletes
             if(dropDeletes && !mtuple->isDelete())
-                dp = insertTuple(xid, dp, mtuple, ltable, scratch_tree, ltable->get_dpstate2(),
+                dp = insertTuple(xid, dp, mtuple, ltable, scratch_tree, scratch_tree->get_alloc(),
                                  dpages, npages);
             
             datatuple::freetuple(t1);
@@ -682,7 +684,7 @@ int64_t merge_iterators(int xid,
         else
         {        
             //insert t2
-            dp = insertTuple(xid, dp, t2, ltable, scratch_tree, ltable->get_dpstate2(),
+            dp = insertTuple(xid, dp, t2, ltable, scratch_tree, scratch_tree->get_alloc(),
                              dpages, npages);
             // cannot free any tuples here; they may still be read through a lookup
         }
@@ -693,7 +695,7 @@ int64_t merge_iterators(int xid,
 
     while(t1 != 0) // t1 is less than t2
         {
-            dp = insertTuple(xid, dp, t1, ltable, scratch_tree, ltable->get_dpstate2(),
+            dp = insertTuple(xid, dp, t1, ltable, scratch_tree, scratch_tree->get_alloc(),
                              dpages, npages);
 
             datatuple::freetuple(t1);
@@ -715,19 +717,19 @@ inline DataPage<datatuple>*
 insertTuple(int xid, DataPage<datatuple> *dp, datatuple *t,
             logtable *ltable,
             logtree * ltree,
-            recordid & dpstate,
+            DataPage<datatuple>::RegionAllocator * alloc,
             int64_t &dpages, int64_t &npages)
 {
     if(dp==0)
     {
-        dp = ltable->insertTuple(xid, t, dpstate, ltree);
+        dp = ltable->insertTuple(xid, t, alloc, ltree);
         dpages++;
     }
-    else if(!dp->append(xid, t))
+    else if(!dp->append(t))
     {
         npages += dp->get_page_count();
         delete dp;
-        dp = ltable->insertTuple(xid, t, dpstate, ltree);
+        dp = ltable->insertTuple(xid, t, alloc, ltree);
         dpages++;
     }
 

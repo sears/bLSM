@@ -1,4 +1,3 @@
-
 #include "logstore.h"
 #include "datapage.h"
 #include <stasis/page.h>
@@ -8,9 +7,8 @@ static const int DATA_PAGE = USER_DEFINED_PAGE(1);
 
 BEGIN_C_DECLS
 static void dataPageFsck(Page* p) {
-	int32_t pageCount = *stasis_page_int32_cptr_from_start(p, 0);
-	assert(pageCount >= 0);
-	assert(pageCount <= MAX_PAGE_COUNT);
+	int32_t is_last_page = *stasis_page_int32_cptr_from_start(p, 0);
+	assert(is_last_page == 0 || is_last_page == 1 || is_last_page == 2);
 }
 static void dataPageLoaded(Page* p) {
 	dataPageFsck(p);
@@ -20,6 +18,15 @@ static void dataPageFlushed(Page* p) {
 	dataPageFsck(p);
 }
 static int notSupported(int xid, Page * p) { return 0; }
+
+static lsn_t get_lsn(int xid) {
+	lsn_t xid_lsn = stasis_transaction_table_get((stasis_transaction_table_t*)stasis_runtime_transaction_table(), xid)->prevLSN;
+	lsn_t log_lsn = ((stasis_log_t*)stasis_log())->next_available_lsn((stasis_log_t*)stasis_log());
+	lsn_t ret = xid_lsn == INVALID_LSN ? log_lsn-1 : xid_lsn;
+	assert(ret != INVALID_LSN);
+	return ret;
+}
+
 END_C_DECLS
 
 template <class TUPLE>
@@ -56,54 +63,59 @@ void DataPage<TUPLE>::register_stasis_page_impl() {
 	stasis_page_impl_register(pi);
 
 }
-template <class TUPLE>
-int32_t DataPage<TUPLE>::readPageCount(int xid, pageid_t pid) {
-  Page *p = loadPage(xid, pid);
-  int32_t ret = *page_count_ptr(p);
-  releasePage(p);
-  return ret;
-}
-
 
 template <class TUPLE>
 DataPage<TUPLE>::DataPage(int xid, pageid_t pid):
-    page_count_(readPageCount(xid, pid)),
+    xid_(xid),
+    page_count_(1), // will be opportunistically incremented as we scan the datapage.
+    initial_page_count_(-1), // used by append.
+    alloc_(0),  // read-only, and we don't free data pages one at a time.
     first_page_(pid),
-    write_offset_(-1) { assert(pid!=0); }
+    write_offset_(-1) {
+	assert(pid!=0);
+	Page *p = loadPage(xid_, first_page_);
+	if(!(*is_another_page_ptr(p) == 0 || *is_another_page_ptr(p) == 2)) {
+		printf("Page %lld is not the start of a datapage\n", first_page_);  fflush(stdout);
+		abort();
+	}
+	assert(*is_another_page_ptr(p) == 0 || *is_another_page_ptr(p) == 2); // would be 1 for page in the middle of a datapage
+	releasePage(p);
+}
 
 template <class TUPLE>
-DataPage<TUPLE>::DataPage(int xid, int fix_pcount, pageid_t (*alloc_region)(int, void*), void * alloc_state) :
-  page_count_(MAX_PAGE_COUNT), // XXX fix_pcount),
-	first_page_(alloc_region(xid, alloc_state)),
+DataPage<TUPLE>::DataPage(int xid, pageid_t page_count, RegionAllocator *alloc) :
+	xid_(xid),
+	page_count_(1),
+	initial_page_count_(page_count),
+	alloc_(alloc),
+	first_page_(alloc_->alloc_extent(xid_, page_count_)),
 	write_offset_(0)
 {
-    assert(fix_pcount >= 1);
-    initialize(xid);
+	DEBUG("Datapage page count: %lld pid = %lld\n", (long long int)page_count_, (long long int)first_page_);
+    assert(page_count_ >= 1);
+    initialize();
 }
 
 template<class TUPLE>
-DataPage<TUPLE>::~DataPage() { }
-
-
-template<class TUPLE>
-void DataPage<TUPLE>::initialize(int xid)
+void DataPage<TUPLE>::initialize()
 {
     //load the first page
-    Page *p = loadUninitializedPage(xid, first_page_);
+    Page *p = loadUninitializedPage(xid_, first_page_);
     writelock(p->rwlatch,0);
     
+    DEBUG("\t\t\t\t\t\t->%lld\n", first_page_);
+
     //initialize header
+    p->pageType = DATA_PAGE;
     
-    //set number of pages to 1
-    *page_count_ptr(p) = page_count_;
+    //we're the last page for now.
+    *is_another_page_ptr(p) = 0;
     
     //write 0 to first data size    
     *length_at_offset_ptr(p, write_offset_) = 0;
 
     //set the page dirty
-    stasis_dirty_page_table_set_dirty((stasis_dirty_page_table_t*)stasis_runtime_dirty_page_table(), p);
-    
-    p->pageType = DATA_PAGE;
+    stasis_page_lsn_write(xid_, p, get_lsn(xid_));
 
     //release the page
     unlock(p->rwlatch);
@@ -111,18 +123,18 @@ void DataPage<TUPLE>::initialize(int xid)
 }
 
 template <class TUPLE>
-size_t DataPage<TUPLE>::write_bytes(int xid, const byte * buf, size_t remaining) {
+size_t DataPage<TUPLE>::write_bytes(const byte * buf, size_t remaining) {
 	recordid chunk = calc_chunk_from_offset(write_offset_);
 	if(chunk.size > remaining) {
 		chunk.size = remaining;
 	}
 	if(chunk.page >= first_page_ + page_count_) {
-		chunk.size = 0; // no space
+	    chunk.size = 0; // no space (should not happen)
 	} else {
-		Page *p = loadPage(xid, chunk.page);
+		Page *p = loadPage(xid_, chunk.page);
 		memcpy(data_at_offset_ptr(p, chunk.slot), buf, chunk.size);
 		writelock(p->rwlatch,0);
-		stasis_dirty_page_table_set_dirty((stasis_dirty_page_table_t*)stasis_runtime_dirty_page_table(), p);
+		stasis_page_lsn_write(xid_, p, get_lsn(xid_));
 		unlock(p->rwlatch);
 		releasePage(p);
 		write_offset_ += chunk.size;
@@ -130,7 +142,7 @@ size_t DataPage<TUPLE>::write_bytes(int xid, const byte * buf, size_t remaining)
 	return chunk.size;
 }
 template <class TUPLE>
-size_t DataPage<TUPLE>::read_bytes(int xid, byte * buf, off_t offset, size_t remaining) {
+size_t DataPage<TUPLE>::read_bytes(byte * buf, off_t offset, size_t remaining) {
 	recordid chunk = calc_chunk_from_offset(offset);
 	if(chunk.size > remaining) {
 		chunk.size = remaining;
@@ -138,7 +150,12 @@ size_t DataPage<TUPLE>::read_bytes(int xid, byte * buf, off_t offset, size_t rem
 	if(chunk.page >= first_page_ + page_count_) {
 		chunk.size = 0; // eof
 	} else {
-		Page *p = loadPage(xid, chunk.page);
+		Page *p = loadPage(xid_, chunk.page);
+		assert(p->pageType == DATA_PAGE);
+		if((chunk.page + 1 == page_count_ + first_page_)
+		  && (*is_another_page_ptr(p))) {
+			page_count_++;
+		}
 		memcpy(buf, data_at_offset_ptr(p, chunk.slot), chunk.size);
 		releasePage(p);
 	}
@@ -146,47 +163,81 @@ size_t DataPage<TUPLE>::read_bytes(int xid, byte * buf, off_t offset, size_t rem
 }
 
 template <class TUPLE>
-bool DataPage<TUPLE>::initialize_next_page(int xid) {
+bool DataPage<TUPLE>::initialize_next_page() {
   recordid rid = calc_chunk_from_offset(write_offset_);
   assert(rid.slot == 0);
+  DEBUG("\t\t%lld\n", (long long)rid.page);
+
   if(rid.page >= first_page_ + page_count_) {
-    return false;
+	  assert(rid.page == first_page_ + page_count_);
+	  if(alloc_->grow_extent(1)) {
+		  page_count_++;
+	  } else {
+		  return false; // The region is full
+	  }
   } else {
-    Page *p = loadUninitializedPage(xid, rid.page);
-    p->pageType = DATA_PAGE;
-    *page_count_ptr(p) = 0;
-    *length_at_offset_ptr(p,0) = 0;
-    writelock(p->rwlatch, 0); //XXX this is pretty obnoxious.  Perhaps stasis shouldn't check for the latch
-    stasis_dirty_page_table_set_dirty((stasis_dirty_page_table_t*)stasis_runtime_dirty_page_table(), p);
-    unlock(p->rwlatch);
-    releasePage(p);
-    return true;
+	  abort();
   }
+
+  Page *p = loadPage(xid_, rid.page-1);
+  *is_another_page_ptr(p) = (rid.page-1 == first_page_) ? 2 : 1;
+  writelock(p->rwlatch, 0);
+  stasis_page_lsn_write(xid_, p, get_lsn(xid_));
+  unlock(p->rwlatch);
+  releasePage(p);
+
+
+  // XXX this is repeated in initialize()!
+#ifdef CHECK_FOR_SCRIBBLING
+  p = loadPage(xid_, rid.page);
+  if(*stasis_page_type_ptr(p) == DATA_PAGE) {
+	  printf("Collision on page %lld\n", (long long)rid.page); fflush(stdout);
+	  assert(*stasis_page_type_ptr(p) != DATA_PAGE);  // XXX DO NOT COMMIT THIS LINE
+  }
+#else
+  p = loadUninitializedPage(xid_, rid.page);
+#endif
+  DEBUG("\t\t\t\t%lld\n", (long long)rid.page);
+
+  p->pageType = DATA_PAGE;
+  *is_another_page_ptr(p) = 0;
+  writelock(p->rwlatch, 0); //XXX this is pretty obnoxious.  Perhaps stasis shouldn't check for the latch
+  stasis_page_lsn_write(xid_, p, get_lsn(xid_));
+  unlock(p->rwlatch);
+  releasePage(p);
+  return true;
 }
 
 template <class TUPLE>
-bool DataPage<TUPLE>::write_data(int xid, const byte * buf, size_t len) {
+bool DataPage<TUPLE>::write_data(const byte * buf, size_t len, bool init_next) {
+	bool first = true;
 	while(1) {
 		assert(len > 0);
-		size_t written = write_bytes(xid, buf, len);
+		size_t written = write_bytes(buf, len);
 		if(written == 0) {
 			return false; // fail
 		}
 		if(written == len) {
 			return true; // success
 		}
+		if(len > PAGE_SIZE && ! first) {
+			assert(written > 4000);
+		}
 		buf += written;
 		len -= written;
-		if(!initialize_next_page(xid)) {
-		  return false; // fail
+		if(init_next) {
+			if(!initialize_next_page()) {
+			  return false; // fail
+			}
 		}
+		first = false;
 	}
 }
 template <class TUPLE>
-bool DataPage<TUPLE>::read_data(int xid, byte * buf, off_t offset, size_t len) {
+bool DataPage<TUPLE>::read_data(byte * buf, off_t offset, size_t len) {
 	while(1) {
 		assert(len > 0);
-		size_t read_count = read_bytes(xid, buf, offset, len);
+		size_t read_count = read_bytes(buf, offset, len);
 		if(read_count == 0) {
 			return false; // fail
 		}
@@ -199,29 +250,17 @@ bool DataPage<TUPLE>::read_data(int xid, byte * buf, off_t offset, size_t len) {
 	}
 }
 template <class TUPLE>
-bool DataPage<TUPLE>::append(int xid, TUPLE const * dat)
+bool DataPage<TUPLE>::append(TUPLE const * dat)
 {
+  // Don't append record to already-full datapage.  The record could push us over the page limit, but that's OK.
+        if(write_offset_ > (initial_page_count_ * PAGE_SIZE)) { return false; }
+
 	byte * buf = dat->to_bytes(); // TODO could be more efficient; this does a malloc and memcpy.  The alternative couples us more strongly to datapage, but simplifies datapage.
 	len_t dat_len = dat->byte_length();
 
-	bool succ = write_data(xid, (const byte*)&dat_len, sizeof(dat_len));
+	bool succ = write_data((const byte*)&dat_len, sizeof(dat_len));
 	if(succ) {
-	  succ = write_data(xid, buf, dat_len);
-	}
-
-	if(succ) {
-
-	  dat_len = 0; // write terminating zero.
-
-	  succ = write_data(xid, (const byte*)&dat_len, sizeof(dat_len));
-
-	  if(succ) {
-	    write_offset_ -= sizeof(dat_len); // want to overwrite zero next time around.
-	  }
-
-	  // if writing the zero fails, later reads will fail as well, and assume EOF.
-	  succ = true;  // return true (the tuple has been written regardless of whether the zero fit)
-
+		succ = write_data(buf, dat_len);
 	}
 
 	free(buf);
@@ -230,12 +269,12 @@ bool DataPage<TUPLE>::append(int xid, TUPLE const * dat)
 }
 
 template <class TUPLE>
-bool DataPage<TUPLE>::recordRead(int xid, typename TUPLE::key_t key, size_t keySize,  TUPLE ** buf)
+bool DataPage<TUPLE>::recordRead(typename TUPLE::key_t key, size_t keySize,  TUPLE ** buf)
 {
     RecordIterator itr(this);
 
     int match = -1;
-    while((*buf=itr.getnext(xid)) != 0)
+    while((*buf=itr.getnext()) != 0)
         {
             match = TUPLE::compare((*buf)->key(), key);
             
@@ -259,108 +298,24 @@ bool DataPage<TUPLE>::recordRead(int xid, typename TUPLE::key_t key, size_t keyS
     return false;
 }
 
-template <class TUPLE>
-pageid_t DataPage<TUPLE>::dp_alloc_region(int xid, void *conf)
-{
-    RegionAllocConf_t* a = (RegionAllocConf_t*)conf;
-
-    if(a->nextPage == a->endOfRegion) {
-        if(a->regionList.size == -1) {
-            //DEBUG("nextPage: %lld\n", a->nextPage);
-            a->regionList = TarrayListAlloc(xid, 1, 4, sizeof(pageid_t));
-        DEBUG("regionList.page: %lld\n", a->regionList.page);
-        DEBUG("regionList.slot: %d\n", a->regionList.slot);
-        DEBUG("regionList.size: %lld\n", a->regionList.size);
-
-        a->regionCount = 0;
-    }
-        DEBUG("{%lld <- alloc region arraylist}\n", a->regionList.page);
-    TarrayListExtend(xid,a->regionList,1);
-    a->regionList.slot = a->regionCount;
-    DEBUG("region lst slot %d\n",a->regionList.slot);
-    a->regionCount++;
-    DEBUG("region count %lld\n",a->regionCount);
-    a->nextPage = TregionAlloc(xid, a->regionSize,12);
-    DEBUG("next page %lld\n",a->nextPage);
-    a->endOfRegion = a->nextPage + a->regionSize;
-    Tset(xid,a->regionList,&a->nextPage);
-    DEBUG("next page %lld\n",a->nextPage);
-  }
-
-  DEBUG("%lld ?= %lld\n", a->nextPage,a->endOfRegion);
-  pageid_t ret = a->nextPage;
-  a->nextPage = a->endOfRegion; // Allocate everything all at once.
-
-  DEBUG("ret %lld\n",ret);
-  return ret;
-
-}
-
-template <class TUPLE>
-pageid_t DataPage<TUPLE>::dp_alloc_region_rid(int xid, void * ridp) {
-  recordid rid = *(recordid*)ridp;
-  RegionAllocConf_t conf;
-  Tread(xid,rid,&conf);
-  pageid_t ret = dp_alloc_region(xid,&conf);
-  //DEBUG("{%lld <- alloc region extend}\n", conf.regionList.page);
-  // XXX get rid of Tset by storing next page in memory, and losing it
-  //     on crash.
-  Tset(xid,rid,&conf);
-  return ret;
-}
-
-template <class TUPLE>
-void DataPage<TUPLE>::dealloc_region_rid(int xid, void *conf)
-{
-    RegionAllocConf_t a = *((RegionAllocConf_t*)conf);
-    DEBUG("{%lld <- dealloc region arraylist}\n", a.regionList.page);
-
-    for(int i = 0; i < a.regionCount; i++) {
-     a.regionList.slot = i;
-     pageid_t pid;
-     Tread(xid,a.regionList,&pid);
-     TregionDealloc(xid,pid);
-    }
-}
-
-template <class TUPLE>
-void DataPage<TUPLE>::force_region_rid(int xid, void *conf)
-{
-    recordid rid = *(recordid*)conf;
-    RegionAllocConf_t a;
-    Tread(xid,rid,&a);
-    
-    for(int i = 0; i < a.regionCount; i++)
-    {
-        a.regionList.slot = i;
-        pageid_t pid;
-        Tread(xid,a.regionList,&pid);
-        stasis_dirty_page_table_flush_range((stasis_dirty_page_table_t*)stasis_runtime_dirty_page_table(), pid, pid+a.regionSize);
-        stasis_buffer_manager_t *bm = 
-	   (stasis_buffer_manager_t*)stasis_runtime_buffer_manager();
-        bm->forcePageRange(bm, pid, pid+a.regionSize);
-    }
-}
-
-
 ///////////////////////////////////////////////////////////////
 //RECORD ITERATOR
 ///////////////////////////////////////////////////////////////
 
 
 template <class TUPLE>
-TUPLE* DataPage<TUPLE>::RecordIterator::getnext(int xid)
+TUPLE* DataPage<TUPLE>::RecordIterator::getnext()
 {
 	len_t len;
 	bool succ;
 
-	succ = dp->read_data(xid, (byte*)&len, read_offset_, sizeof(len));
+	succ = dp->read_data((byte*)&len, read_offset_, sizeof(len));
 	if((!succ) || (len == 0)) { return NULL; }
 	read_offset_ += sizeof(len);
 
 	byte * buf = (byte*)malloc(len);
 
-	succ = dp->read_data(xid, buf, read_offset_, len);
+	succ = dp->read_data(buf, read_offset_, len);
 
 	if(!succ) { read_offset_ -= sizeof(len); free(buf); return NULL; }
 
@@ -373,7 +328,7 @@ TUPLE* DataPage<TUPLE>::RecordIterator::getnext(int xid)
 	return ret;
 }
 
-template <class TUPLE>
+/*template <class TUPLE>
 void DataPage<TUPLE>::RecordIterator::advance(int xid, int count)
 {
 	len_t len;
@@ -384,4 +339,4 @@ void DataPage<TUPLE>::RecordIterator::advance(int xid, int count)
 	  read_offset_ += sizeof(len);
 	  read_offset_ += len;
 	}
-}
+}*/

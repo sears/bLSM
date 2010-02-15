@@ -26,7 +26,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     sync();
 
-    DataPage<datatuple>::register_stasis_page_impl();
+    logtree::init_stasis();
 
     //data generation
 //    std::vector<std::string> * data_arr = new std::vector<std::string>;
@@ -43,10 +43,6 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     NUM_ENTRIES=key_arr->size();
     
-    bufferManagerNonBlockingSlowHandleType = IO_HANDLE_PFILE;
-
-    Tinit();
-
     int xid = Tbegin();
 
     merge_scheduler mscheduler;    
@@ -106,7 +102,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     //Tcommit(xid);
     
-    Tdeinit();
+    logtree::deinit_stasis();
     
     
 }

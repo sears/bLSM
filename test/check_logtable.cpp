@@ -28,11 +28,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     sync();
 
-    bufferManagerNonBlockingSlowHandleType = IO_HANDLE_PFILE;
-
-    DataPage<datatuple>::register_stasis_page_impl();
-
-    Tinit();
+    logtree::init_stasis();
 
     int xid = Tbegin();
 
@@ -86,17 +82,17 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
         if(dp == NULL)
         {
-            dp = ltable.insertTuple(xid, newtuple, ltable.get_dpstate1(), lt);
+            dp = ltable.insertTuple(xid, newtuple, ltable.get_tree_c1()->get_alloc(), lt);
             dpages++;
             dsp.push_back(dp->get_start_pid());
         }
         else
         {
-            if(!dp->append(xid, newtuple))
+            if(!dp->append(newtuple))
             {
                 npages += dp->get_page_count();
                 delete dp;
-                dp = ltable.insertTuple(xid, newtuple, ltable.get_dpstate1(), lt);
+                dp = ltable.insertTuple(xid, newtuple, ltable.get_tree_c1()->get_alloc(), lt);
                 dpages++;
                 dsp.push_back(dp->get_start_pid());            
             }
@@ -155,8 +151,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     printf("Random Reads completed.\n");
     Tcommit(xid);
-    Tdeinit();
-
+    logtree::deinit_stasis();
 }
 
 /** @test

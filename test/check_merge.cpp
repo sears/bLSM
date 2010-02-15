@@ -24,9 +24,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     unlink("storefile.txt");
     unlink("logfile.txt");
 
-    DataPage<datatuple>::register_stasis_page_impl();
-
-    sync();
+    logtree::init_stasis();
 
     //data generation
     std::vector<std::string> * data_arr = new std::vector<std::string>;
@@ -45,11 +43,6 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     if(data_arr->size() > NUM_ENTRIES)
         data_arr->erase(data_arr->begin()+NUM_ENTRIES, data_arr->end());
-    
-    
-    bufferManagerNonBlockingSlowHandleType = IO_HANDLE_PFILE;
-
-    Tinit();
 
     int xid = Tbegin();
 
@@ -159,9 +152,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     
     Tcommit(xid);
-    Tdeinit();
-    
-    
+    logtree::deinit_stasis();
 }
 
 

@@ -8,8 +8,18 @@
 #include "logiterators.h"
 #include "datapage.cpp"
 
+#include <stasis/transactional.h>
 #include <stasis/page.h>
 #include <stasis/page/slotted.h>
+#include <stasis/bufferManager.h>
+#include <stasis/bufferManager/bufferHash.h>
+
+
+static inline double tv_to_double(struct timeval tv)
+{
+  return static_cast<double>(tv.tv_sec) +
+      (static_cast<double>(tv.tv_usec) / 1000000.0);
+}
 
 /////////////////////////////////////////////////////////////////
 // LOGTREE implementation
@@ -38,6 +48,20 @@ logtree::logtree()
 {
 
 }
+
+void logtree::init_stasis() {
+
+    bufferManagerFileHandleType = BUFFER_MANAGER_FILE_HANDLE_PFILE;
+
+    DataPage<datatuple>::register_stasis_page_impl();
+
+    stasis_buffer_manager_factory = stasis_buffer_manager_hash_factory; // XXX workaround stasis issue #22.
+
+    Tinit();
+
+}
+
+void logtree::deinit_stasis() { Tdeinit(); }
 
 void logtree::free_region_rid(int xid, recordid tree,
           logtree_page_deallocator_t dealloc, void *allocator_state)
@@ -114,15 +138,8 @@ pageid_t logtree::alloc_region(int xid, void *conf)
     
   DEBUG("%lld ?= %lld\n", a->nextPage,a->endOfRegion);
   pageid_t ret = a->nextPage;
-  // Ensure the page is in buffer cache without accessing disk (this
-  // sets it to clean and all zeros if the page is not in cache).
-  // Hopefully, future reads will get a cache hit, and avoid going to
-  // disk.
-
-  Page * p = loadUninitializedPage(xid, ret);
-  releasePage(p);
-  DEBUG("ret %lld\n",ret);
   (a->nextPage)++;
+  DEBUG("tree %lld-%lld\n", (long long)ret, a->endOfRegion);
   return ret;
 
 }
@@ -157,18 +174,11 @@ recordid logtree::create(int xid)
     
     Page *p = loadPage(xid, ret.page);
     writelock(p->rwlatch,0);
-    
-    stasis_page_slotted_initialize_page(p);
-    
-    //*stasis_page_type_ptr(p) = SLOTTED_PAGE; //LOGTREE_ROOT_PAGE;
-    
-    //logtree_state *state = (logtree_state*) ( malloc(sizeof(logtree_state)));
-    //state->lastLeaf = -1;
-    
-    //p->impl = state;
+
     lastLeaf = -1;
 
     //initialize root node
+    stasis_page_slotted_initialize_page(p);
     recordid tmp  = stasis_record_alloc_begin(xid, p, root_rec_size);
     stasis_record_alloc_done(xid,p,tmp);
     
@@ -186,8 +196,7 @@ recordid logtree::create(int xid)
            && tmp.size == root_rec_size);
 
     writeRecord(xid, p, tmp, (byte*)&COMPARATOR, root_rec_size);
-    
-    
+
     unlock(p->rwlatch);
     releasePage(p);    
 
@@ -207,9 +216,10 @@ void logtree::writeRecord(int xid, Page *p, recordid &rid,
     byte *byte_arr = stasis_record_write_begin(xid, p, rid);
     memcpy(byte_arr, data, datalen); //TODO: stasis write call
     stasis_record_write_done(xid, p, rid, byte_arr);
-    stasis_page_lsn_write(xid, p, 0); // XXX need real LSN?   
+    stasis_page_lsn_write(xid, p, get_lsn(xid));
 
 }
+
 
 void logtree::writeNodeRecord(int xid, Page * p, recordid & rid, 
                               const byte *key, size_t keylen, pageid_t ptr)
@@ -220,7 +230,7 @@ void logtree::writeNodeRecord(int xid, Page * p, recordid & rid,
     nr->ptr = ptr;
     memcpy(nr+1, key, keylen);
     stasis_record_write_done(xid, p, rid, (byte*)nr);
-    stasis_page_lsn_write(xid, p, 0); // XXX need real LSN?   
+    stasis_page_lsn_write(xid, p, get_lsn(xid));
 }
 
 void logtree::writeRecord(int xid, Page *p, slotid_t slot,
@@ -233,24 +243,14 @@ void logtree::writeRecord(int xid, Page *p, slotid_t slot,
     byte *byte_arr = stasis_record_write_begin(xid, p, rid);
     memcpy(byte_arr, data, datalen); //TODO: stasis write call
     stasis_record_write_done(xid, p, rid, byte_arr);
-    stasis_page_lsn_write(xid, p, 0); // XXX need real LSN?   
+    stasis_page_lsn_write(xid, p, get_lsn(xid));
 
 }
 
 const byte* logtree::readRecord(int xid, Page * p, recordid &rid)
 {    
-    //byte *ret = (byte*)malloc(rid.size);
-    //const byte *nr = stasis_record_read_begin(xid,p,rid);
-    //memcpy(ret, nr, rid.size);
-    //stasis_record_read_done(xid,p,rid,nr);
-
-    const byte *nr = stasis_record_read_begin(xid,p,rid);
+    const byte *nr = stasis_record_read_begin(xid,p,rid); // XXX API violation?
     return nr;
-
-    //DEBUG("reading {%lld, %d, %d}\n",
-    //      p->id, rid.slot, rid.size );
-
-    //return ret;
 }
 
 const byte* logtree::readRecord(int xid, Page * p, slotid_t slot, int64_t size)
@@ -394,7 +394,7 @@ recordid logtree::appendPage(int xid, recordid tree, pageid_t & rmLeafID,
           // don't overwrite key...
           nr->ptr = child;
           stasis_record_write_done(xid,p,pFirstSlot,(byte*)nr);
-          stasis_page_lsn_write(xid, p, 0); // XXX need real LSN?
+          stasis_page_lsn_write(xid, p, get_lsn(xid));
           
           if(!depth) {
               rmLeafID = lc->id;
@@ -827,7 +827,6 @@ logtable::logtable()
     tree_c0 = NULL;
     tree_c1 = NULL;
     tree_c2 = NULL;
-//    rbtree_mut = NULL;
     this->mergedata = 0;
     fixed_page_count = -1;
     //tmerger = new tuplemerger(&append_merger);
@@ -841,16 +840,22 @@ logtable::logtable()
 
 void logtable::tearDownTree(rbtree_ptr_t tree) {
     datatuple * t = 0;
+    rbtree_t::iterator old;
     for(rbtree_t::iterator delitr  = tree->begin();
                            delitr != tree->end();
                            delitr++) {
     	if(t) {
+    		tree->erase(old);
     		datatuple::freetuple(t);
+    		t = 0;
     	}
     	t = *delitr;
-    	tree->erase(delitr);
+    	old = delitr;
     }
-	if(t) { datatuple::freetuple(t); }
+	if(t) {
+		tree->erase(old);
+		datatuple::freetuple(t);
+	}
     delete tree;
 }
 
@@ -878,15 +883,14 @@ recordid logtable::allocTable(int xid)
     tree_c2 = new logtree();
     tree_c2->create(xid);
 
-    tbl_header.c2_dp_state = Talloc(xid, sizeof(RegionAllocConf_t));
-    Tset(xid, tbl_header.c2_dp_state, &DATAPAGE_REGION_ALLOC_STATIC_INITIALIZER);    
-                         
+    tbl_header.c2_dp_state = Talloc(xid, DataPage<datatuple>::RegionAllocator::header_size);
+    tree_c2->set_alloc(new DataPage<datatuple>::RegionAllocator(xid, tbl_header.c2_dp_state, 10000)); /// XXX do not hard code region length.
 
     //create the small tree
     tree_c1 = new logtree();
     tree_c1->create(xid);
-    tbl_header.c1_dp_state = Talloc(xid, sizeof(RegionAllocConf_t));
-    Tset(xid, tbl_header.c1_dp_state, &DATAPAGE_REGION_ALLOC_STATIC_INITIALIZER);
+    tbl_header.c1_dp_state = Talloc(xid, DataPage<datatuple>::RegionAllocator::header_size);
+    tree_c1->set_alloc(new DataPage<datatuple>::RegionAllocator(xid, tbl_header.c1_dp_state, 10000)); /// XXX do not hard code region length.
     
     tbl_header.c2_root = tree_c2->get_root_rec();
     tbl_header.c2_state = tree_c2->get_tree_state();
@@ -1278,24 +1282,25 @@ void logtable::insertTuple(datatuple *tuple)
 }
 
 
-DataPage<datatuple>* logtable::insertTuple(int xid, datatuple *tuple, recordid &dpstate, logtree *ltree)
+DataPage<datatuple>* logtable::insertTuple(int xid, datatuple *tuple, DataPage<datatuple>::RegionAllocator * alloc, logtree *ltree)
 {
 
-    //create a new data page    
+    //create a new data page -- either the last region is full, or the last data page doesn't want our tuple.  (or both)
     
     DataPage<datatuple> * dp = 0;
-
+    int count = 0;
     while(dp==0)
     {
-        dp = new DataPage<datatuple>(xid, fixed_page_count,
-                                     &DataPage<datatuple>::dp_alloc_region_rid,
-                                     &dpstate );
+      dp = new DataPage<datatuple>(xid, fixed_page_count, alloc);
 
         //insert the record into the data page
-        if(!dp->append(xid, tuple))
-        {            
-            delete dp;
+        if(!dp->append(tuple))
+        {
+        	// the last datapage must have not wanted the tuple, and then this datapage figured out the region is full.
+        	delete dp;
             dp = 0;
+		    assert(count == 0); // only retry once.
+            count ++;
         }
     }
     
@@ -1327,7 +1332,7 @@ datatuple * logtable::findTuple(int xid, datatuple::key_t key, size_t keySize,  
     if(pid!=-1)
     {
         DataPage<datatuple> * dp = new DataPage<datatuple>(xid, pid);
-        dp->recordRead(xid, key, keySize, &tup);
+        dp->recordRead(key, keySize, &tup);
         delete dp;           
     }
     return tup;
@@ -1494,39 +1499,6 @@ int logtreeIterator::next(int xid, lladdIterator_t *it)
     
 }
 
-/*
-lladdIterator_t *logtreeIterator::copy(int xid, lladdIterator_t* i)
-{
-    logtreeIterator_s *it = (logtreeIterator_s*) i->impl;
-    logtreeIterator_s *mine = (logtreeIterator_s*) malloc(sizeof(logtreeIterator_s));
-    
-    if(it->p)
-    {
-        mine->p = loadPage(xid, it->p->id);
-        readlock(mine->p->rwlatch,0);
-    }
-    else 
-        mine->p = 0;
-  
-    memcpy(&mine->current, &it->current,sizeof(recordid));
-    
-    if(it->t)
-    {
-        mine->t = (datatuple*)malloc(sizeof(*it->t)); //TODO: DATA IS NOT COPIED, MIGHT BE WRONG
-        //mine->t = malloc(sizeof(*it->t) + it->current.size);
-        memcpy(mine->t, it->t, sizeof(*it->t));// + it->current.size);
-    }
-    else 
-        mine->t = 0;
-    
-    mine->justOnePage = it->justOnePage;
-    lladdIterator_t * ret = (lladdIterator_t*)malloc(sizeof(lladdIterator_t));
-    ret->type = -1; // XXX LSM_TREE_ITERATOR
-    ret->impl = mine;
-    return ret;
-}
-*/
-
 void logtreeIterator::close(int xid, lladdIterator_t *it)
 {
     logtreeIterator_s *impl = (logtreeIterator_s*)it->impl;
@@ -1542,20 +1514,3 @@ void logtreeIterator::close(int xid, lladdIterator_t *it)
   free(impl);
   free(it);
 }
-
-
-/////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////
-
-
-
-
-double tv_to_double(struct timeval tv)
-{
-  return static_cast<double>(tv.tv_sec) +
-      (static_cast<double>(tv.tv_usec) / 1000000.0);
-}
-
-
-///////////////////////////////////////////////////////////////////                       
-

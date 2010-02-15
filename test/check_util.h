@@ -153,4 +153,10 @@ void preprandstr(int count, std::vector<std::string> &arr, int avg_len=50, bool 
 
 }
 
+static inline double tv_to_double(struct timeval tv)
+{
+  return static_cast<double>(tv.tv_sec) +
+      (static_cast<double>(tv.tv_usec) / 1000000.0);
+}
+
 #endif /* CHECK_UTIL_H_ */

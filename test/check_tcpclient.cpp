@@ -129,8 +129,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         assert(ret);
         
         gettimeofday(&ti_end,0);
-//        insert_time += tv_to_double(ti_end) - tv_to_double(ti_st);
-        insert_time ++; // XXX
+        insert_time += tv_to_double(ti_end) - tv_to_double(ti_st);
 
         datatuple::freetuple(newtuple);
 
@@ -140,7 +139,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     }
     gettimeofday(&stop_tv,0);
     printf("insert time: %6.1f\n", insert_time);
-    printf("insert time: %6.1f\n", -1.0); // XXX (tv_to_double(stop_tv) - tv_to_double(start_tv)));
+    printf("insert time: %6.1f\n", (tv_to_double(stop_tv) - tv_to_double(start_tv)));
     printf("#deletions: %d\n#updates: %d\n", delcount, upcount);
 
     
@@ -182,7 +181,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     logstore_client_close(l);
 
     gettimeofday(&stop_tv,0);
-    printf("run time: %6.1f\n", -1.0); // XXX (tv_to_double(stop_tv) - tv_to_double(start_tv)));
+    printf("run time: %6.1f\n", (tv_to_double(stop_tv) - tv_to_double(start_tv)));
 }
 
 

@@ -9,10 +9,7 @@ int main(int argc, char **argv)
 
     sync();
 
-    //    PAGELAYOUT::initPageLayout();
-    bufferManagerNonBlockingSlowHandleType = IO_HANDLE_PFILE;
-
-    Tinit();
+    logtree::init_stasis();
 
     int xid = Tbegin();
 
@@ -31,7 +28,7 @@ int main(int argc, char **argv)
     logtreeIterator::close(xid, it);
     Tcommit(xid);
 
-    Tdeinit();
+    logtree::deinit_stasis();
 
 
 

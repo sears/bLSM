@@ -33,7 +33,7 @@ void terminate (int param)
   
   printf("Deinitializing stasis...\n");
   fflush(stdout);
-  Tdeinit();
+  logtree::deinit_stasis();
   
   exit(0);
 }
@@ -43,14 +43,10 @@ void initialize_server()
     //signal handling
     void (*prev_fn)(int);
 
+    logtree::init_stasis();
+
     prev_fn = signal (SIGINT,terminate);
     
-    bufferManagerFileHandleType = BUFFER_MANAGER_FILE_HANDLE_PFILE;
-
-    DataPage<datatuple>::register_stasis_page_impl();
-
-    Tinit();
-
     int xid = Tbegin();
 
     mscheduler = new merge_scheduler;    
