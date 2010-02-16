@@ -177,7 +177,6 @@ public:
     
     void insertTuple(struct datatuple *tuple);
 
-
     //other class functions
     recordid allocTable(int xid);
 

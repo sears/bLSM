@@ -1,15 +1,10 @@
 #ifndef _LOGSERVER_H_
 #define _LOGSERVER_H_
 
-
 #include <queue>
 #include <vector>
 
-//#include "logstore.h"
-
 #include "datatuple.h"
-
-
 
 #include <stasis/transactional.h>
 #include <pthread.h>
@@ -28,8 +23,6 @@
 
 class logtable;
 
-
-
 struct pthread_item;
 
 struct pthread_data {
@@ -45,8 +38,6 @@ struct pthread_data {
     
     int *workitem; //id of the socket to work
 
-    //pthread_mutex_t * table_lock;
-    //rwl *table_lock;
     logtable *ltable;
     bool *sys_alive;
 
@@ -64,14 +55,6 @@ struct pthread_item{
     pthread_t * th_handle;
     pthread_data *data;
 };
-
-
-//struct work_item
-//{
-//    int sockd; //socket id
-//    datatuple in_tuple; //request
-//    datatuple out_tuple; //response
-//};
 
 struct serverth_data
 {
@@ -93,10 +76,6 @@ public:
     logserver(int nthreads, int server_port){
         this->nthreads = nthreads;
         this->server_port = server_port;
-        //lsmlock = new pthread_mutex_t;
-        //pthread_mutex_init(lsmlock,0);
-
-        //lsmlock = initlock();
 
         qlock = new pthread_mutex_t;
         pthread_mutex_init(qlock,0);
@@ -113,8 +92,6 @@ public:
 
     ~logserver()
         {
-            //delete lsmlock;
-            //deletelock(lsmlock);
             delete qlock;
         }
     
@@ -126,12 +103,7 @@ private:
 
     //main loop of server
     //accept connections, assign jobs to threads
-    //void dispatchLoop();
-
     void eventLoop();
-    
-
-private:
 
     int server_port;
     
@@ -140,10 +112,6 @@ private:
     bool sys_alive;
     
     int serversocket; //server socket file descriptor
-
-    //ccqueue<int> conn_queue; //list of active connections (socket list)
-
-    //ccqueue<pthread_item> idleth_queue; //list of idle threads
 
     std::queue<int> ready_queue; //connections to go inside select
     std::queue<int> work_queue;  //connections to be processed by worker threads
@@ -156,10 +124,7 @@ private:
     
     std::vector<pthread_item *> th_list; // list of threads
 
-    //rwl *lsmlock; //lock for using lsm table
-
     logtable *ltable;
-
 
     #ifdef STATS_ENABLED
     int num_reqs;

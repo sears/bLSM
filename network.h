@@ -26,7 +26,10 @@ static const network_op_t OP_INSERT              = 8;   // Create, Update, Delet
 static const network_op_t OP_FIND                = 9;   // Read
 
 static const network_op_t OP_DONE                = 10;  // Please close the connection.
-static const network_op_t LOGSTORE_LAST_REQUEST_CODE   = 10;
+
+static const network_op_t OP_DBG_BLOCKMAP            = 11;
+
+static const network_op_t LOGSTORE_LAST_REQUEST_CODE   = 11;
 
 //error codes
 static const network_op_t LOGSTORE_FIRST_ERROR  = 28;
