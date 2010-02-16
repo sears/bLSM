@@ -49,12 +49,6 @@ typedef struct RegionAllocConf_t
   pageid_t regionSize;
 } RegionAllocConf_t;
 
-
-//struct logtree_state {
-//  pageid_t lastLeaf;
-//};
-
-
 struct indexnode_rec {
     pageid_t ptr;
 };
@@ -132,7 +126,6 @@ public:
                                     pageid_t val_page, pageid_t lastLeaf,
                                     logtree_page_allocator_t allocator,
                                     void *allocator_state);
-
 
     inline DataPage<datatuple>::RegionAllocator* get_alloc() { return region_alloc; }
     inline void set_alloc(DataPage<datatuple>::RegionAllocator* a1) { region_alloc = a1; } // XXX kludge; must be a better api for this
