@@ -41,9 +41,9 @@ void insertProbeIter(size_t NUM_ENTRIES)
     Tcommit(xid);
     
     xid = Tbegin();
-    logtree *lt = ltable.get_tree_c1();
+    logtree *ltable_c1 = ltable.get_tree_c1();
     
-    recordid tree_root = lt->get_root_rec();
+    recordid tree_root = ltable_c1->get_root_rec();
 
 
     std::vector<std::string> data_arr;
@@ -82,7 +82,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
         if(dp == NULL)
         {
-            dp = ltable.insertTuple(xid, newtuple, ltable.get_tree_c1()->get_alloc(), lt);
+            dp = ltable.insertTuple(xid, newtuple, ltable_c1);
             dpages++;
             dsp.push_back(dp->get_start_pid());
         }
@@ -92,7 +92,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
             {
                 npages += dp->get_page_count();
                 delete dp;
-                dp = ltable.insertTuple(xid, newtuple, ltable.get_tree_c1()->get_alloc(), lt);
+                dp = ltable.insertTuple(xid, newtuple, ltable_c1);
                 dpages++;
                 dsp.push_back(dp->get_start_pid());            
             }
@@ -102,7 +102,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     }
 
     printf("\nTREE STRUCTURE\n");
-    lt->print_tree(xid);
+    ltable_c1->print_tree(xid);
     
     printf("Total data set length: %lld\n", datasize);
     printf("Storage utilization: %.2f\n", (datasize+.0) / (PAGE_SIZE * npages));
@@ -140,7 +140,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         //randomly pick a key
         int ri = rand()%key_arr.size();
 
-		datatuple *dt = ltable.findTuple(xid, (const datatuple::key_t) key_arr[ri].c_str(), (size_t)key_arr[ri].length()+1, lt);
+		datatuple *dt = ltable.findTuple(xid, (const datatuple::key_t) key_arr[ri].c_str(), (size_t)key_arr[ri].length()+1, ltable_c1);
 
         assert(dt!=0);
         assert(dt->keylen() == key_arr[ri].length()+1);

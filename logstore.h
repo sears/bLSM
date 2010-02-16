@@ -73,8 +73,9 @@ public:
     
     static void init_stasis();
     static void deinit_stasis();
-
+private:
     static pageid_t alloc_region(int xid, void *conf);
+public:
     static pageid_t alloc_region_rid(int xid, void * ridp);
     static void force_region_rid(int xid, void *conf);
     static void dealloc_region_rid(int xid, void *conf);
@@ -191,7 +192,7 @@ public:
     
     static void tearDownTree(rbtree_ptr_t t);
 
-    DataPage<datatuple>* insertTuple(int xid, datatuple *tuple, DataPage<datatuple>::RegionAllocator * alloc,logtree *ltree);
+    DataPage<datatuple>* insertTuple(int xid, datatuple *tuple,logtree *ltree);
 
     datatuple * findTuple(int xid, const datatuple::key_t key, size_t keySize,  logtree *ltree);
 

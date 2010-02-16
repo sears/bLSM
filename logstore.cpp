@@ -1278,16 +1278,15 @@ void logtable::insertTuple(datatuple *tuple)
 }
 
 
-DataPage<datatuple>* logtable::insertTuple(int xid, datatuple *tuple, DataPage<datatuple>::RegionAllocator * alloc, logtree *ltree)
+DataPage<datatuple>* logtable::insertTuple(int xid, datatuple *tuple, logtree *ltree)
 {
-
     //create a new data page -- either the last region is full, or the last data page doesn't want our tuple.  (or both)
     
     DataPage<datatuple> * dp = 0;
     int count = 0;
     while(dp==0)
     {
-      dp = new DataPage<datatuple>(xid, fixed_page_count, alloc);
+      dp = new DataPage<datatuple>(xid, fixed_page_count, ltree->get_alloc());
 
         //insert the record into the data page
         if(!dp->append(tuple))

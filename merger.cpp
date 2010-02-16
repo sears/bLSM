@@ -8,7 +8,6 @@ inline DataPage<datatuple>*
 insertTuple(int xid, DataPage<datatuple> *dp, datatuple *t,
             logtable *ltable,
             logtree * ltree,
-	    DataPage<datatuple>::RegionAllocator* alloc,
             int64_t &dpages, int64_t &npages);
 
 int merge_scheduler::addlogtable(logtable *ltable)
@@ -645,7 +644,6 @@ int64_t merge_iterators(int xid,
         {
             //insert t1
             dp = insertTuple(xid, dp, t1, ltable, scratch_tree,
-                             scratch_tree->get_alloc(), // XXX inserTuple should do this for us
                              dpages, npages);
 
             datatuple::freetuple(t1);
@@ -660,7 +658,7 @@ int64_t merge_iterators(int xid,
             
             //insert merged tuple, drop deletes
             if(dropDeletes && !mtuple->isDelete())
-                dp = insertTuple(xid, dp, mtuple, ltable, scratch_tree, scratch_tree->get_alloc(),
+                dp = insertTuple(xid, dp, mtuple, ltable, scratch_tree,
                                  dpages, npages);
             
             datatuple::freetuple(t1);
@@ -670,7 +668,7 @@ int64_t merge_iterators(int xid,
         else
         {        
             //insert t2
-            dp = insertTuple(xid, dp, t2, ltable, scratch_tree, scratch_tree->get_alloc(),
+            dp = insertTuple(xid, dp, t2, ltable, scratch_tree,
                              dpages, npages);
             // cannot free any tuples here; they may still be read through a lookup
         }
@@ -681,7 +679,7 @@ int64_t merge_iterators(int xid,
 
     while(t1 != 0) // t1 is less than t2
         {
-            dp = insertTuple(xid, dp, t1, ltable, scratch_tree, scratch_tree->get_alloc(),
+            dp = insertTuple(xid, dp, t1, ltable, scratch_tree,
                              dpages, npages);
 
             datatuple::freetuple(t1);
@@ -703,19 +701,18 @@ inline DataPage<datatuple>*
 insertTuple(int xid, DataPage<datatuple> *dp, datatuple *t,
             logtable *ltable,
             logtree * ltree,
-            DataPage<datatuple>::RegionAllocator * alloc,
             int64_t &dpages, int64_t &npages)
 {
     if(dp==0)
     {
-        dp = ltable->insertTuple(xid, t, alloc, ltree);
+        dp = ltable->insertTuple(xid, t, ltree);
         dpages++;
     }
     else if(!dp->append(t))
     {
         npages += dp->get_page_count();
         delete dp;
-        dp = ltable->insertTuple(xid, t, alloc, ltree);
+        dp = ltable->insertTuple(xid, t, ltree);
         dpages++;
     }
 
