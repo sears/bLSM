@@ -26,10 +26,6 @@ static inline double tv_to_double(struct timeval tv)
 /////////////////////////////////////////////////////////////////
 
 const RegionAllocConf_t logtree::REGION_ALLOC_STATIC_INITIALIZER = { {0,0,-1}, 0, -1, -1, 1000 };
-const RegionAllocConf_t
-logtable::DATAPAGE_REGION_ALLOC_STATIC_INITIALIZER = { {0,0,-1}, 0, -1, -1, 1000 };
-
-//printf(__VA_ARGS__); fflush(NULL)
 
 #define LOGTREE_ROOT_PAGE SLOTTED_PAGE
 

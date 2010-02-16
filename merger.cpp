@@ -4,10 +4,6 @@
 #include "logiterators.cpp"
 #include "datapage.h"
 
-//pageid_t merge_scheduler::C0_MEM_SIZE = 1000 * 1000 * 1000;
-
-//template <> struct merger_args<rbtree_t>;
-//template <> struct merger_args<logtree>;
 inline DataPage<datatuple>*
 insertTuple(int xid, DataPage<datatuple> *dp, datatuple *t,
             logtable *ltable,
@@ -166,8 +162,6 @@ void merge_scheduler::startlogtable(int index, int64_t MAX_C0_SIZE)
     *block1_scratch=0;
 
     //recordid * allocer_scratch = new recordid;
-    RegionAllocConf_t *allocer_scratch = new RegionAllocConf_t;
-
     
     struct merger_args<logtree> diskmerge_args= {
         ltable, 
@@ -188,9 +182,7 @@ void merge_scheduler::startlogtable(int index, int64_t MAX_C0_SIZE)
         0, //max_tree_size No max size for biggest component
         &R, //r_i
             block1_scratch, //in-tree
-            allocer_scratch, //in_tree_allocer
             0, //out_tree
-            0, //out_tree_allocer
             ltable->get_tree_c2()->get_root_rec(), // my_tree
             ltable->get_table_rec() //tree
                 };
@@ -228,9 +220,7 @@ void merge_scheduler::startlogtable(int index, int64_t MAX_C0_SIZE)
             (int64_t)(R * R * MAX_C0_SIZE),
             &R,
             mdata->old_c0,
-            0,
             block1_scratch,
-            allocer_scratch,
             ltable->get_tree_c1()->get_root_rec(),
             ltable->get_table_rec() //tree
         };
@@ -325,13 +315,10 @@ void* memMergeThread(void*arg)
         recordid scratch_root = scratch_tree->create(xid);
 
         //save the old dp state values
-		//        RegionAllocConf_t olddp_state;
-		//        Tread(xid, ltable->get_dpstate1(), &olddp_state);
 		DataPage<datatuple>::RegionAllocator *old_alloc = ltable->get_tree_c1()->get_alloc();
 		old_alloc->done(); // XXX do this earlier
 			//reinitialize the dp state
 		scratch_tree->set_alloc(new DataPage<datatuple>::RegionAllocator(xid, ltable->get_dpstate1() /*rid of old header*/, 10000)); // XXX should not hardcode region size
-//        Tset(xid, ltable->get_dpstate1(), &logtable::DATAPAGE_REGION_ALLOC_STATIC_INITIALIZER);
 
         //pthread_mutex_unlock(a->block_ready_mut);
         unlock(ltable->mergedata->header_lock);
@@ -347,14 +334,13 @@ void* memMergeThread(void*arg)
 
         //force write the new region to disk
         recordid scratch_alloc_state = scratch_tree->get_tree_state();        
-        //TlsmForce(xid,scratch_root,logtree::force_region_rid, &scratch_alloc_state);
         // XXX When called by merger_check (at least), we hold a pin on a page that should be forced.  This causes stasis to abort() the process.
         logtree::force_region_rid(xid, &scratch_alloc_state);
         //force write the new datapages
         scratch_tree->get_alloc()->force_regions(xid);
 
         //writes complete
-        //now automically replace the old c1 with new c1
+        //now atomically replace the old c1 with new c1
         //pthread_mutex_lock(a->block_ready_mut);
 
         writelock(ltable->mergedata->header_lock,0);
@@ -414,7 +400,7 @@ void* memMergeThread(void*arg)
 
             *a->out_tree = scratch_tree;
             xid = Tbegin();
-            Tread(xid, ltable->get_dpstate1(), a->out_tree_allocer);  
+//            Tread(xid, ltable->get_dpstate1(), a->out_tree_allocer);
 
             pthread_cond_signal(a->out_block_ready_cond);
 
@@ -435,7 +421,7 @@ void* memMergeThread(void*arg)
             printf("mmt:\tUpdated C1's position on disk to %lld\n",empty_tree->get_root_rec().page);      
             Tset(xid, a->tree, &h);
             //update datapage alloc state
-            Tset(xid, ltable->get_dpstate1(), &logtable::DATAPAGE_REGION_ALLOC_STATIC_INITIALIZER);
+    		ltable->get_tree_c1()->set_alloc(new DataPage<datatuple>::RegionAllocator(xid, ltable->get_dpstate1() /*rid of old header*/, 10000)); // XXX should not hardcode region size
         
             Tcommit(xid);
             //xid = Tbegin();

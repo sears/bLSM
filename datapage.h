@@ -7,7 +7,7 @@
 #include <stasis/constants.h>
 
 
-#define CHECK_FOR_SCRIBBLING
+//#define CHECK_FOR_SCRIBBLING
 
 template<class TUPLE>
 class DataPage

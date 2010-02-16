@@ -41,10 +41,8 @@ struct merger_args
     double * r_i;
 
     T ** in_tree;
-    void * in_tree_allocer;
 
     logtree ** out_tree;
-    void * out_tree_allocer;
 
     recordid my_tree;
     
