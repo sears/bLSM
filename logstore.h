@@ -59,7 +59,7 @@ typedef void(*logtree_page_deallocator_t)(int, void *);
 
 class logtree{
 public:
-    logtree();
+    logtree(DataPage<datatuple>::RegionAllocator * alloc): region_alloc(alloc) {}
 
     recordid create(int xid);
 
@@ -72,6 +72,7 @@ private:
 public:
     static pageid_t alloc_region_rid(int xid, void * ridp);
     static void force_region_rid(int xid, void *conf);
+    static pageid_t*list_region_rid(int xid, void * ridp, pageid_t * region_len, pageid_t * region_count);
     static void dealloc_region_rid(int xid, void *conf);
     static void free_region_rid(int xid, recordid tree,
                                 logtree_page_deallocator_t dealloc,
@@ -128,7 +129,7 @@ public:
                                     void *allocator_state);
 
     inline DataPage<datatuple>::RegionAllocator* get_alloc() { return region_alloc; }
-    inline void set_alloc(DataPage<datatuple>::RegionAllocator* a1) { region_alloc = a1; } // XXX kludge; must be a better api for this
+//    inline void set_alloc(DataPage<datatuple>::RegionAllocator* a1) { region_alloc = a1; } // XXX kludge; must be a better api for this
                                                                                            // (currently, need to get rid from dpstate. add a 'register' method that sets the rid of the region allocator?)
 
     /**
@@ -202,6 +203,8 @@ public:
 
     inline recordid get_dpstate1(){return tbl_header.c1_dp_state;}
     inline recordid get_dpstate2(){return tbl_header.c2_dp_state;}
+    inline recordid get_treestate1(){return tbl_header.c1_state;}
+    inline recordid get_treestate2(){return tbl_header.c2_state;}
 
     int get_fixed_page_count(){return fixed_page_count;}
     void set_fixed_page_count(int count){fixed_page_count = count;}

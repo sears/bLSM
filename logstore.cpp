@@ -38,13 +38,6 @@ const size_t logtree::root_rec_size = sizeof(int64_t);
 const int64_t logtree::PREV_LEAF = 0; //pointer to prev leaf page
 const int64_t logtree::NEXT_LEAF = 1; //pointer to next leaf page
 
-
-
-logtree::logtree()
-{
-
-}
-
 void logtree::init_stasis() {
 
     bufferManagerFileHandleType = BUFFER_MANAGER_FILE_HANDLE_PFILE;
@@ -82,6 +75,9 @@ void logtree::dealloc_region_rid(int xid, void *conf)
      Tread(xid,a.regionList,&pid);
      TregionDealloc(xid,pid);
     }
+    a.regionList.slot = 0;
+    printf("Warning: leaking arraylist %lld in logtree\n", (long long)a.regionList.page);
+//    TarrayListDealloc(xid, a.regionList);
 }
 
 
@@ -150,6 +146,21 @@ pageid_t logtree::alloc_region_rid(int xid, void * ridp) {
   //     on crash.
   Tset(xid,rid,&conf);
   return ret;
+}
+
+pageid_t * logtree::list_region_rid(int xid, void *ridp, pageid_t * region_len, pageid_t * region_count) {
+	recordid header = *(recordid*)ridp;
+	RegionAllocConf_t conf;
+	Tread(xid,header,&conf);
+	recordid header_list = conf.regionList;
+	*region_len = conf.regionSize;
+	*region_count = conf.regionCount;
+	pageid_t * ret = (pageid_t*) malloc(sizeof(pageid_t) * *region_count);
+	for(pageid_t i = 0; i < *region_count; i++) {
+		header_list.slot = i;
+		Tread(xid,header_list,&ret[i]);
+	}
+	return ret;
 }
 
 
@@ -876,17 +887,14 @@ recordid logtable::allocTable(int xid)
     table_rec = Talloc(xid, sizeof(tbl_header));
     
     //create the big tree
-    tree_c2 = new logtree();
+    tbl_header.c2_dp_state = Talloc(xid, DataPage<datatuple>::RegionAllocator::header_size);
+    tree_c2 = new logtree(new DataPage<datatuple>::RegionAllocator(xid, tbl_header.c2_dp_state, 10000)); /// XXX do not hard code region length.
     tree_c2->create(xid);
 
-    tbl_header.c2_dp_state = Talloc(xid, DataPage<datatuple>::RegionAllocator::header_size);
-    tree_c2->set_alloc(new DataPage<datatuple>::RegionAllocator(xid, tbl_header.c2_dp_state, 10000)); /// XXX do not hard code region length.
-
     //create the small tree
-    tree_c1 = new logtree();
-    tree_c1->create(xid);
     tbl_header.c1_dp_state = Talloc(xid, DataPage<datatuple>::RegionAllocator::header_size);
-    tree_c1->set_alloc(new DataPage<datatuple>::RegionAllocator(xid, tbl_header.c1_dp_state, 10000)); /// XXX do not hard code region length.
+    tree_c1 = new logtree(new DataPage<datatuple>::RegionAllocator(xid, tbl_header.c1_dp_state, 10000)); /// XXX do not hard code region length.
+    tree_c1->create(xid);
     
     tbl_header.c2_root = tree_c2->get_root_rec();
     tbl_header.c2_state = tree_c2->get_tree_state();

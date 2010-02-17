@@ -109,6 +109,19 @@ public:
 	      TregionDealloc(xid, pid);
 #endif
 	    }
+	    printf("Warning: leaking arraylist %lld in datapage\n", (long long)header_.region_list.page);
+	    //	    TarrayListDealloc(xid, header_.region_list);
+	  }
+	  pageid_t * list_regions(int xid, pageid_t * region_length, pageid_t * region_count) {
+		  *region_count = TarrayListLength(xid, header_.region_list);
+		  pageid_t * ret = (pageid_t*)malloc(sizeof(pageid_t) * *region_count);
+		  recordid rid = header_.region_list;
+		  for(pageid_t i = 0; i < *region_count; i++) {
+			  rid.slot = i;
+			  Tread(xid, rid, &ret[i]);
+		  }
+		  *region_length = header_.region_length;
+		  return ret;
 	  }
 	  void done() {
 	    nextPage_ = INVALID_PAGE;

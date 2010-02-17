@@ -234,7 +234,6 @@ void merge_scheduler::startlogtable(int index, int64_t MAX_C0_SIZE)
     
 }
 
-//TODO: flush the data pages
 //      deallocate/free their region
 //      create new data region for new data pages
 void* memMergeThread(void*arg)
@@ -310,14 +309,12 @@ void* memMergeThread(void*arg)
         xid = Tbegin();
         
         //create a new tree
-        logtree * scratch_tree = new logtree;
+        logtree * scratch_tree = new logtree(new DataPage<datatuple>::RegionAllocator(xid, ltable->get_dpstate1() /*rid of old header*/, 10000)); // XXX should not hardcode region size)
         recordid scratch_root = scratch_tree->create(xid);
 
         //save the old dp state values
 		DataPage<datatuple>::RegionAllocator *old_alloc = ltable->get_tree_c1()->get_alloc();
 		old_alloc->done(); // XXX do this earlier
-			//reinitialize the dp state
-		scratch_tree->set_alloc(new DataPage<datatuple>::RegionAllocator(xid, ltable->get_dpstate1() /*rid of old header*/, 10000)); // XXX should not hardcode region size
 
         //pthread_mutex_unlock(a->block_ready_mut);
         unlock(ltable->mergedata->header_lock);
@@ -333,7 +330,6 @@ void* memMergeThread(void*arg)
 
         //force write the new region to disk
         recordid scratch_alloc_state = scratch_tree->get_tree_state();        
-        // XXX When called by merger_check (at least), we hold a pin on a page that should be forced.  This causes stasis to abort() the process.
         logtree::force_region_rid(xid, &scratch_alloc_state);
         //force write the new datapages
         scratch_tree->get_alloc()->force_regions(xid);
@@ -399,12 +395,11 @@ void* memMergeThread(void*arg)
 
             *a->out_tree = scratch_tree;
             xid = Tbegin();
-//            Tread(xid, ltable->get_dpstate1(), a->out_tree_allocer);
 
             pthread_cond_signal(a->out_block_ready_cond);
 
 
-            logtree *empty_tree = new logtree;
+            logtree *empty_tree = new logtree(new DataPage<datatuple>::RegionAllocator(xid, ltable->get_dpstate1() /*rid of old header*/, 10000)); // XXX should not hardcode region size);
             empty_tree->create(xid);
             
             *(recordid*)(a->pageAllocState) = empty_tree->get_tree_state();
@@ -419,9 +414,6 @@ void* memMergeThread(void*arg)
             h.c1_state = empty_tree->get_tree_state(); //update index alloc state
             printf("mmt:\tUpdated C1's position on disk to %lld\n",empty_tree->get_root_rec().page);      
             Tset(xid, a->tree, &h);
-            //update datapage alloc state
-    		ltable->get_tree_c1()->set_alloc(new DataPage<datatuple>::RegionAllocator(xid, ltable->get_dpstate1() /*rid of old header*/, 10000)); // XXX should not hardcode region size
-        
             Tcommit(xid);
             //xid = Tbegin();
 
@@ -510,27 +502,17 @@ void *diskMergeThread(void*arg)
         treeIterator<datatuple> *itrB =
             new treeIterator<datatuple>((*a->in_tree)->get_root_rec());
         
-        //Tcommit(xid);
         xid = Tbegin();
         
         //create a new tree
-        logtree * scratch_tree = new logtree;
+        //TODO: maybe you want larger regions for the second tree?
+        logtree * scratch_tree = new logtree(new DataPage<datatuple>::RegionAllocator(xid, ltable->get_dpstate2() /*rid of old header*/, 10000)); // XXX should not hardcode region size
         recordid scratch_root = scratch_tree->create(xid);
 
         //save the old dp state values
         DataPage<datatuple>::RegionAllocator *old_alloc1 = ltable->get_tree_c1()->get_alloc();
         DataPage<datatuple>::RegionAllocator *old_alloc2 = ltable->get_tree_c2()->get_alloc();
 
-        //reinitialize the dp state
-        //TODO: maybe you want larger regions for the second tree?
-//        foo XXX Tset(xid, ltable->get_dpstate2(), &logtable::DATAPAGE_REGION_ALLOC_STATIC_INITIALIZER);
-
-        //DataPage<datatuple>::RegionAllocator *newAlloc2 = new DataPage<datatuple>::RegionAllocator(xid, ltable->get_dpstate2(), 10000); // XXX don't hardcode region length
-
-		scratch_tree->set_alloc(new DataPage<datatuple>::RegionAllocator(xid, ltable->get_dpstate2() /*rid of old header*/, 10000)); // XXX should not hardcode region size
-
-        
-        //pthread_mutex_unlock(a->block_ready_mut);
         unlock(ltable->mergedata->header_lock);
         
         
@@ -545,15 +527,12 @@ void *diskMergeThread(void*arg)
         
         //force write the new region to disk
         recordid scratch_alloc_state = scratch_tree->get_tree_state();
-        //TODO:
-        //TlsmForce(xid,scratch_root,logtree::force_region_rid, &scratch_alloc_state);
         logtree::force_region_rid(xid, &scratch_alloc_state);
         //force write the new datapages
         scratch_tree->get_alloc()->force_regions(xid);
 
-
         //writes complete
-        //now automically replace the old c2 with new c2
+        //now atomically replace the old c2 with new c2
         //pthread_mutex_lock(a->block_ready_mut);
         writelock(ltable->mergedata->header_lock,0);
         

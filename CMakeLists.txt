@@ -11,7 +11,7 @@ Project(Stasis)
 
 SET(PACKAGE_VERSION 1)
 
-SUBDIRS(test)
+SUBDIRS(test util)
 
 # Main decisions
 SET(BUILD_SHARED_LIBS ON)

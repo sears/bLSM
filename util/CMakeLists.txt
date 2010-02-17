@@ -1,0 +1,1 @@
+CREATE_CLIENT_EXECUTABLE(dump_blockmap)

@@ -1,8 +1,6 @@
-
-
-
 #include "logserver.h"
 #include "datatuple.h"
+#include "merger.h"
 
 #include "logstore.h"
 
@@ -15,6 +13,8 @@
 #include <arpa/inet.h>
 #include <sys/select.h>
 #include <errno.h>
+
+#include <stasis/operations/regions.h>
 
 #undef begin
 #undef end
@@ -495,9 +495,65 @@ void * thread_work_fn( void * args)
         else if(opcode == OP_DBG_BLOCKMAP)
         {
         	// produce a list of stasis regions
+        	int xid = Tbegin();
+
+        	readlock(item->data->ltable->getMergeData()->header_lock, 0);
 
         	// produce a list of regions used by current tree components
+        	pageid_t datapage_c1_region_length, datapage_c2_region_length;
+        	pageid_t datapage_c1_region_count,  datapage_c2_region_count;
+        	pageid_t * datapage_c1_regions = item->data->ltable->get_tree_c1()->get_alloc()->list_regions(xid, &datapage_c1_region_length, &datapage_c1_region_count);
+        	pageid_t * datapage_c2_regions = item->data->ltable->get_tree_c2()->get_alloc()->list_regions(xid, &datapage_c2_region_length, &datapage_c2_region_count);
 
+        	pageid_t tree_c1_region_length, tree_c2_region_length;
+        	pageid_t tree_c1_region_count,  tree_c2_region_count;
+
+        	recordid tree_c1_region_header = item->data->ltable->get_treestate1();
+        	recordid tree_c2_region_header = item->data->ltable->get_treestate2();
+
+        	pageid_t * tree_c1_regions = logtree::list_region_rid(xid, &tree_c1_region_header, &tree_c1_region_length, &tree_c1_region_count);
+        	pageid_t * tree_c2_regions = logtree::list_region_rid(xid, &tree_c2_region_header, &tree_c2_region_length, &tree_c2_region_count);
+        	unlock(item->data->ltable->getMergeData()->header_lock);
+
+        	Tcommit(xid);
+
+        	printf("C1 Datapage Regions (each is %lld pages long):\n", datapage_c1_region_length);
+        	for(pageid_t i = 0; i < datapage_c1_region_count; i++) {
+        		printf("%lld ", datapage_c1_regions[i]);
+        	}
+
+        	printf("\nC1 Internal Node Regions (each is %lld pages long):\n", tree_c1_region_length);
+        	for(pageid_t i = 0; i < tree_c1_region_count; i++) {
+        		printf("%lld ", tree_c1_regions[i]);
+        	}
+
+        	printf("\nC2 Datapage Regions (each is %lld pages long):\n", datapage_c2_region_length);
+        	for(pageid_t i = 0; i < datapage_c2_region_count; i++) {
+        		printf("%lld ", datapage_c2_regions[i]);
+        	}
+
+        	printf("\nC2 Internal Node Regions (each is %lld pages long):\n", tree_c2_region_length);
+        	for(pageid_t i = 0; i < tree_c2_region_count; i++) {
+        		printf("%lld ", tree_c2_regions[i]);
+        	}
+        	printf("\nStasis Region Map\n");
+
+        	boundary_tag tag;
+        	pageid_t pid = ROOT_RECORD.page;
+        	TregionReadBoundaryTag(xid, pid, &tag);
+        	bool done;
+        	do {
+        		// print tag.
+        		printf("\tPage %lld\tSize %lld\tAllocationManager %d\n", (long long)pid, (long long)tag.size, (int)tag.allocation_manager);
+        		done = ! TregionNextBoundaryTag(xid, &pid, &tag, 0/*all allocation managers*/);
+        	} while(!done);
+
+        	printf("\n");
+        	free(datapage_c1_regions);
+        	free(datapage_c2_regions);
+        	free(tree_c1_regions);
+        	free(tree_c2_regions);
+            err = writeoptosocket(*(item->data->workitem), LOGSTORE_RESPONSE_SUCCESS);
 
         }
 
