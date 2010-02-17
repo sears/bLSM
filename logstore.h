@@ -189,7 +189,7 @@ public:
 
     datatuple * findTuple(int xid, const datatuple::key_t key, size_t keySize,  logtree *ltree);
 
-    inline recordid & get_table_rec(){return table_rec;}
+    inline recordid & get_table_rec(){return table_rec;}  // TODO This is called by merger.cpp for no good reason.  (remove the calls)
     
     inline logtree * get_tree_c2(){return tree_c2;}
     inline logtree * get_tree_c1(){return tree_c1;}
@@ -234,9 +234,11 @@ public:
     
     int64_t max_c0_size;
 
-private:
-
-    
+    inline bool is_still_running() { return still_running_; }
+    inline void stop() {
+    	still_running_ = false;
+		// XXX must need to do other things!
+    }
 
 private:    
     recordid table_rec;
@@ -257,6 +259,8 @@ private:
 //    logtable_mergedata * mergedata;
 
     tuplemerger *tmerger;
+
+    bool still_running_;
 };
 
 

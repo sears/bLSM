@@ -17,11 +17,6 @@ struct merger_args
     logtable * ltable;
     int worker_id;
 
-    //page allocation information
-    pageid_t(*pageAlloc)(int,void*);
-    void *pageAllocState;
-    void *oldAllocState;
-
     pthread_mutex_t * block_ready_mut;
 
     pthread_cond_t * in_block_needed_cond;
@@ -33,10 +28,6 @@ struct merger_args
     pthread_cond_t * in_block_ready_cond;
     pthread_cond_t * out_block_ready_cond;
 
-    bool * still_open;
-
-    int64_t * my_tree_size;
-    int64_t * out_tree_size;
     int64_t max_size; //pageid_t
     double * r_i;
 
@@ -45,8 +36,6 @@ struct merger_args
     logtree ** out_tree;
 
     recordid my_tree;
-    
-    recordid tree;    
 };
 
 

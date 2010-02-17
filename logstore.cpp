@@ -834,6 +834,7 @@ logtable::logtable()
     tree_c0 = NULL;
     tree_c1 = NULL;
     tree_c2 = NULL;
+    this->still_running_ = true;
     this->mergedata = 0;
     fixed_page_count = -1;
     //tmerger = new tuplemerger(&append_merger);
