@@ -70,5 +70,5 @@ ENDIF ( "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" )
 #CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 
 ADD_LIBRARY(logstore logserver.cpp logstore.cpp logiterators.cpp datapage.cpp merger.cpp tuplemerger.cpp)
-ADD_LIBRARY(logstore_client tcpclient.cpp datapage.cpp)
+ADD_LIBRARY(logstore_client tcpclient.cpp)
 CREATE_EXECUTABLE(server)
