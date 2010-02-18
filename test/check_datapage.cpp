@@ -48,10 +48,8 @@ void insertProbeIter(size_t NUM_ENTRIES)
     if(data_arr.size() > NUM_ENTRIES)
         data_arr.erase(data_arr.begin()+NUM_ENTRIES, data_arr.end());
 
-    recordid datapage_header_rid = Talloc(xid, DataPage<datatuple>::RegionAllocator::header_size);
-
     DataPage<datatuple>::RegionAllocator * alloc
-      = new DataPage<datatuple>::RegionAllocator(xid, datapage_header_rid, 10000); // ~ 10 datapages per region.
+      = new DataPage<datatuple>::RegionAllocator(xid, 10000); // ~ 10 datapages per region.
 
     recordid alloc_state = Talloc(xid,sizeof(RegionAllocConf_t));
     

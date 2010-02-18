@@ -43,20 +43,19 @@ public:
 
     	// Open an existing region allocator.
     	RegionAllocator(int xid, recordid rid) :
-    	  rid_(rid),
     	  nextPage_(INVALID_PAGE),
     	  endOfRegion_(INVALID_PAGE) {
-    		Tread(xid, rid, &header_);
+    		rid_ = rid;
+    		Tread(xid, rid_, &header_);
     		regionCount_ = TarrayListLength(xid, header_.region_list);
     	}
 	  // Create a new region allocator.
-    	RegionAllocator(int xid, recordid rid, pageid_t region_length) :
-    		rid_(rid),
+    	RegionAllocator(int xid, pageid_t region_length) :
     		nextPage_(0),
     		endOfRegion_(0),
     		regionCount_(0)
 		{
-    		assert(TrecordSize(xid, rid) == sizeof(header_));
+    		rid_ = Talloc(xid, sizeof(header_));
     		header_.region_list = TarrayListAlloc(xid, 1, 2, sizeof(pageid_t));
     		header_.region_length = region_length;
     		Tset(xid, rid_, &header_);
@@ -94,7 +93,6 @@ public:
 	      Tread(xid, list_entry, &pid);
 	      TregionForce(xid, pid);
 	    }
-	    Tset(xid, rid_, &header_);
 	  }
 	  void dealloc_regions(int xid) {
 	    pageid_t regionCount = TarrayListLength(xid, header_.region_list);
@@ -105,12 +103,13 @@ public:
 	        list_entry.slot < regionCount; list_entry.slot++) {
 	      pageid_t pid;
 	      Tread(xid, list_entry, &pid);
-#ifndef CHECK_FOR_SCRIBBLING  // Don't actually free the page if we'll be checking that pages are used exactly once below.
+//#ifndef CHECK_FOR_SCRIBBLING  // Don't actually free the page if we'll be checking that pages are used exactly once below.
 	      TregionDealloc(xid, pid);
-#endif
+//#endif
 	    }
-	    printf("Warning: leaking arraylist %lld in datapage\n", (long long)header_.region_list.page);
-	    //	    TarrayListDealloc(xid, header_.region_list);
+//	    printf("Warning: leaking arraylist %lld in datapage\n", (long long)header_.region_list.page);
+	    TarrayListDealloc(xid, header_.region_list);
+	    Tdealloc(xid, rid_);
 	  }
 	  pageid_t * list_regions(int xid, pageid_t * region_length, pageid_t * region_count) {
 		  *region_count = TarrayListLength(xid, header_.region_list);
@@ -127,17 +126,17 @@ public:
 	    nextPage_ = INVALID_PAGE;
 	    endOfRegion_ = INVALID_PAGE;
 	  }
+	  recordid header_rid() { return rid_; }
     private:
     	typedef struct {
 			recordid region_list;
 			pageid_t region_length;
     	} persistent_state;
 
-    	const recordid rid_;
+    	recordid rid_;
     	pageid_t nextPage_;
-	pageid_t endOfRegion_;
-
-	pageid_t regionCount_;
+		pageid_t endOfRegion_;
+		pageid_t regionCount_;
     	persistent_state header_;
     public:
     	static const size_t header_size = sizeof(persistent_state);

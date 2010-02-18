@@ -59,10 +59,10 @@ typedef void(*logtree_page_deallocator_t)(int, void *);
 
 class logtree{
 public:
-    logtree(DataPage<datatuple>::RegionAllocator * alloc): region_alloc(alloc) {}
-
+    logtree(int xid): region_alloc(new DataPage<datatuple>::RegionAllocator(xid, 10000)) {create(xid);}  // XXX shouldn't hardcode region size.
+private:
     recordid create(int xid);
-
+public:
     void print_tree(int xid);
     
     static void init_stasis();
@@ -71,9 +71,9 @@ private:
     static pageid_t alloc_region(int xid, void *conf);
 public:
     static pageid_t alloc_region_rid(int xid, void * ridp);
-    static void force_region_rid(int xid, void *conf);
+    static void force_region_rid(int xid, recordid rid);
     static pageid_t*list_region_rid(int xid, void * ridp, pageid_t * region_len, pageid_t * region_count);
-    static void dealloc_region_rid(int xid, void *conf);
+    static void dealloc_region_rid(int xid, recordid rid);
     static void free_region_rid(int xid, recordid tree,
                                 logtree_page_deallocator_t dealloc,
                                 void *allocator_state);
@@ -129,8 +129,6 @@ public:
                                     void *allocator_state);
 
     inline DataPage<datatuple>::RegionAllocator* get_alloc() { return region_alloc; }
-//    inline void set_alloc(DataPage<datatuple>::RegionAllocator* a1) { region_alloc = a1; } // XXX kludge; must be a better api for this
-                                                                                           // (currently, need to get rid from dpstate. add a 'register' method that sets the rid of the region allocator?)
 
     /**
        Initialize a page for use as an internal node of the tree.
@@ -193,18 +191,16 @@ public:
     
     inline logtree * get_tree_c2(){return tree_c2;}
     inline logtree * get_tree_c1(){return tree_c1;}
+    inline logtree * get_tree_c1_mergeable(){return tree_c1_mergeable;}
 
     inline void set_tree_c1(logtree *t){tree_c1=t;}
+    inline void set_tree_c1_mergeable(logtree *t){tree_c1_mergeable=t;}
     inline void set_tree_c2(logtree *t){tree_c2=t;}
     
     inline rbtree_ptr_t get_tree_c0(){return tree_c0;}
-    
+    inline rbtree_ptr_t get_tree_c0_mergeable(){return tree_c0_mergeable;}
     void set_tree_c0(rbtree_ptr_t newtree){tree_c0 = newtree;}
-
-    inline recordid get_dpstate1(){return tbl_header.c1_dp_state;}
-    inline recordid get_dpstate2(){return tbl_header.c2_dp_state;}
-    inline recordid get_treestate1(){return tbl_header.c1_state;}
-    inline recordid get_treestate2(){return tbl_header.c2_state;}
+    void set_tree_c0_mergeable(rbtree_ptr_t newtree){tree_c0_mergeable = newtree;}
 
     int get_fixed_page_count(){return fixed_page_count;}
     void set_fixed_page_count(int count){fixed_page_count = count;}
@@ -223,9 +219,6 @@ public:
         recordid c1_root;
         recordid c1_state;
         recordid c1_dp_state;
-        //epoch_t beginning;
-        //epoch_t end;
-
     };
 
     const static RegionAllocConf_t DATAPAGE_REGION_ALLOC_STATIC_INITIALIZER;
@@ -246,8 +239,9 @@ private:
 
     logtree *tree_c2; //big tree
     logtree *tree_c1; //small tree
+    logtree *tree_c1_mergeable; //small tree: ready to be merged with c2
     rbtree_ptr_t tree_c0; // in-mem red black tree
-
+    rbtree_ptr_t tree_c0_mergeable; // in-mem red black tree: ready to be merged with c1.
 
     int tsize; //number of tuples
     int64_t tree_bytes; //number of bytes
@@ -255,8 +249,6 @@ private:
     
     //DATA PAGE SETTINGS
     int fixed_page_count;//number of pages in a datapage
-
-//    logtable_mergedata * mergedata;
 
     tuplemerger *tmerger;
 
@@ -279,7 +271,6 @@ public:
     static lladdIterator_t* open(int xid, recordid root);
     static lladdIterator_t* openAt(int xid, recordid root, const byte* key);
     static int next(int xid, lladdIterator_t *it);
-    //static lladdIterator_t *copy(int xid, lladdIterator_t* i);
     static void close(int xid, lladdIterator_t *it);
 
     

@@ -19,8 +19,7 @@ int merge_scheduler::addlogtable(logtable *ltable)
     mdata->header_lock = initlock();
     mdata->rbtree_mut = new pthread_mutex_t;
     pthread_mutex_init(mdata->rbtree_mut,0);
-    mdata->old_c0 = new rbtree_ptr_t;
-    *mdata->old_c0 = 0;
+    ltable->set_tree_c0_mergeable(NULL);
     
     mdata->input_needed = new bool(false);
     
@@ -32,8 +31,8 @@ int merge_scheduler::addlogtable(logtable *ltable)
 
     mdata->input_size = new int64_t(100);
 
-    mdata->diskmerge_args = new merger_args<logtree>;
-    mdata->memmerge_args = new merger_args<rbtree_t>;
+    mdata->diskmerge_args = new merger_args;
+    mdata->memmerge_args = new merger_args;
     
     mergedata.push_back(std::make_pair(ltable, mdata));
     return mergedata.size()-1;
@@ -50,7 +49,6 @@ merge_scheduler::~merge_scheduler()
         //delete the mergedata fields
         deletelock(mdata->header_lock);
         delete mdata->rbtree_mut;        
-        delete mdata->old_c0;
         delete mdata->input_needed;
         delete mdata->input_ready_cond;
         delete mdata->input_needed_cond;
@@ -147,7 +145,7 @@ void merge_scheduler::startlogtable(int index, int64_t MAX_C0_SIZE)
     DEBUG("Tree C1 is %lld\n", (long long)ltable->get_tree_c1()->get_root_rec().page);
     DEBUG("Tree C2 is %lld\n", (long long)ltable->get_tree_c2()->get_root_rec().page);
 
-    struct merger_args<logtree> diskmerge_args= {
+    struct merger_args diskmerge_args= {
         ltable, 
             1,  //worker id 
             mdata->rbtree_mut, //block_ready_mutex
@@ -159,18 +157,15 @@ void merge_scheduler::startlogtable(int index, int64_t MAX_C0_SIZE)
             block2_ready_cond,  //out_block_ready_cond
         0, //max_tree_size No max size for biggest component
         &R, //r_i
-            block1_scratch, //in-tree
-            0, //out_tree
-            ltable->get_tree_c2()->get_root_rec(), // my_tree
                 };
 
     *mdata->diskmerge_args = diskmerge_args;
 
-    struct merger_args<rbtree_t> memmerge_args =
+    struct merger_args memmerge_args =
         {
             ltable,
             2,
-            mdata->rbtree_mut, //block_ready_mutex
+            mdata->rbtree_mut,
             mdata->input_needed_cond,
             mdata->input_needed,
             block1_needed_cond,
@@ -179,9 +174,6 @@ void merge_scheduler::startlogtable(int index, int64_t MAX_C0_SIZE)
             block1_ready_cond,
             (int64_t)(R * R * MAX_C0_SIZE),
             &R,
-            mdata->old_c0,
-            block1_scratch,
-            ltable->get_tree_c1()->get_root_rec(),
         };
     
     *mdata->memmerge_args = memmerge_args;
@@ -194,17 +186,32 @@ void merge_scheduler::startlogtable(int index, int64_t MAX_C0_SIZE)
     
 }
 
-//      deallocate/free their region
-//      create new data region for new data pages
+/**
+ *  Merge algorithm
+ *<pre>
+  1: while(1)
+  2:    wait for c0_mergable
+  3:    begin
+  4:    merge c0_mergable and c1 into c1'
+  5:    force c1'
+  6:    delete c1
+  7:    if c1' is too big
+  8:       c1 = new_empty
+  9:       c1_mergable = c1'
+ 10:    else
+ 11:       c1 = c1'
+ 12:    commit
+  </pre>
+ */
 void* memMergeThread(void*arg)
 {
 
     int xid;// = Tbegin();
 
-    merger_args<rbtree_t> * a = (merger_args<rbtree_t>*)(arg);    
-    assert(a->my_tree.size != -1);
+    merger_args * a = (merger_args*)(arg);
 
     logtable * ltable = a->ltable;
+    assert(ltable->get_tree_c1());
     
     int merge_count =0;
 //    pthread_mutex_lock(a->block_ready_mut);
@@ -213,8 +220,8 @@ void* memMergeThread(void*arg)
     {
         writelock(ltable->mergedata->header_lock,0);
         int done = 0;
-        // get a new input for merge
-        while(!*(a->in_tree))
+        // wait for c0_mergable
+        while(!ltable->get_tree_c0_mergeable())
         {            
             pthread_mutex_lock(a->block_ready_mut);
             *a->in_block_needed = true;
@@ -242,40 +249,25 @@ void* memMergeThread(void*arg)
         if(done==1)
         {
             pthread_mutex_lock(a->block_ready_mut);
-            pthread_cond_signal(a->out_block_ready_cond);
+            pthread_cond_signal(a->out_block_ready_cond);  // no block is ready.  this allows the other thread to wake up, and see that we're shutting down.
             pthread_mutex_unlock(a->block_ready_mut);
             unlock(ltable->mergedata->header_lock);
             break;
         }
 
-        if((*a->in_tree)->size()==0) //input empty, this can only happen during shutdown
-        {
-            delete *a->in_tree;
-            *a->in_tree = 0;
-            unlock(ltable->mergedata->header_lock);
-            continue;
-        }
-      
-        int64_t mergedPages=0;
-        
-        assert(a->my_tree.size != -1);
-        
-        //create the iterators
-        treeIterator<datatuple> *itrA = new treeIterator<datatuple>(a->my_tree);
-        memTreeIterator<rbtree_t, datatuple> *itrB =
-        		new memTreeIterator<rbtree_t, datatuple>(*a->in_tree);
-
-        //Tcommit(xid);
+        // 3: Begin transaction
         xid = Tbegin();
+
+        // 4: Merge
+
+        //create the iterators
+        treeIterator<datatuple> *itrA = new treeIterator<datatuple>(ltable->get_tree_c1()->get_root_rec()); // XXX don't want get_root_rec() to be here.
+        memTreeIterator<rbtree_t, datatuple> *itrB =
+        		new memTreeIterator<rbtree_t, datatuple>(ltable->get_tree_c0_mergeable());
+
         
         //create a new tree
-        logtree * scratch_tree = new logtree(new DataPage<datatuple>::RegionAllocator(xid, ltable->get_dpstate1() /*rid of old header*/, 10000)); // XXX should not hardcode region size)
-        recordid scratch_root = scratch_tree->create(xid);
-
-        //save the old dp state values
-		DataPage<datatuple>::RegionAllocator *old_alloc = ltable->get_tree_c1()->get_alloc();
-		old_alloc->done(); // XXX do this earlier
-		recordid oldAllocState = ltable->get_tree_c1()->get_tree_state();
+        logtree * c1_prime = new logtree(xid); // XXX should not hardcode region size)
 
         //pthread_mutex_unlock(a->block_ready_mut);
         unlock(ltable->mergedata->header_lock);
@@ -284,16 +276,24 @@ void* memMergeThread(void*arg)
         printf("mmt:\tMerging:\n");
 
         int64_t npages = 0;
-        mergedPages = merge_iterators<typeof(*itrA),typeof(*itrB)>(xid, itrA, itrB, ltable, scratch_tree, npages, false);
+        int64_t mergedPages = merge_iterators<typeof(*itrA),typeof(*itrB)>(xid, itrA, itrB, ltable, c1_prime, npages, false);
 
         delete itrA;
         delete itrB;
 
+        // 5: force c1'
+
         //force write the new region to disk
-        recordid scratch_alloc_state = scratch_tree->get_tree_state();        
-        logtree::force_region_rid(xid, &scratch_alloc_state);
+        logtree::force_region_rid(xid, c1_prime->get_tree_state());
         //force write the new datapages
-        scratch_tree->get_alloc()->force_regions(xid);
+        c1_prime->get_alloc()->force_regions(xid);
+
+        // 6: delete c1 and c0_mergeable
+        logtree::dealloc_region_rid(xid, ltable->get_tree_c1()->get_tree_state());
+        ltable->get_tree_c1()->get_alloc()->dealloc_regions(xid);
+
+        logtable::tearDownTree(ltable->get_tree_c0_mergeable());
+        ltable->set_tree_c0_mergeable(NULL);
 
         //writes complete
         //now atomically replace the old c1 with new c1
@@ -303,32 +303,6 @@ void* memMergeThread(void*arg)
         merge_count++;        
         printf("mmt:\tmerge_count %d #pages written %lld\n", merge_count, npages);      
 
-        delete ltable->get_tree_c1();
-        ltable->set_tree_c1(scratch_tree);
-
-        logtable::table_header h;
-        Tread(xid, ltable->get_table_rec(), &h);
-        
-        h.c1_root = scratch_root;
-        h.c1_state = scratch_alloc_state;
-        //note we already updated the dpstate before the merge
-        printf("mmt:\tUpdated C1's position on disk to %lld\n",scratch_root.page);      
-        Tset(xid, ltable->get_table_rec(), &h);
-        
-        //Tcommit(xid);
-        //xid = Tbegin();
-        
-        // free old my_tree here
-        //TODO: check
-        logtree::free_region_rid(xid, a->my_tree, logtree::dealloc_region_rid, &oldAllocState);
-        
-        //free the old data pages
-        old_alloc->dealloc_regions(xid);
-
-        Tcommit(xid);
-        //xid = Tbegin();
-
-        
         //TODO: this is simplistic for now
         //signal the other merger if necessary
         double target_R = *(a->r_i);
@@ -337,12 +311,19 @@ void* memMergeThread(void*arg)
         if( (new_c1_size / ltable->max_c0_size > target_R) ||
             (a->max_size && new_c1_size > a->max_size ) )
         {
-            printf("mmt:\tsignaling C2 for merge\n");
+        	// 7: c1' is too big
+
+			// 8: c1 = new empty.
+            ltable->set_tree_c1(new logtree(xid));
+
+        	printf("mmt:\tsignaling C2 for merge\n");
             printf("mmt:\tnew_c1_size %.2f\tMAX_C0_SIZE %lld\ta->max_size %lld\t targetr %.2f \n", new_c1_size,
                    ltable->max_c0_size, a->max_size, target_R);
+
+            // 9: c1_mergeable = c1'
             
-            // XXX need to report backpressure here!
-            while(*a->out_tree) {
+            // XXX need to report backpressure here!  Also, shouldn't be inside a transaction while waiting on backpressure.
+            while(ltable->get_tree_c1_mergeable()) {
                 pthread_mutex_lock(a->block_ready_mut);
                 unlock(ltable->mergedata->header_lock);
                 
@@ -350,50 +331,24 @@ void* memMergeThread(void*arg)
                 pthread_mutex_unlock(a->block_ready_mut);
                 writelock(ltable->mergedata->header_lock,0);
             }
-
-
-            *a->out_tree = scratch_tree;
-            xid = Tbegin();
+            ltable->set_tree_c1_mergeable(c1_prime);
 
             pthread_cond_signal(a->out_block_ready_cond);
 
-
-            logtree *empty_tree = new logtree(new DataPage<datatuple>::RegionAllocator(xid, ltable->get_dpstate1() /*rid of old header*/, 10000)); // XXX should not hardcode region size);
-            empty_tree->create(xid);
-
-            a->my_tree = empty_tree->get_root_rec();
-
-            ltable->set_tree_c1(empty_tree);
-
-            logtable::table_header h;
-            Tread(xid, ltable->get_table_rec(), &h);
-            h.c1_root = empty_tree->get_root_rec(); //update root
-            h.c1_state = empty_tree->get_tree_state(); //update index alloc state
-            printf("mmt:\tUpdated C1's position on disk to %lld\n",empty_tree->get_root_rec().page);      
-            Tset(xid, ltable->get_table_rec(), &h);
-            Tcommit(xid);
-            //xid = Tbegin();
-
-        }
-        else //not signaling the C2 for merge yet
-        {
-            printf("mmt:\tnot signaling C2 for merge\n");
-            a->my_tree = scratch_root;
+        } else {
+        	// 11: c1 = c1'
+        	ltable->set_tree_c1(c1_prime);
         }
 
-        rbtree_ptr_t deltree = *a->in_tree;
-        *a->in_tree = 0;
+        // XXX want to set this stuff somewhere.
+        logtable::table_header h;
+        printf("mmt:\tUpdated C1's position on disk to %lld\n",ltable->get_tree_c1()->get_root_rec().page);
 
-        
-        //Tcommit(xid);
+		Tcommit(xid);
+
         unlock(ltable->mergedata->header_lock);
         
         //TODO: get the freeing outside of the lock
-        //// ----------- Free in_tree
-        logtable::tearDownTree(deltree);
-        //deltree = 0;       
-
-
     }
 
     //pthread_mutex_unlock(a->block_ready_mut);
@@ -407,10 +362,10 @@ void *diskMergeThread(void*arg)
 {
     int xid;// = Tbegin();
 
-    merger_args<logtree> * a = (merger_args<logtree>*)(arg);    
-    assert(a->my_tree.size != -1);
+    merger_args * a = (merger_args*)(arg);
 
     logtable * ltable = a->ltable;
+    assert(ltable->get_tree_c2());
     
     int merge_count =0;
     //pthread_mutex_lock(a->block_ready_mut);
@@ -420,7 +375,7 @@ void *diskMergeThread(void*arg)
         writelock(ltable->mergedata->header_lock,0);
         int done = 0;
         // get a new input for merge
-        while(!*(a->in_tree))
+        while(!ltable->get_tree_c1_mergeable())
         {
             pthread_mutex_lock(a->block_ready_mut);
             *a->in_block_needed = true;
@@ -451,25 +406,16 @@ void *diskMergeThread(void*arg)
         
         int64_t mergedPages=0;
         
-        assert(a->my_tree.size != -1);
-        
         //create the iterators
-        treeIterator<datatuple> *itrA = new treeIterator<datatuple>(a->my_tree);
+        treeIterator<datatuple> *itrA = new treeIterator<datatuple>(ltable->get_tree_c2()->get_root_rec());
         treeIterator<datatuple> *itrB =
-            new treeIterator<datatuple>((*a->in_tree)->get_root_rec());
+            new treeIterator<datatuple>(ltable->get_tree_c1_mergeable()->get_root_rec());
         
         xid = Tbegin();
         
         //create a new tree
         //TODO: maybe you want larger regions for the second tree?
-        logtree * scratch_tree = new logtree(new DataPage<datatuple>::RegionAllocator(xid, ltable->get_dpstate2() /*rid of old header*/, 10000)); // XXX should not hardcode region size
-        recordid scratch_root = scratch_tree->create(xid);
-
-        //save the old dp state values
-        DataPage<datatuple>::RegionAllocator *old_alloc1 = ltable->get_tree_c1()->get_alloc();
-        DataPage<datatuple>::RegionAllocator *old_alloc2 = ltable->get_tree_c2()->get_alloc();
-
-        recordid oldAllocState = ltable->get_tree_c2()->get_tree_state();
+        logtree * c2_prime = new logtree(xid);
 
         unlock(ltable->mergedata->header_lock);
         
@@ -478,16 +424,24 @@ void *diskMergeThread(void*arg)
         printf("dmt:\tMerging:\n");
 
         int64_t npages = 0;
-        mergedPages = merge_iterators<typeof(*itrA),typeof(*itrB)>(xid, itrA, itrB, ltable, scratch_tree, npages, true);
+        mergedPages = merge_iterators<typeof(*itrA),typeof(*itrB)>(xid, itrA, itrB, ltable, c2_prime, npages, true);
       
         delete itrA;
         delete itrB;        
-        
+
         //force write the new region to disk
-        recordid scratch_alloc_state = scratch_tree->get_tree_state();
-        logtree::force_region_rid(xid, &scratch_alloc_state);
-        //force write the new datapages
-        scratch_tree->get_alloc()->force_regions(xid);
+        logtree::force_region_rid(xid, c2_prime->get_tree_state());
+        c2_prime->get_alloc()->force_regions(xid);
+
+        logtree::dealloc_region_rid(xid, ltable->get_tree_c1_mergeable()->get_tree_state());
+        ltable->get_tree_c1_mergeable()->get_alloc()->dealloc_regions(xid);
+        delete ltable->get_tree_c1_mergeable();
+        ltable->set_tree_c1_mergeable(0);
+
+        logtree::dealloc_region_rid(xid, ltable->get_tree_c2()->get_tree_state());
+        ltable->get_tree_c2()->get_alloc()->dealloc_regions(xid);
+        delete ltable->get_tree_c2();
+
 
         //writes complete
         //now atomically replace the old c2 with new c2
@@ -500,50 +454,18 @@ void *diskMergeThread(void*arg)
         
         printf("dmt:\tmerge_count %d\t#written pages: %lld\n optimal r %.2f", merge_count, npages, *(a->r_i));
 
-        delete ltable->get_tree_c2();
-        ltable->set_tree_c2(scratch_tree);
+        // 11: C2 is never too big.
+        ltable->set_tree_c2(c2_prime);
 
-        logtable::table_header h;
-        Tread(xid, ltable->get_table_rec(), &h);
-        
-        h.c2_root = scratch_root;
-        h.c2_state = scratch_alloc_state;
-        //note we already updated the dpstate before the merge
-        printf("dmt:\tUpdated C2's position on disk to %lld\n",scratch_root.page);
-        Tset(xid, ltable->get_table_rec(), &h);
-        
-        // free old my_tree here
-        //TODO: check
-        logtree::free_region_rid(xid, a->my_tree, logtree::dealloc_region_rid, &oldAllocState);
-        
-        //free the old data pages
-        old_alloc2->dealloc_regions(xid);
+        logtable::table_header h; // XXX Need to set header.
 
-        a->my_tree = scratch_root;
-        
-        //// ----------- Free in_tree
-        //TODO: check
-        logtree::free_region_rid(xid, (*a->in_tree)->get_root_rec(),
-                                 logtree::dealloc_region_rid,
-                                 &((*a->in_tree)->get_tree_state()));
-        old_alloc1->dealloc_regions(xid);  // XXX make sure that both of these are 'unlinked' before this happens
+        printf("dmt:\tUpdated C2's position on disk to %lld\n",(long long)-1);
 
         Tcommit(xid);
         
-        //xid = Tbegin();
-        //Tcommit(xid);
-        delete *a->in_tree;        
-        *a->in_tree = 0;
-
         unlock(ltable->mergedata->header_lock);
-        
     }
-
-    //pthread_mutex_unlock(a->block_ready_mut);
-    
     return 0;
-
-
 }
 
 template <class ITA, class ITB>

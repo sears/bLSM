@@ -500,18 +500,27 @@ void * thread_work_fn( void * args)
         	readlock(item->data->ltable->getMergeData()->header_lock, 0);
 
         	// produce a list of regions used by current tree components
-        	pageid_t datapage_c1_region_length, datapage_c2_region_length;
-        	pageid_t datapage_c1_region_count,  datapage_c2_region_count;
+        	pageid_t datapage_c1_region_length, datapage_c1_mergeable_region_length = 0, datapage_c2_region_length;
+        	pageid_t datapage_c1_region_count,  datapage_c1_mergeable_region_count = 0, datapage_c2_region_count;
         	pageid_t * datapage_c1_regions = item->data->ltable->get_tree_c1()->get_alloc()->list_regions(xid, &datapage_c1_region_length, &datapage_c1_region_count);
+        	pageid_t * datapage_c1_mergeable_regions = NULL;
+		if(item->data->ltable->get_tree_c1_mergeable()) {
+		  datapage_c1_mergeable_regions = item->data->ltable->get_tree_c1_mergeable()->get_alloc()->list_regions(xid, &datapage_c1_mergeable_region_length, &datapage_c1_mergeable_region_count);
+		}
         	pageid_t * datapage_c2_regions = item->data->ltable->get_tree_c2()->get_alloc()->list_regions(xid, &datapage_c2_region_length, &datapage_c2_region_count);
 
-        	pageid_t tree_c1_region_length, tree_c2_region_length;
-        	pageid_t tree_c1_region_count,  tree_c2_region_count;
+        	pageid_t tree_c1_region_length, tree_c1_mergeable_region_length = 0, tree_c2_region_length;
+        	pageid_t tree_c1_region_count,  tree_c1_mergeable_region_count = 0, tree_c2_region_count;
 
-        	recordid tree_c1_region_header = item->data->ltable->get_treestate1();
-        	recordid tree_c2_region_header = item->data->ltable->get_treestate2();
+        	recordid tree_c1_region_header = item->data->ltable->get_tree_c1()->get_tree_state();
+        	recordid tree_c2_region_header = item->data->ltable->get_tree_c2()->get_tree_state();
 
         	pageid_t * tree_c1_regions = logtree::list_region_rid(xid, &tree_c1_region_header, &tree_c1_region_length, &tree_c1_region_count);
+        	pageid_t * tree_c1_mergeable_regions = NULL;
+		if(item->data->ltable->get_tree_c1_mergeable()) {
+		  recordid tree_c1_mergeable_region_header = item->data->ltable->get_tree_c1_mergeable()->get_tree_state();
+		  tree_c1_mergeable_regions = logtree::list_region_rid(xid, &tree_c1_mergeable_region_header, &tree_c1_mergeable_region_length, &tree_c1_mergeable_region_count);
+		}
         	pageid_t * tree_c2_regions = logtree::list_region_rid(xid, &tree_c2_region_header, &tree_c2_region_length, &tree_c2_region_count);
         	unlock(item->data->ltable->getMergeData()->header_lock);
 
@@ -541,17 +550,31 @@ void * thread_work_fn( void * args)
         	boundary_tag tag;
         	pageid_t pid = ROOT_RECORD.page;
         	TregionReadBoundaryTag(xid, pid, &tag);
+		pageid_t max_off = 0;
         	bool done;
         	do {
+		  max_off = pid + tag.size;
         		// print tag.
         		printf("\tPage %lld\tSize %lld\tAllocationManager %d\n", (long long)pid, (long long)tag.size, (int)tag.allocation_manager);
         		done = ! TregionNextBoundaryTag(xid, &pid, &tag, 0/*all allocation managers*/);
         	} while(!done);
 
         	printf("\n");
+
+	        printf("Tree components are using %lld megabytes.  File is using %lld megabytes.",
+		       PAGE_SIZE * (tree_c1_region_length * tree_c1_region_count
+				    + tree_c1_mergeable_region_length * tree_c1_mergeable_region_count
+				    + tree_c2_region_length * tree_c2_region_count
+				    + datapage_c1_region_length * datapage_c1_region_count
+				    + datapage_c1_mergeable_region_length * datapage_c1_mergeable_region_count
+				    + datapage_c2_region_length * datapage_c2_region_count) / (1024 * 1024),
+		       (PAGE_SIZE * max_off) / (1024*1024));
+
         	free(datapage_c1_regions);
+		if(datapage_c1_mergeable_regions) free(datapage_c1_mergeable_regions);
         	free(datapage_c2_regions);
         	free(tree_c1_regions);
+		if(tree_c1_mergeable_regions) free(tree_c1_mergeable_regions);
         	free(tree_c2_regions);
             err = writeoptosocket(*(item->data->workitem), LOGSTORE_RESPONSE_SUCCESS);
 

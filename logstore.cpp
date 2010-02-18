@@ -62,9 +62,8 @@ void logtree::free_region_rid(int xid, recordid tree,
 }
 
 
-void logtree::dealloc_region_rid(int xid, void *conf)
+void logtree::dealloc_region_rid(int xid, recordid rid)
 {
-    recordid rid = *(recordid*)conf;
     RegionAllocConf_t a;
     Tread(xid,rid,&a);
     DEBUG("{%lld <- dealloc region arraylist}\n", a.regionList.page);
@@ -76,14 +75,13 @@ void logtree::dealloc_region_rid(int xid, void *conf)
      TregionDealloc(xid,pid);
     }
     a.regionList.slot = 0;
-    printf("Warning: leaking arraylist %lld in logtree\n", (long long)a.regionList.page);
-//    TarrayListDealloc(xid, a.regionList);
+//    printf("Warning: leaking arraylist %lld in logtree\n", (long long)a.regionList.page);
+    TarrayListDealloc(xid, a.regionList);
 }
 
 
-void logtree::force_region_rid(int xid, void *conf)
+void logtree::force_region_rid(int xid, recordid rid)
 {
-    recordid rid = *(recordid*)conf;
     RegionAllocConf_t a;
     Tread(xid,rid,&a);
     
@@ -832,7 +830,9 @@ logtable::logtable()
 {
 
     tree_c0 = NULL;
+    tree_c0_mergeable = NULL;
     tree_c1 = NULL;
+    tree_c1_mergeable = NULL;
     tree_c2 = NULL;
     this->still_running_ = true;
     this->mergedata = 0;
@@ -889,17 +889,17 @@ recordid logtable::allocTable(int xid)
     
     //create the big tree
     tbl_header.c2_dp_state = Talloc(xid, DataPage<datatuple>::RegionAllocator::header_size);
-    tree_c2 = new logtree(new DataPage<datatuple>::RegionAllocator(xid, tbl_header.c2_dp_state, 10000)); /// XXX do not hard code region length.
-    tree_c2->create(xid);
+    tree_c2 = new logtree(xid);
 
     //create the small tree
     tbl_header.c1_dp_state = Talloc(xid, DataPage<datatuple>::RegionAllocator::header_size);
-    tree_c1 = new logtree(new DataPage<datatuple>::RegionAllocator(xid, tbl_header.c1_dp_state, 10000)); /// XXX do not hard code region length.
-    tree_c1->create(xid);
+    tree_c1 = new logtree(xid);
     
     tbl_header.c2_root = tree_c2->get_root_rec();
+    tbl_header.c2_dp_state = tree_c2->get_alloc()->header_rid();
     tbl_header.c2_state = tree_c2->get_tree_state();
     tbl_header.c1_root = tree_c1->get_root_rec();
+    tbl_header.c2_dp_state = tree_c1->get_alloc()->header_rid();
     tbl_header.c1_state = tree_c1->get_tree_state();
     
     Tset(xid, table_rec, &tbl_header);    
@@ -931,7 +931,7 @@ void logtable::flushTable()
     printf("prv merge not complete\n");
 
 
-    while(*mergedata->old_c0) {
+    while(get_tree_c0_mergeable()) {
         unlock(mergedata->header_lock);
 //        pthread_mutex_lock(mergedata->rbtree_mut);
         if(tree_bytes >= max_c0_size)
@@ -963,15 +963,15 @@ void logtable::flushTable()
     stop = tv_to_double(stop_tv);
     
     //rbtree_ptr *tmp_ptr = new rbtree_ptr_t; //(typeof(h->scratch_tree)*) malloc(sizeof(void*));
-    //*tmp_ptr = tree_c0;
-    *(mergedata->old_c0) = tree_c0; 
+    set_tree_c0_mergeable(get_tree_c0());
 
 //    pthread_mutex_lock(mergedata->rbtree_mut);
     pthread_cond_signal(mergedata->input_ready_cond);
 //    pthread_mutex_unlock(mergedata->rbtree_mut);
 
     merge_count ++;
-    tree_c0 = new rbtree_t;    
+    set_tree_c0(new rbtree_t);
+
     tsize = 0;
     tree_bytes = 0;
     
@@ -1002,20 +1002,20 @@ datatuple * logtable::findTuple(int xid, const datatuple::key_t key, size_t keyS
     datatuple *ret_tuple=0; 
 
     //step 1: look in tree_c0
-    rbtree_t::iterator rbitr = tree_c0->find(search_tuple);
-    if(rbitr != tree_c0->end())
+    rbtree_t::iterator rbitr = get_tree_c0()->find(search_tuple);
+    if(rbitr != get_tree_c0()->end())
     {
-        DEBUG("tree_c0 size %d\n", tree_c0->size());
+        DEBUG("tree_c0 size %d\n", get_tree_c0()->size());
         ret_tuple = (*rbitr)->create_copy();
     }
 
     bool done = false;
     //step: 2 look into first in tree if exists (a first level merge going on)
-    if(*(mergedata->old_c0) != 0)
+    if(get_tree_c0_mergeable() != 0)
     {
         DEBUG("old mem tree not null %d\n", (*(mergedata->old_c0))->size());
-        rbitr = (*(mergedata->old_c0))->find(search_tuple);
-        if(rbitr != (*(mergedata->old_c0))->end())
+        rbitr = get_tree_c0_mergeable()->find(search_tuple);
+        if(rbitr != get_tree_c0_mergeable()->end())
         {
             datatuple *tuple = *rbitr;
 
@@ -1041,7 +1041,7 @@ datatuple * logtable::findTuple(int xid, const datatuple::key_t key, size_t keyS
     //step 3: check c1    
     if(!done)
     {
-        datatuple *tuple_c1 = findTuple(xid, key, keySize, tree_c1);
+        datatuple *tuple_c1 = findTuple(xid, key, keySize, get_tree_c1());
         if(tuple_c1 != NULL)
         {
             bool use_copy = false;
@@ -1057,9 +1057,6 @@ datatuple * logtable::findTuple(int xid, const datatuple::key_t key, size_t keyS
             {
                 use_copy = true;
                 ret_tuple = tuple_c1;
-                //byte *barr = (byte*)malloc(tuple_c1->byte_length());
-                //memcpy(barr, (byte*)tuple_c1->keylen, tuple_c1->byte_length());
-                //ret_tuple = datatuple::from_bytes(barr);
             }
 
             if(!use_copy)
@@ -1070,11 +1067,10 @@ datatuple * logtable::findTuple(int xid, const datatuple::key_t key, size_t keyS
     }
 
     //step 4: check old c1 if exists
-    if(!done && *(mergedata->diskmerge_args->in_tree) != 0)
+    if(!done && get_tree_c1_mergeable() != 0)
     {
         DEBUG("old c1 tree not null\n");
-        datatuple *tuple_oc1 = findTuple(xid, key, keySize,
-                                             (logtree*)( *(mergedata->diskmerge_args->in_tree)));
+        datatuple *tuple_oc1 = findTuple(xid, key, keySize, get_tree_c1_mergeable());
         
         if(tuple_oc1 != NULL)
         {
@@ -1107,7 +1103,7 @@ datatuple * logtable::findTuple(int xid, const datatuple::key_t key, size_t keyS
     if(!done)
     {
         DEBUG("Not in old first disk tree\n");        
-        datatuple *tuple_c2 = findTuple(xid, key, keySize, tree_c2);
+        datatuple *tuple_c2 = findTuple(xid, key, keySize, get_tree_c2());
 
         if(tuple_c2 != NULL)
         {
@@ -1154,8 +1150,8 @@ datatuple * logtable::findTuple_first(int xid, datatuple::key_t key, size_t keyS
     datatuple *ret_tuple=0; 
     //step 1: look in tree_c0
 
-    rbtree_t::iterator rbitr = tree_c0->find(search_tuple);
-    if(rbitr != tree_c0->end())
+    rbtree_t::iterator rbitr = get_tree_c0()->find(search_tuple);
+    if(rbitr != get_tree_c0()->end())
     {
         DEBUG("tree_c0 size %d\n", tree_c0->size());
         ret_tuple = (*rbitr)->create_copy();
@@ -1165,11 +1161,11 @@ datatuple * logtable::findTuple_first(int xid, datatuple::key_t key, size_t keyS
     {
         DEBUG("Not in mem tree %d\n", tree_c0->size());
         //step: 2 look into first in tree if exists (a first level merge going on)
-        if(*(mergedata->old_c0) != 0)
+        if(get_tree_c0_mergeable() != NULL)
         {
             DEBUG("old mem tree not null %d\n", (*(mergedata->old_c0))->size());
-            rbitr = (*(mergedata->old_c0))->find(search_tuple);
-            if(rbitr != (*(mergedata->old_c0))->end())
+            rbitr = get_tree_c0_mergeable()->find(search_tuple);
+            if(rbitr != get_tree_c0_mergeable()->end())
             {
                 ret_tuple = (*rbitr)->create_copy();
             }            
@@ -1180,7 +1176,7 @@ datatuple * logtable::findTuple_first(int xid, datatuple::key_t key, size_t keyS
             DEBUG("Not in old mem tree\n");
 
             //step 3: check c1
-            ret_tuple = findTuple(xid, key, keySize, tree_c1);    
+            ret_tuple = findTuple(xid, key, keySize, get_tree_c1());
         }
 
         if(ret_tuple == 0)
@@ -1188,11 +1184,10 @@ datatuple * logtable::findTuple_first(int xid, datatuple::key_t key, size_t keyS
             DEBUG("Not in first disk tree\n");
 
             //step 4: check old c1 if exists
-            if( *(mergedata->diskmerge_args->in_tree) != 0)
+            if( get_tree_c1_mergeable() != 0)
             {
                 DEBUG("old c1 tree not null\n");
-                ret_tuple = findTuple(xid, key, keySize,
-                                      (logtree*)( *(mergedata->diskmerge_args->in_tree)));
+                ret_tuple = findTuple(xid, key, keySize, get_tree_c1_mergeable());
             }
                 
         }

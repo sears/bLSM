@@ -10,8 +10,7 @@
 //TODO: 400 bytes overhead per tuple, this is nuts, check if this is true...
 static const int RB_TREE_OVERHEAD = 400;
 static const double MIN_R = 3.0;
-//T is either logtree or red-black tree
-template <class T>
+
 struct merger_args
 {
     logtable * ltable;
@@ -28,14 +27,8 @@ struct merger_args
     pthread_cond_t * in_block_ready_cond;
     pthread_cond_t * out_block_ready_cond;
 
-    int64_t max_size; //pageid_t
+    int64_t max_size;
     double * r_i;
-
-    T ** in_tree;
-
-    logtree ** out_tree;
-
-    recordid my_tree;
 };
 
 
@@ -49,7 +42,6 @@ struct logtable_mergedata
     rwl *header_lock;
     
     pthread_mutex_t * rbtree_mut;
-    rbtree_ptr_t *old_c0; //in-mem red black tree being merged / to be merged
 
     bool *input_needed; // memmerge-input needed
     
@@ -58,9 +50,9 @@ struct logtable_mergedata
     int64_t * input_size;
 
     //merge args 1
-    struct merger_args<logtree> *diskmerge_args;    
+    struct merger_args *diskmerge_args;
     //merge args 2
-    struct merger_args<rbtree_t> *memmerge_args;
+    struct merger_args *memmerge_args;
     
 };
 
@@ -79,13 +71,7 @@ public:
     struct logtable_mergedata *getMergeData(int index){return mergedata[index].second;}
 
     void shutdown();
-
-    
-
 };
-
-
-void* memMergeThread(void* arg);
 
 template <class ITA, class ITB>
 int64_t merge_iterators(int xid,
@@ -96,8 +82,7 @@ int64_t merge_iterators(int xid,
                     int64_t &npages,
                     bool dropDeletes);
 
-
+void* memMergeThread(void* arg);
 void* diskMergeThread(void* arg);
-
 
 #endif
