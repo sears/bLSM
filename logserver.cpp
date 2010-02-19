@@ -531,13 +531,13 @@ void * thread_work_fn( void * args)
         	recordid tree_c1_region_header = item->data->ltable->get_tree_c1()->get_tree_state();
         	recordid tree_c2_region_header = item->data->ltable->get_tree_c2()->get_tree_state();
 
-        	pageid_t * tree_c1_regions = logtree::list_region_rid(xid, &tree_c1_region_header, &tree_c1_region_length, &tree_c1_region_count);
+        	pageid_t * tree_c1_regions = diskTreeComponent::list_region_rid(xid, &tree_c1_region_header, &tree_c1_region_length, &tree_c1_region_count);
         	pageid_t * tree_c1_mergeable_regions = NULL;
 		if(item->data->ltable->get_tree_c1_mergeable()) {
 		  recordid tree_c1_mergeable_region_header = item->data->ltable->get_tree_c1_mergeable()->get_tree_state();
-		  tree_c1_mergeable_regions = logtree::list_region_rid(xid, &tree_c1_mergeable_region_header, &tree_c1_mergeable_region_length, &tree_c1_mergeable_region_count);
+		  tree_c1_mergeable_regions = diskTreeComponent::list_region_rid(xid, &tree_c1_mergeable_region_header, &tree_c1_mergeable_region_length, &tree_c1_mergeable_region_count);
 		}
-        	pageid_t * tree_c2_regions = logtree::list_region_rid(xid, &tree_c2_region_header, &tree_c2_region_length, &tree_c2_region_count);
+        	pageid_t * tree_c2_regions = diskTreeComponent::list_region_rid(xid, &tree_c2_region_header, &tree_c2_region_length, &tree_c2_region_count);
         	unlock(item->data->ltable->getMergeData()->header_lock);
 
         	Tcommit(xid);

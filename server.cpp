@@ -33,7 +33,7 @@ void terminate (int param)
   
   printf("Deinitializing stasis...\n");
   fflush(stdout);
-  logtree::deinit_stasis();
+  diskTreeComponent::deinit_stasis();
   
   exit(0);
 }
@@ -43,7 +43,7 @@ void initialize_server()
     //signal handling
     void (*prev_fn)(int);
 
-    logtree::init_stasis();
+    diskTreeComponent::init_stasis();
 
     prev_fn = signal (SIGINT,terminate);
     

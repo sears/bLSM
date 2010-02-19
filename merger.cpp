@@ -7,7 +7,7 @@
 inline DataPage<datatuple>*
 insertTuple(int xid, DataPage<datatuple> *dp, datatuple *t,
             logtable *ltable,
-            logtree * ltree,
+            diskTreeComponent * ltree,
             int64_t &dpages, int64_t &npages);
 
 int merge_scheduler::addlogtable(logtable *ltable)
@@ -139,7 +139,7 @@ void merge_scheduler::startlogtable(int index, int64_t MAX_C0_SIZE)
 
     ltable->max_c0_size = MAX_C0_SIZE;
 
-    logtree ** block1_scratch = new logtree*;
+    diskTreeComponent ** block1_scratch = new diskTreeComponent*;
     *block1_scratch=0;
 
     DEBUG("Tree C1 is %lld\n", (long long)ltable->get_tree_c1()->get_root_rec().page);
@@ -267,7 +267,7 @@ void* memMergeThread(void*arg)
 
         
         //create a new tree
-        logtree * c1_prime = new logtree(xid); // XXX should not hardcode region size)
+        diskTreeComponent * c1_prime = new diskTreeComponent(xid); // XXX should not hardcode region size)
 
         //pthread_mutex_unlock(a->block_ready_mut);
         unlock(ltable->mergedata->header_lock);
@@ -284,12 +284,12 @@ void* memMergeThread(void*arg)
         // 5: force c1'
 
         //force write the new region to disk
-        logtree::force_region_rid(xid, c1_prime->get_tree_state());
+        diskTreeComponent::force_region_rid(xid, c1_prime->get_tree_state());
         //force write the new datapages
         c1_prime->get_alloc()->force_regions(xid);
 
         // 6: delete c1 and c0_mergeable
-        logtree::dealloc_region_rid(xid, ltable->get_tree_c1()->get_tree_state());
+        diskTreeComponent::dealloc_region_rid(xid, ltable->get_tree_c1()->get_tree_state());
         ltable->get_tree_c1()->get_alloc()->dealloc_regions(xid);
 
         logtable::tearDownTree(ltable->get_tree_c0_mergeable());
@@ -314,7 +314,7 @@ void* memMergeThread(void*arg)
         	// 7: c1' is too big
 
 			// 8: c1 = new empty.
-            ltable->set_tree_c1(new logtree(xid));
+            ltable->set_tree_c1(new diskTreeComponent(xid));
 
         	printf("mmt:\tsignaling C2 for merge\n");
             printf("mmt:\tnew_c1_size %.2f\tMAX_C0_SIZE %lld\ta->max_size %lld\t targetr %.2f \n", new_c1_size,
@@ -415,7 +415,7 @@ void *diskMergeThread(void*arg)
         
         //create a new tree
         //TODO: maybe you want larger regions for the second tree?
-        logtree * c2_prime = new logtree(xid);
+        diskTreeComponent * c2_prime = new diskTreeComponent(xid);
 
         unlock(ltable->mergedata->header_lock);
         
@@ -430,15 +430,15 @@ void *diskMergeThread(void*arg)
         delete itrB;        
 
         //force write the new region to disk
-        logtree::force_region_rid(xid, c2_prime->get_tree_state());
+        diskTreeComponent::force_region_rid(xid, c2_prime->get_tree_state());
         c2_prime->get_alloc()->force_regions(xid);
 
-        logtree::dealloc_region_rid(xid, ltable->get_tree_c1_mergeable()->get_tree_state());
+        diskTreeComponent::dealloc_region_rid(xid, ltable->get_tree_c1_mergeable()->get_tree_state());
         ltable->get_tree_c1_mergeable()->get_alloc()->dealloc_regions(xid);
         delete ltable->get_tree_c1_mergeable();
         ltable->set_tree_c1_mergeable(0);
 
-        logtree::dealloc_region_rid(xid, ltable->get_tree_c2()->get_tree_state());
+        diskTreeComponent::dealloc_region_rid(xid, ltable->get_tree_c2()->get_tree_state());
         ltable->get_tree_c2()->get_alloc()->dealloc_regions(xid);
         delete ltable->get_tree_c2();
 
@@ -473,7 +473,7 @@ int64_t merge_iterators(int xid,
                         ITA *itrA, //iterator on c1 or c2
                         ITB *itrB, //iterator on c0 or c1, respectively
                         logtable *ltable,
-                        logtree *scratch_tree,
+                        diskTreeComponent *scratch_tree,
                         int64_t &npages,
                         bool dropDeletes  // should be true iff this is biggest component
                         )
@@ -550,7 +550,7 @@ int64_t merge_iterators(int xid,
 inline DataPage<datatuple>*
 insertTuple(int xid, DataPage<datatuple> *dp, datatuple *t,
             logtable *ltable,
-            logtree * ltree,
+            diskTreeComponent * ltree,
             int64_t &dpages, int64_t &npages)
 {
     if(dp==0)

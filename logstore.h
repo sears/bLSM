@@ -65,19 +65,19 @@ public:
     
     static void tearDownTree(rbtree_ptr_t t);
 
-    DataPage<datatuple>* insertTuple(int xid, datatuple *tuple,logtree *ltree);
+    DataPage<datatuple>* insertTuple(int xid, datatuple *tuple,diskTreeComponent *ltree);
 
-    datatuple * findTuple(int xid, const datatuple::key_t key, size_t keySize,  logtree *ltree);
+    datatuple * findTuple(int xid, const datatuple::key_t key, size_t keySize,  diskTreeComponent *ltree);
 
     inline recordid & get_table_rec(){return table_rec;}  // TODO This is called by merger.cpp for no good reason.  (remove the calls)
     
-    inline logtree * get_tree_c2(){return tree_c2;}
-    inline logtree * get_tree_c1(){return tree_c1;}
-    inline logtree * get_tree_c1_mergeable(){return tree_c1_mergeable;}
+    inline diskTreeComponent * get_tree_c2(){return tree_c2;}
+    inline diskTreeComponent * get_tree_c1(){return tree_c1;}
+    inline diskTreeComponent * get_tree_c1_mergeable(){return tree_c1_mergeable;}
 
-    inline void set_tree_c1(logtree *t){tree_c1=t;}
-    inline void set_tree_c1_mergeable(logtree *t){tree_c1_mergeable=t;}
-    inline void set_tree_c2(logtree *t){tree_c2=t;}
+    inline void set_tree_c1(diskTreeComponent *t){tree_c1=t;}
+    inline void set_tree_c1_mergeable(diskTreeComponent *t){tree_c1_mergeable=t;}
+    inline void set_tree_c2(diskTreeComponent *t){tree_c2=t;}
     
     inline rbtree_ptr_t get_tree_c0(){return tree_c0;}
     inline rbtree_ptr_t get_tree_c0_mergeable(){return tree_c0_mergeable;}
@@ -119,9 +119,9 @@ private:
     recordid table_rec;
     struct table_header tbl_header;
 
-    logtree *tree_c2; //big tree
-    logtree *tree_c1; //small tree
-    logtree *tree_c1_mergeable; //small tree: ready to be merged with c2
+    diskTreeComponent *tree_c2; //big tree
+    diskTreeComponent *tree_c1; //small tree
+    diskTreeComponent *tree_c1_mergeable; //small tree: ready to be merged with c2
     rbtree_ptr_t tree_c0; // in-mem red black tree
     rbtree_ptr_t tree_c0_mergeable; // in-mem red black tree: ready to be merged with c1.
 

@@ -26,7 +26,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     sync();
 
-    logtree::init_stasis();
+    diskTreeComponent::init_stasis();
 
     double delete_freq = .05;
     double update_freq = .15;
@@ -256,7 +256,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     
     Tcommit(xid);
-    logtree::deinit_stasis();
+    diskTreeComponent::deinit_stasis();
 }
 
 

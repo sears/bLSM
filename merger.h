@@ -78,7 +78,7 @@ int64_t merge_iterators(int xid,
                     ITA *itrA,
                     ITB *itrB,
                     logtable *ltable,
-                    logtree *scratch_tree,
+                    diskTreeComponent *scratch_tree,
                     int64_t &npages,
                     bool dropDeletes);
 

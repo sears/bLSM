@@ -28,7 +28,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     sync();
 
-    logtree::init_stasis();
+    diskTreeComponent::init_stasis();
 
     int xid = Tbegin();
 
@@ -41,7 +41,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     Tcommit(xid);
     
     xid = Tbegin();
-    logtree *ltable_c1 = ltable.get_tree_c1();
+    diskTreeComponent *ltable_c1 = ltable.get_tree_c1();
     
     recordid tree_root = ltable_c1->get_root_rec();
 
@@ -151,7 +151,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     printf("Random Reads completed.\n");
     Tcommit(xid);
-    logtree::deinit_stasis();
+    diskTreeComponent::deinit_stasis();
 }
 
 /** @test

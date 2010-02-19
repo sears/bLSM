@@ -23,18 +23,18 @@
 // LOGTREE implementation
 /////////////////////////////////////////////////////////////////
 
-const RegionAllocConf_t logtree::REGION_ALLOC_STATIC_INITIALIZER = { {0,0,-1}, 0, -1, -1, 1000 };
+const RegionAllocConf_t diskTreeComponent::REGION_ALLOC_STATIC_INITIALIZER = { {0,0,-1}, 0, -1, -1, 1000 };
 
 #define LOGTREE_ROOT_PAGE SLOTTED_PAGE
 
 //LSM_ROOT_PAGE
 
-const int64_t logtree::DEPTH = 0;      //in root this is the slot num where the DEPTH (of tree) is stored
-const int64_t logtree::COMPARATOR = 1; //in root this is the slot num where the COMPARATOR id is stored
-const int64_t logtree::FIRST_SLOT = 2; //this is the first unused slot in all index pages
-const size_t logtree::root_rec_size = sizeof(int64_t);
-const int64_t logtree::PREV_LEAF = 0; //pointer to prev leaf page
-const int64_t logtree::NEXT_LEAF = 1; //pointer to next leaf page
+const int64_t diskTreeComponent::DEPTH = 0;      //in root this is the slot num where the DEPTH (of tree) is stored
+const int64_t diskTreeComponent::COMPARATOR = 1; //in root this is the slot num where the COMPARATOR id is stored
+const int64_t diskTreeComponent::FIRST_SLOT = 2; //this is the first unused slot in all index pages
+const size_t diskTreeComponent::root_rec_size = sizeof(int64_t);
+const int64_t diskTreeComponent::PREV_LEAF = 0; //pointer to prev leaf page
+const int64_t diskTreeComponent::NEXT_LEAF = 1; //pointer to next leaf page
 
 // XXX hack, and cut and pasted from datapage.cpp.
 static lsn_t get_lsn(int xid) {
@@ -46,7 +46,7 @@ static lsn_t get_lsn(int xid) {
 }
 
 
-void logtree::init_stasis() {
+void diskTreeComponent::init_stasis() {
 
     bufferManagerFileHandleType = BUFFER_MANAGER_FILE_HANDLE_PFILE;
 
@@ -58,9 +58,9 @@ void logtree::init_stasis() {
 
 }
 
-void logtree::deinit_stasis() { Tdeinit(); }
+void diskTreeComponent::deinit_stasis() { Tdeinit(); }
 
-void logtree::free_region_rid(int xid, recordid tree,
+void diskTreeComponent::free_region_rid(int xid, recordid tree,
           logtree_page_deallocator_t dealloc, void *allocator_state)
 {
   //  Tdealloc(xid,tree);
@@ -70,7 +70,7 @@ void logtree::free_region_rid(int xid, recordid tree,
 }
 
 
-void logtree::dealloc_region_rid(int xid, recordid rid)
+void diskTreeComponent::dealloc_region_rid(int xid, recordid rid)
 {
     RegionAllocConf_t a;
     Tread(xid,rid,&a);
@@ -83,12 +83,12 @@ void logtree::dealloc_region_rid(int xid, recordid rid)
      TregionDealloc(xid,pid);
     }
     a.regionList.slot = 0;
-//    printf("Warning: leaking arraylist %lld in logtree\n", (long long)a.regionList.page);
+//    printf("Warning: leaking arraylist %lld in diskTreeComponent\n", (long long)a.regionList.page);
     TarrayListDealloc(xid, a.regionList);
 }
 
 
-void logtree::force_region_rid(int xid, recordid rid)
+void diskTreeComponent::force_region_rid(int xid, recordid rid)
 {
     RegionAllocConf_t a;
     Tread(xid,rid,&a);
@@ -106,7 +106,7 @@ void logtree::force_region_rid(int xid, recordid rid)
 }
 
 
-pageid_t logtree::alloc_region(int xid, void *conf)
+pageid_t diskTreeComponent::alloc_region(int xid, void *conf)
 {
     RegionAllocConf_t* a = (RegionAllocConf_t*)conf;
 
@@ -142,7 +142,7 @@ pageid_t logtree::alloc_region(int xid, void *conf)
 
 }
 
-pageid_t logtree::alloc_region_rid(int xid, void * ridp) {
+pageid_t diskTreeComponent::alloc_region_rid(int xid, void * ridp) {
   recordid rid = *(recordid*)ridp;
   RegionAllocConf_t conf;
   Tread(xid,rid,&conf);
@@ -154,7 +154,7 @@ pageid_t logtree::alloc_region_rid(int xid, void * ridp) {
   return ret;
 }
 
-pageid_t * logtree::list_region_rid(int xid, void *ridp, pageid_t * region_len, pageid_t * region_count) {
+pageid_t * diskTreeComponent::list_region_rid(int xid, void *ridp, pageid_t * region_len, pageid_t * region_count) {
 	recordid header = *(recordid*)ridp;
 	RegionAllocConf_t conf;
 	Tread(xid,header,&conf);
@@ -171,7 +171,7 @@ pageid_t * logtree::list_region_rid(int xid, void *ridp, pageid_t * region_len, 
 
 
 
-recordid logtree::create(int xid)
+recordid diskTreeComponent::create(int xid)
 {
 
     tree_state = Talloc(xid,sizeof(RegionAllocConf_t));
@@ -223,7 +223,7 @@ recordid logtree::create(int xid)
  * TODO: what happen if there is already such a record with a different size?
  * I guess this should never happen in rose, but what if?
  **/
-void logtree::writeRecord(int xid, Page *p, recordid &rid,
+void diskTreeComponent::writeRecord(int xid, Page *p, recordid &rid,
                           const byte *data, size_t datalen)
 {
     byte *byte_arr = stasis_record_write_begin(xid, p, rid);
@@ -234,7 +234,7 @@ void logtree::writeRecord(int xid, Page *p, recordid &rid,
 }
 
 
-void logtree::writeNodeRecord(int xid, Page * p, recordid & rid,
+void diskTreeComponent::writeNodeRecord(int xid, Page * p, recordid & rid,
                               const byte *key, size_t keylen, pageid_t ptr)
 {
     DEBUG("writenoderecord:\tp->id\t%lld\tkey:\t%s\tkeylen: %d\tval_page\t%lld\n",
@@ -246,7 +246,7 @@ void logtree::writeNodeRecord(int xid, Page * p, recordid & rid,
     stasis_page_lsn_write(xid, p, get_lsn(xid));
 }
 
-void logtree::writeRecord(int xid, Page *p, slotid_t slot,
+void diskTreeComponent::writeRecord(int xid, Page *p, slotid_t slot,
                           const byte *data, size_t datalen)
 {
     recordid rid;
@@ -260,13 +260,13 @@ void logtree::writeRecord(int xid, Page *p, slotid_t slot,
 
 }
 
-const byte* logtree::readRecord(int xid, Page * p, recordid &rid)
+const byte* diskTreeComponent::readRecord(int xid, Page * p, recordid &rid)
 {
     const byte *nr = stasis_record_read_begin(xid,p,rid); // XXX API violation?
     return nr;
 }
 
-const byte* logtree::readRecord(int xid, Page * p, slotid_t slot, int64_t size)
+const byte* diskTreeComponent::readRecord(int xid, Page * p, slotid_t slot, int64_t size)
 {
     recordid rid;
     rid.page = p->id;
@@ -281,14 +281,14 @@ const byte* logtree::readRecord(int xid, Page * p, slotid_t slot, int64_t size)
 
 }
 
-int32_t logtree::readRecordLength(int xid, Page *p, slotid_t slot)
+int32_t diskTreeComponent::readRecordLength(int xid, Page *p, slotid_t slot)
 {
     recordid rec = {p->id, slot, 0};
     int32_t reclen = stasis_record_length_read(xid, p, rec);
     return reclen;
 }
 
-void logtree::initializeNodePage(int xid, Page *p)
+void diskTreeComponent::initializeNodePage(int xid, Page *p)
 {
     stasis_page_slotted_initialize_page(p);
     recordid reserved1 = stasis_record_alloc_begin(xid, p, sizeof(indexnode_rec));
@@ -298,7 +298,7 @@ void logtree::initializeNodePage(int xid, Page *p)
 }
 
 
-recordid logtree::appendPage(int xid, recordid tree, pageid_t & rmLeafID,
+recordid diskTreeComponent::appendPage(int xid, recordid tree, pageid_t & rmLeafID,
                              const byte *key, size_t keySize,
                              lsm_page_allocator_t allocator, void *allocator_state,
                              long val_page)
@@ -449,7 +449,7 @@ recordid logtree::appendPage(int xid, recordid tree, pageid_t & rmLeafID,
 
       stasis_record_alloc_done(xid, lastLeaf, ret);
 
-      logtree::writeNodeRecord(xid, lastLeaf, ret, key, keySize, val_page);
+      diskTreeComponent::writeNodeRecord(xid, lastLeaf, ret, key, keySize, val_page);
 
     if(lastLeaf->id != p->id) {
       assert(rmLeafID != tree.page);
@@ -478,7 +478,7 @@ recordid logtree::appendPage(int xid, recordid tree, pageid_t & rmLeafID,
 
 */
 
-recordid logtree::appendInternalNode(int xid, Page *p,
+recordid diskTreeComponent::appendInternalNode(int xid, Page *p,
                                      int64_t depth,
                                      const byte *key, size_t key_len,
                                      pageid_t val_page, pageid_t lastLeaf,
@@ -550,7 +550,7 @@ recordid logtree::appendInternalNode(int xid, Page *p,
   }
 }
 
-recordid logtree::buildPathToLeaf(int xid, recordid root, Page *root_p,
+recordid diskTreeComponent::buildPathToLeaf(int xid, recordid root, Page *root_p,
                                   int64_t depth, const byte *key, size_t key_len,
                                   pageid_t val_page, pageid_t lastLeaf,
                                   logtree_page_allocator_t allocator,
@@ -633,7 +633,7 @@ recordid logtree::buildPathToLeaf(int xid, recordid root, Page *root_p,
  * Traverse from the root of the page to the right most leaf (the one
  * with the higest base key value).
  **/
-pageid_t logtree::findLastLeaf(int xid, Page *root, int64_t depth)
+pageid_t diskTreeComponent::findLastLeaf(int xid, Page *root, int64_t depth)
 {
   if(!depth)
   {
@@ -661,7 +661,7 @@ pageid_t logtree::findLastLeaf(int xid, Page *root, int64_t depth)
  *  Traverse from the root of the tree to the left most (lowest valued
  *  key) leaf.
  */
-pageid_t logtree::findFirstLeaf(int xid, Page *root, int64_t depth)
+pageid_t diskTreeComponent::findFirstLeaf(int xid, Page *root, int64_t depth)
 {
     if(!depth) //if depth is 0, then returns the id of the page
         return root->id;
@@ -678,7 +678,7 @@ pageid_t logtree::findFirstLeaf(int xid, Page *root, int64_t depth)
 }
 
 
-pageid_t logtree::findPage(int xid, recordid tree, const byte *key, size_t keySize)
+pageid_t diskTreeComponent::findPage(int xid, recordid tree, const byte *key, size_t keySize)
 {
   Page *p = loadPage(xid, tree.page);
   readlock(p->rwlatch,0);
@@ -696,7 +696,7 @@ pageid_t logtree::findPage(int xid, recordid tree, const byte *key, size_t keySi
 
 }
 
-pageid_t logtree::lookupLeafPageFromRid(int xid, recordid rid)
+pageid_t diskTreeComponent::lookupLeafPageFromRid(int xid, recordid rid)
 {
   pageid_t pid = -1;
   if(rid.page != NULLRID.page || rid.slot != NULLRID.slot)
@@ -711,7 +711,7 @@ pageid_t logtree::lookupLeafPageFromRid(int xid, recordid rid)
 }
 
 
-recordid logtree::lookup(int xid,
+recordid diskTreeComponent::lookup(int xid,
                             Page *node,
                             int64_t depth,
                             const byte *key, size_t keySize )
@@ -755,7 +755,7 @@ recordid logtree::lookup(int xid,
 }
 
 
-void logtree::print_tree(int xid)
+void diskTreeComponent::print_tree(int xid)
 {
     Page *p = loadPage(xid, root_rec.page);
     readlock(p->rwlatch,0);
@@ -771,7 +771,7 @@ void logtree::print_tree(int xid)
 
 }
 
-void logtree::print_tree(int xid, pageid_t pid, int64_t depth)
+void diskTreeComponent::print_tree(int xid, pageid_t pid, int64_t depth)
 {
 
     Page *node = loadPage(xid, pid);
@@ -840,14 +840,14 @@ lladdIterator_t* logtreeIterator::open(int xid, recordid root)
     readlock(p->rwlatch,0);
 
     //size_t keySize = getKeySize(xid,p);
-    DEBUG("ROOT_REC_SIZE %d\n", logtree::root_rec_size);
-    const byte * nr = logtree::readRecord(xid,p,
-                                                  logtree::DEPTH,
-                                                  logtree::root_rec_size);
+    DEBUG("ROOT_REC_SIZE %d\n", diskTreeComponent::root_rec_size);
+    const byte * nr = diskTreeComponent::readRecord(xid,p,
+                                                  diskTreeComponent::DEPTH,
+                                                  diskTreeComponent::root_rec_size);
     int64_t depth = *((int64_t*)nr);
     DEBUG("DEPTH = %lld\n", depth);
 
-    pageid_t leafid = logtree::findFirstLeaf(xid, p, depth);
+    pageid_t leafid = diskTreeComponent::findFirstLeaf(xid, p, depth);
     if(leafid != root.page)
     {
         unlock(p->rwlatch);
@@ -885,12 +885,12 @@ lladdIterator_t* logtreeIterator::openAt(int xid, recordid root, const byte* key
   readlock(p->rwlatch,0);
   //size_t keySize = getKeySize(xid,p);
   //assert(keySize);
-  const byte *nr = logtree::readRecord(xid,p,logtree::DEPTH, logtree::root_rec_size);
-  //const byte *cmp_nr = logtree::readRecord(xid, p , logtree::COMPARATOR, logtree::root_rec_size);
+  const byte *nr = diskTreeComponent::readRecord(xid,p,diskTreeComponent::DEPTH, diskTreeComponent::root_rec_size);
+  //const byte *cmp_nr = diskTreeComponent::readRecord(xid, p , diskTreeComponent::COMPARATOR, diskTreeComponent::root_rec_size);
 
   int64_t depth = *((int64_t*)nr);
 
-  recordid lsm_entry_rid = logtree::lookup(xid,p,depth,key,0);//keySize,comparators[cmp_nr->ptr]);
+  recordid lsm_entry_rid = diskTreeComponent::lookup(xid,p,depth,key,0);//keySize,comparators[cmp_nr->ptr]);
 
   if(lsm_entry_rid.page == NULLRID.page && lsm_entry_rid.slot == NULLRID.slot) {
     unlock(p->rwlatch);
@@ -934,8 +934,8 @@ int logtreeIterator::next(int xid, lladdIterator_t *it)
     if(impl->current.size == INVALID_SLOT)
     {
 
-        const indexnode_rec next_rec = *(const indexnode_rec*)logtree::readRecord(xid,impl->p,
-                                                                   logtree::NEXT_LEAF,
+        const indexnode_rec next_rec = *(const indexnode_rec*)diskTreeComponent::readRecord(xid,impl->p,
+                                                                   diskTreeComponent::NEXT_LEAF,
                                                                    0);
         unlock(impl->p->rwlatch);
         releasePage(impl->p);
@@ -972,7 +972,7 @@ int logtreeIterator::next(int xid, lladdIterator_t *it)
             free(impl->t);
 
         impl->t = (indexnode_rec*)malloc(impl->current.size);
-        memcpy(impl->t, logtree::readRecord(xid,impl->p,impl->current), impl->current.size);
+        memcpy(impl->t, diskTreeComponent::readRecord(xid,impl->p,impl->current), impl->current.size);
 
         return 1;
     }

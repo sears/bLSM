@@ -71,7 +71,7 @@ private:
 private:
     recordid tree_; //root of the tree
     
-    lladdIterator_t * lsmIterator_; //logtree iterator
+    lladdIterator_t * lsmIterator_; //diskTreeComponent iterator
     
     pageid_t curr_pageid; //current page id
     DataPage<TUPLE>    *curr_page;   //current page

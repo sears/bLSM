@@ -9,7 +9,7 @@ int main(int argc, char **argv)
 
     sync();
 
-    logtree::init_stasis();
+    diskTreeComponent::init_stasis();
 
     int xid = Tbegin();
 
@@ -28,7 +28,7 @@ int main(int argc, char **argv)
     logtreeIterator::close(xid, it);
     Tcommit(xid);
 
-    logtree::deinit_stasis();
+    diskTreeComponent::deinit_stasis();
 
 
 

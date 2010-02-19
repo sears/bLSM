@@ -37,9 +37,9 @@ typedef pageid_t(*logtree_page_allocator_t)(int, void *);
 typedef void(*logtree_page_deallocator_t)(int, void *);
 
 
-class logtree{
+class diskTreeComponent{
 public:
-    logtree(int xid): region_alloc(new DataPage<datatuple>::RegionAllocator(xid, 10000)) {create(xid);}  // XXX shouldn't hardcode region size.
+    diskTreeComponent(int xid): region_alloc(new DataPage<datatuple>::RegionAllocator(xid, 10000)) {create(xid);}  // XXX shouldn't hardcode region size.
 private:
     recordid create(int xid);
 public:
