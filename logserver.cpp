@@ -436,12 +436,11 @@ void * thread_work_fn( void * args)
         	continue;
         }
 
+        int err;
         
         //step 2: read the tuple from client
-        datatuple * tuple = readtuplefromsocket(*(item->data->workitem));
+        datatuple * tuple = readtuplefromsocket(*(item->data->workitem), &err);
         //step 3: process the tuple
-        
-        int err = 0;
 
         if(opcode == OP_INSERT)
         {
@@ -491,6 +490,23 @@ void * thread_work_fn( void * args)
             if(dt_needs_free) {
             	datatuple::freetuple(dt);
             }
+        }
+        else if(opcode == OP_SCAN)
+        {
+        	datatuple * end_tuple;
+        	size_t limit;
+        	if(!err) {	end_tuple = readtuplefromsocket(*(item->data->workitem), &err); }
+        	if(!err) {  limit = readcountfromsocket(*(item->data->workitem), &err);     }
+        	if(!err) {
+        		treeIterator<datatuple> * itr;
+//        		if(tuple) {
+//        			itr = new treeIterator<datatuple>(item->data->ltable, *tuple);
+//        		} else {
+//        			itr = new treeIterator<datatuple>(item->data->ltable);
+//        		}
+        		abort();
+        		delete itr;
+        	}
         }
         else if(opcode == OP_DBG_BLOCKMAP)
         {

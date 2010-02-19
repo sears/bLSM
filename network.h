@@ -24,12 +24,12 @@ static const network_op_t LOGSTORE_LAST_RESPONSE_CODE = 3;
 static const network_op_t LOGSTORE_FIRST_REQUEST_CODE  = 8;
 static const network_op_t OP_INSERT              = 8;   // Create, Update, Delete
 static const network_op_t OP_FIND                = 9;   // Read
+static const network_op_t OP_SCAN                = 11;
+static const network_op_t OP_DONE                = 12;  // Please close the connection.
 
-static const network_op_t OP_DONE                = 10;  // Please close the connection.
+static const network_op_t OP_DBG_BLOCKMAP            = 13;
 
-static const network_op_t OP_DBG_BLOCKMAP            = 11;
-
-static const network_op_t LOGSTORE_LAST_REQUEST_CODE   = 11;
+static const network_op_t LOGSTORE_LAST_REQUEST_CODE   = 13;
 
 //error codes
 static const network_op_t LOGSTORE_FIRST_ERROR  = 28;
@@ -137,17 +137,34 @@ static inline int writeoptosocket(int sockd, network_op_t op) {
   return writetosocket(sockd, &op, sizeof(network_op_t));
 }
 
-static inline datatuple* readtuplefromsocket(int sockd) {
+/**
+	Iterator wire format:
+
+	  LOGSTORE_RESPONSE_SENDING_TUPLES
+	  TUPLE
+	  TUPLE
+	  TUPLE
+	  datatuple::DELETE
+
+ */
+
+/**
+    @param sockd The socket.
+    @param error will be set to zero on succes, a logstore error number on failure
+    @return a datatuple, or NULL.
+ */
+static inline datatuple* readtuplefromsocket(int sockd, int * err) {
 
 	datatuple::len_t keylen, datalen, buflen;
 
-    if(    readfromsocket(sockd, &keylen, sizeof(keylen))   ) return NULL;
-    if(    readfromsocket(sockd, &datalen, sizeof(datalen)) ) return NULL;
+    if(( *err = readfromsocket(sockd, &keylen, sizeof(keylen))   )) return NULL;
+    if(keylen == datatuple::DELETE) return NULL; // *err is zero.
+    if(( *err = readfromsocket(sockd, &datalen, sizeof(datalen)) )) return NULL;
 
     buflen = datatuple::length_from_header(keylen, datalen);
     byte*  bytes = (byte*) malloc(buflen);
 
-    if(    readfromsocket(sockd, bytes, buflen)             ) return NULL;
+    if(( *err = readfromsocket(sockd, bytes, buflen)             )) return NULL;
 
 	return datatuple::from_bytes(keylen, datalen, bytes);   // from_bytes consumes the buffer.
 }
@@ -162,6 +179,17 @@ static inline int writetupletosocket(int sockd, const datatuple* tup) {
 	if(( err = writetosocket(sockd, buf, datatuple::length_from_header(keylen, datalen)) )) return err;
 	return 0;
 
+}
+static inline uint64_t readcountfromsocket(int sockd, int *err) {
+	uint64_t ret;
+	*err = readfromsocket(sockd, &ret, sizeof(ret));
+	return ret;
+}
+static inline int writecounttosocket(int sockd, uint64_t count) {
+	return writetosocket(sockd, &count, sizeof(count));
+}
+static inline int writeendofiteratortosocket(int sockd) {
+	return writetosocket(sockd, &datatuple::DELETE, sizeof(datatuple::DELETE));
 }
 
 #endif /* NETWORK_H_ */

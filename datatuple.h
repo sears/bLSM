@@ -12,8 +12,8 @@ public:
 	typedef uint32_t len_t ;
 	typedef unsigned char* key_t ;
 	typedef unsigned char* data_t ;
-private:
 	static const len_t DELETE = ((len_t)0) - 1;
+private:
 	len_t datalen_;
 	byte* key_;
 	byte* data_; // aliases key.  data_ - 1 should be the \0 terminating key_.

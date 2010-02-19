@@ -20,8 +20,6 @@
 #include "datatuple.h"
 #include "network.h"
 
-//	const char *appid;
-//	const char *region;
 struct logstore_handle_t {
 	char *host;
 	int portnum;
@@ -30,27 +28,6 @@ struct logstore_handle_t {
 	struct hostent* server;
 	int server_socket;
 };
-
-//LogStoreDBImpl::LogStoreDBImpl(const TestSettings & testSettings):
-//	const char *appid, int timeout, const char *region, int portnum){
-//    host_(testSettings.host()),
-//    appid_(testSettings.appID()),
-//    timeout_(testSettings.timeout()),
-//    region_(testSettings.myRegion()),
-//    routerLatency_(0.0),
-//    suLatency_(0.0)
-//    const std::string& appid_;
-//    const int timeout_;
-//    const std::string& region_;
-//
-//    int portnum;
-//
-//    int server_socket;
-//
-//    struct sockaddr_in serveraddr;
-//    struct hostent *server;
-//    ret->server_socket = -1;
-//    portnum = 32432; //this should be an argument.
 
 logstore_handle_t * logstore_client_open(const char *host, int portnum, int timeout) {
 	logstore_handle_t *ret = (logstore_handle_t*) malloc(sizeof(*ret));
@@ -85,9 +62,6 @@ static inline void close_conn(logstore_handle_t *l) {
 }
 datatuple *
 logstore_client_op(logstore_handle_t *l,
-//		  int *server_socket,
-//          struct sockaddr_in serveraddr,
-//          struct hostent *server,
           uint8_t opcode,  datatuple * tuple)
 {
 
@@ -141,9 +115,13 @@ logstore_client_op(logstore_handle_t *l,
     datatuple * ret;
 
     if(rcode == LOGSTORE_RESPONSE_SENDING_TUPLES)
-    {
-    	ret = readtuplefromsocket(l->server_socket);
-
+    {	int err;
+		uint64_t count = 0; // XXX
+    	while(( ret = readtuplefromsocket(l->server_socket, &err) )) {
+    		if(err) { close_conn(l); return 0; }
+    		count++;
+    	}
+    	printf("return count: %lld\n", count);
     } else if(rcode == LOGSTORE_RESPONSE_SUCCESS) {
     	ret = tuple;
     } else {
