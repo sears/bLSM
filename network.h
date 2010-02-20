@@ -11,7 +11,17 @@
 #include <stdio.h>
 #include <errno.h>
 
+#include <string>
+typedef unsigned char byte;
+#include <cstring>
+#include <assert.h>
+
 typedef uint8_t network_op_t;
+
+typedef uint32_t len_t ;
+static const len_t DELETE = ((len_t)0) - 1;
+
+#include <datatuple.h>
 
 //server codes
 static const network_op_t LOGSTORE_FIRST_RESPONSE_CODE = 1;
@@ -155,10 +165,10 @@ static inline int writeoptosocket(int sockd, network_op_t op) {
  */
 static inline datatuple* readtuplefromsocket(int sockd, int * err) {
 
-	datatuple::len_t keylen, datalen, buflen;
+	len_t keylen, datalen, buflen;
 
     if(( *err = readfromsocket(sockd, &keylen, sizeof(keylen))   )) return NULL;
-    if(keylen == datatuple::DELETE) return NULL; // *err is zero.
+    if(keylen == DELETE) return NULL; // *err is zero.
     if(( *err = readfromsocket(sockd, &datalen, sizeof(datalen)) )) return NULL;
 
     buflen = datatuple::length_from_header(keylen, datalen);
@@ -169,14 +179,21 @@ static inline datatuple* readtuplefromsocket(int sockd, int * err) {
 	return datatuple::from_bytes(keylen, datalen, bytes);   // from_bytes consumes the buffer.
 }
 
+static inline int writeendofiteratortosocket(int sockd) {
+	return writetosocket(sockd, &DELETE, sizeof(DELETE));
+}
 static inline int writetupletosocket(int sockd, const datatuple* tup) {
-	datatuple::len_t keylen, datalen;
-
-	const byte* buf = tup->get_bytes(&keylen, &datalen);
+	len_t keylen, datalen;
 	int err;
-	if(( err = writetosocket(sockd, &keylen, sizeof(keylen))                             )) return err;
-	if(( err = writetosocket(sockd, &datalen, sizeof(datalen))                           )) return err;
-	if(( err = writetosocket(sockd, buf, datatuple::length_from_header(keylen, datalen)) )) return err;
+
+	if(tup == NULL) {
+		if(( err = writeendofiteratortosocket(sockd)                                         )) return err;
+	} else {
+		const byte* buf = tup->get_bytes(&keylen, &datalen);
+		if(( err = writetosocket(sockd, &keylen, sizeof(keylen))                             )) return err;
+		if(( err = writetosocket(sockd, &datalen, sizeof(datalen))                           )) return err;
+		if(( err = writetosocket(sockd, buf, datatuple::length_from_header(keylen, datalen)) )) return err;
+	}
 	return 0;
 
 }
@@ -187,9 +204,6 @@ static inline uint64_t readcountfromsocket(int sockd, int *err) {
 }
 static inline int writecounttosocket(int sockd, uint64_t count) {
 	return writetosocket(sockd, &count, sizeof(count));
-}
-static inline int writeendofiteratortosocket(int sockd) {
-	return writetosocket(sockd, &datatuple::DELETE, sizeof(datatuple::DELETE));
 }
 
 #endif /* NETWORK_H_ */

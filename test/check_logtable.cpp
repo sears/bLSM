@@ -18,7 +18,7 @@
 
 #include "check_util.h"
 
-template class treeIterator<datatuple>;
+template class diskTreeIterator<datatuple>;
 
 void insertProbeIter(size_t NUM_ENTRIES)
 {
@@ -115,7 +115,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     printf("Stage 2: Sequentially reading %d tuples\n", NUM_ENTRIES);
     
     size_t tuplenum = 0;
-    treeIterator<datatuple> tree_itr(tree_root);
+    diskTreeIterator<datatuple> tree_itr(tree_root);
 
 
     datatuple *dt=0;

@@ -26,7 +26,6 @@ static inline double tv_to_double(struct timeval tv)
 
 template class DataPage<datatuple>;
 
-
 logtable::logtable()
 {
 
@@ -41,9 +40,12 @@ logtable::logtable()
     //tmerger = new tuplemerger(&append_merger);
     tmerger = new tuplemerger(&replace_merger);
 
+    header_lock = initlock();
+
     tsize = 0;
     tree_bytes = 0;
         
+    epoch = 0;
     
 }
 
@@ -80,6 +82,7 @@ logtable::~logtable()
     	tearDownTree(tree_c0);
     }
 
+    deletelock(header_lock);
     delete tmerger;
 }
 
@@ -121,7 +124,7 @@ void logtable::flushTable()
     start = tv_to_double(start_tv);
 
     
-    writelock(mergedata->header_lock,0);
+    writelock(header_lock,0);
     pthread_mutex_lock(mergedata->rbtree_mut);
     
     int expmcount = merge_count;
@@ -133,7 +136,7 @@ void logtable::flushTable()
 
 
     while(get_tree_c0_mergeable()) {
-        unlock(mergedata->header_lock);
+        unlock(header_lock);
 //        pthread_mutex_lock(mergedata->rbtree_mut);
         if(tree_bytes >= max_c0_size)
             pthread_cond_wait(mergedata->input_needed_cond, mergedata->rbtree_mut);
@@ -146,12 +149,12 @@ void logtable::flushTable()
         
         pthread_mutex_unlock(mergedata->rbtree_mut);
         
-        writelock(mergedata->header_lock,0);
+        writelock(header_lock,0);
         pthread_mutex_lock(mergedata->rbtree_mut);
         
         if(expmcount != merge_count)
         {
-            unlock(mergedata->header_lock);
+            unlock(header_lock);
             pthread_mutex_unlock(mergedata->rbtree_mut);
             return;                    
         }
@@ -177,7 +180,7 @@ void logtable::flushTable()
     tree_bytes = 0;
     
     pthread_mutex_unlock(mergedata->rbtree_mut);
-    unlock(mergedata->header_lock);
+    unlock(header_lock);
     if(first)
     {
         printf("flush waited %f sec\n", stop-start);
@@ -197,7 +200,7 @@ datatuple * logtable::findTuple(int xid, const datatuple::key_t key, size_t keyS
     //prepare a search tuple
 	datatuple *search_tuple = datatuple::create(key, keySize);
 
-    readlock(mergedata->header_lock,0);
+    readlock(header_lock,0);
     pthread_mutex_lock(mergedata->rbtree_mut);
 
     datatuple *ret_tuple=0; 
@@ -328,7 +331,7 @@ datatuple * logtable::findTuple(int xid, const datatuple::key_t key, size_t keyS
     }     
 
     //pthread_mutex_unlock(mergedata->rbtree_mut);
-    unlock(mergedata->header_lock);
+    unlock(header_lock);
     datatuple::freetuple(search_tuple);
     return ret_tuple;
 
@@ -411,12 +414,8 @@ datatuple * logtable::findTuple_first(int xid, datatuple::key_t key, size_t keyS
 
 void logtable::insertTuple(datatuple *tuple)
 {
-    //static int count = LATCH_INTERVAL;
-    //static int tsize = 0; //number of tuples
-    //static int64_t tree_bytes = 0; //number of bytes
-
     //lock the red-black tree
-    readlock(mergedata->header_lock,0);
+    readlock(header_lock,0);
     pthread_mutex_lock(mergedata->rbtree_mut);
     //find the previous tuple with same key in the memtree if exists
     rbtree_t::iterator rbitr = tree_c0->find(tuple);
@@ -451,20 +450,16 @@ void logtable::insertTuple(datatuple *tuple)
     {
         DEBUG("tree size before merge %d tuples %lld bytes.\n", tsize, tree_bytes);
         pthread_mutex_unlock(mergedata->rbtree_mut);
-        unlock(mergedata->header_lock);
+        unlock(header_lock);
         flushTable();
 
-        readlock(mergedata->header_lock,0);        
+        readlock(header_lock,0);
         pthread_mutex_lock(mergedata->rbtree_mut);
-        
-        //tsize = 0;
-        //tree_bytes = 0;
-
     }
     
     //unlock
     pthread_mutex_unlock(mergedata->rbtree_mut);
-    unlock(mergedata->header_lock);
+    unlock(header_lock);
 
 
     DEBUG("tree size %d tuples %lld bytes.\n", tsize, tree_bytes);
@@ -525,3 +520,5 @@ datatuple * logtable::findTuple(int xid, datatuple::key_t key, size_t keySize,  
     }
     return tup;
 }
+
+template class logtableIterator<datatuple>;

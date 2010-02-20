@@ -62,7 +62,7 @@ static inline void close_conn(logstore_handle_t *l) {
 }
 datatuple *
 logstore_client_op(logstore_handle_t *l,
-          uint8_t opcode,  datatuple * tuple)
+          uint8_t opcode,  datatuple * tuple, datatuple * tuple2, uint64_t count)
 {
 
     if(l->server_socket < 0)
@@ -105,23 +105,34 @@ logstore_client_op(logstore_handle_t *l,
     //send the opcode
     if( writetosocket(l->server_socket, &opcode, sizeof(opcode))  ) { close_conn(l); return 0; }
 
-    //send the tuple
+    //send the first tuple
     if( writetupletosocket(l->server_socket, tuple)               ) { close_conn(l); return 0; }
+
+    //send the second tuple
+    if( writetupletosocket(l->server_socket, tuple2)              ) { close_conn(l); return 0; }
+
+    if( count != (uint64_t)-1) {
+    	if( writecounttosocket(l->server_socket, count)           ) { close_conn(l); return 0; }
+    }
+
 
     network_op_t rcode = readopfromsocket(l->server_socket,LOGSTORE_SERVER_RESPONSE);
 
     if( opiserror(rcode)                                          ) { close_conn(l); return 0; }
 
-    datatuple * ret;
+    datatuple * ret = 0;
 
     if(rcode == LOGSTORE_RESPONSE_SENDING_TUPLES)
     {	int err;
 		uint64_t count = 0; // XXX
-    	while(( ret = readtuplefromsocket(l->server_socket, &err) )) {
+		datatuple *nxt;
+    	while(( nxt = readtuplefromsocket(l->server_socket, &err) )) {
+    		if(ret) datatuple::freetuple(ret); // XXX
+    		ret = nxt;
     		if(err) { close_conn(l); return 0; }
     		count++;
     	}
-    	printf("return count: %lld\n", count);
+    	if(count > 1) { printf("return count: %lld\n", count); }
     } else if(rcode == LOGSTORE_RESPONSE_SUCCESS) {
     	ret = tuple;
     } else {

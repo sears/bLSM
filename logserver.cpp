@@ -436,10 +436,13 @@ void * thread_work_fn( void * args)
         	continue;
         }
 
-        int err;
+        int err = 0;
         
-        //step 2: read the tuple from client
-        datatuple * tuple = readtuplefromsocket(*(item->data->workitem), &err);
+        //step 2: read the first tuple from client
+        datatuple *tuple, *tuple2;
+        if(!err) { tuple  = readtuplefromsocket(*(item->data->workitem), &err); }
+        //        read the second tuple from client
+        if(!err) { tuple2 = readtuplefromsocket(*(item->data->workitem), &err); }
         //step 3: process the tuple
 
         if(opcode == OP_INSERT)
@@ -485,7 +488,9 @@ void * thread_work_fn( void * args)
 				//send the tuple
 				err = writetupletosocket(*(item->data->workitem), dt);
             }
-
+            if(!err) {
+            	writeendofiteratortosocket(*(item->data->workitem));
+            }
             //free datatuple
             if(dt_needs_free) {
             	datatuple::freetuple(dt);
@@ -493,27 +498,36 @@ void * thread_work_fn( void * args)
         }
         else if(opcode == OP_SCAN)
         {
-        	datatuple * end_tuple;
-        	size_t limit;
-        	if(!err) {	end_tuple = readtuplefromsocket(*(item->data->workitem), &err); }
+        	size_t limit = -1;
+        	size_t count = 0;
         	if(!err) {  limit = readcountfromsocket(*(item->data->workitem), &err);     }
-        	if(!err) {
-        		treeIterator<datatuple> * itr;
-//        		if(tuple) {
-//        			itr = new treeIterator<datatuple>(item->data->ltable, *tuple);
-//        		} else {
-//        			itr = new treeIterator<datatuple>(item->data->ltable);
-//        		}
-        		abort();
+            if(!err) {  err = writeoptosocket(*(item->data->workitem), LOGSTORE_RESPONSE_SENDING_TUPLES); }
+
+            if(!err) {
+        		logtableIterator<datatuple> * itr = new logtableIterator<datatuple>(item->data->ltable, tuple);
+        		datatuple * t;
+        		while(!err && (t = itr->getnext())) {
+        			if(tuple2) {  // are we at the end of range?
+        				if(datatuple::compare_obj(t, tuple2) >= 0) {
+        					datatuple::freetuple(t);
+        					break;
+        				}
+        			}
+        			err = writetupletosocket(*(item->data->workitem), t);
+					datatuple::freetuple(t);
+					count ++;
+					if(count == limit) { break; }  // did we hit limit?
+				}
         		delete itr;
         	}
+    		if(!err) { writeendofiteratortosocket(*(item->data->workitem)); }
         }
         else if(opcode == OP_DBG_BLOCKMAP)
         {
         	// produce a list of stasis regions
         	int xid = Tbegin();
 
-        	readlock(item->data->ltable->getMergeData()->header_lock, 0);
+        	readlock(item->data->ltable->header_lock, 0);
 
         	// produce a list of regions used by current tree components
         	pageid_t datapage_c1_region_length, datapage_c1_mergeable_region_length = 0, datapage_c2_region_length;
@@ -538,7 +552,7 @@ void * thread_work_fn( void * args)
 		  tree_c1_mergeable_regions = diskTreeComponent::list_region_rid(xid, &tree_c1_mergeable_region_header, &tree_c1_mergeable_region_length, &tree_c1_mergeable_region_count);
 		}
         	pageid_t * tree_c2_regions = diskTreeComponent::list_region_rid(xid, &tree_c2_region_header, &tree_c2_region_length, &tree_c2_region_count);
-        	unlock(item->data->ltable->getMergeData()->header_lock);
+        	unlock(item->data->ltable->header_lock);
 
         	Tcommit(xid);
 
@@ -597,7 +611,8 @@ void * thread_work_fn( void * args)
         }
 
         //free the tuple
-        datatuple::freetuple(tuple);
+        if(tuple)  datatuple::freetuple(tuple);
+        if(tuple2) datatuple::freetuple(tuple2);
 
         if(err) {
 			perror("could not respond to client");

@@ -61,7 +61,7 @@ void diskTreeComponent::init_stasis() {
 void diskTreeComponent::deinit_stasis() { Tdeinit(); }
 
 void diskTreeComponent::free_region_rid(int xid, recordid tree,
-          logtree_page_deallocator_t dealloc, void *allocator_state)
+          diskTreeComponent_page_deallocator_t dealloc, void *allocator_state)
 {
   //  Tdealloc(xid,tree);
   dealloc(xid,allocator_state);
@@ -218,6 +218,7 @@ recordid diskTreeComponent::create(int xid)
     return ret;
 }
 
+//  XXX remove the next N records, which are completely redundant.
 
 /**
  * TODO: what happen if there is already such a record with a different size?
@@ -272,13 +273,8 @@ const byte* diskTreeComponent::readRecord(int xid, Page * p, slotid_t slot, int6
     rid.page = p->id;
     rid.slot = slot;
     rid.size = size;
-    //byte *ret = (byte*)malloc(rid.size);
-    //stasis_record_read(xid,p,rid,ret);
-    //return ret;
     const byte *nr = stasis_record_read_begin(xid,p,rid);
     return nr;
-//    return readRecord(xid, p, rid);
-
 }
 
 int32_t diskTreeComponent::readRecordLength(int xid, Page *p, slotid_t slot)
@@ -482,7 +478,7 @@ recordid diskTreeComponent::appendInternalNode(int xid, Page *p,
                                      int64_t depth,
                                      const byte *key, size_t key_len,
                                      pageid_t val_page, pageid_t lastLeaf,
-                                     logtree_page_allocator_t allocator,
+                                     diskTreeComponent_page_allocator_t allocator,
                                      void *allocator_state)
 {
 //    assert(*stasis_page_type_ptr(p) == LOGTREE_ROOT_PAGE ||
@@ -553,7 +549,7 @@ recordid diskTreeComponent::appendInternalNode(int xid, Page *p,
 recordid diskTreeComponent::buildPathToLeaf(int xid, recordid root, Page *root_p,
                                   int64_t depth, const byte *key, size_t key_len,
                                   pageid_t val_page, pageid_t lastLeaf,
-                                  logtree_page_allocator_t allocator,
+                                  diskTreeComponent_page_allocator_t allocator,
                                   void *allocator_state)
 {
 
@@ -828,10 +824,10 @@ void diskTreeComponent::print_tree(int xid, pageid_t pid, int64_t depth)
 }
 
 /////////////////////////////////////////////////
-//logtreeIterator implementation
+//diskTreeComponentIterator implementation
 /////////////////////////////////////////////////
 
-lladdIterator_t* logtreeIterator::open(int xid, recordid root)
+lladdIterator_t* diskTreeComponentIterator::open(int xid, recordid root)
 {
     if(root.page == 0 && root.slot == 0 && root.size == -1)
         return 0;
@@ -860,7 +856,7 @@ lladdIterator_t* logtreeIterator::open(int xid, recordid root)
         assert(depth == 0);
 
 
-    logtreeIterator_s *impl = (logtreeIterator_s*)malloc(sizeof(logtreeIterator_s));
+    diskTreeComponentIterator_t *impl = (diskTreeComponentIterator_t*)malloc(sizeof(diskTreeComponentIterator_t));
     impl->p = p;
     {
         recordid rid = { p->id, 1, 0};//keySize }; //TODO: why does this start from 1?
@@ -876,7 +872,7 @@ lladdIterator_t* logtreeIterator::open(int xid, recordid root)
     return it;
 }
 
-lladdIterator_t* logtreeIterator::openAt(int xid, recordid root, const byte* key)
+lladdIterator_t* diskTreeComponentIterator::openAt(int xid, recordid root, const byte* key)
 {
   if(root.page == NULLRID.page && root.slot == NULLRID.slot)
       return 0;
@@ -906,7 +902,7 @@ lladdIterator_t* logtreeIterator::openAt(int xid, recordid root, const byte* key
     readlock(p->rwlatch,0);
   }
 
-  logtreeIterator_s *impl = (logtreeIterator_s*) malloc(sizeof(logtreeIterator_s));
+  diskTreeComponentIterator_t *impl = (diskTreeComponentIterator_t*) malloc(sizeof(diskTreeComponentIterator_t));
   impl->p = p;
 
   impl->current.page = lsm_entry_rid.page;
@@ -925,9 +921,9 @@ lladdIterator_t* logtreeIterator::openAt(int xid, recordid root, const byte* key
 /**
  * move to the next page
  **/
-int logtreeIterator::next(int xid, lladdIterator_t *it)
+int diskTreeComponentIterator::next(int xid, lladdIterator_t *it)
 {
-    logtreeIterator_s *impl = (logtreeIterator_s*) it->impl;
+    diskTreeComponentIterator_t *impl = (diskTreeComponentIterator_t*) it->impl;
 
     impl->current = stasis_record_next(xid, impl->p, impl->current);
 
@@ -987,9 +983,9 @@ int logtreeIterator::next(int xid, lladdIterator_t *it)
 
 }
 
-void logtreeIterator::close(int xid, lladdIterator_t *it)
+void diskTreeComponentIterator::close(int xid, lladdIterator_t *it)
 {
-    logtreeIterator_s *impl = (logtreeIterator_s*)it->impl;
+    diskTreeComponentIterator_t *impl = (diskTreeComponentIterator_t*)it->impl;
   if(impl->p)
   {
     unlock(impl->p->rwlatch);

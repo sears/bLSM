@@ -110,12 +110,12 @@ void insertProbeIter(size_t NUM_ENTRIES)
     for(size_t i = 0; i < NUM_ENTRIES; i++)
     {
         //prepare the key
-        datatuple::len_t keylen = (*key_arr)[i].length()+1;
+        len_t keylen = (*key_arr)[i].length()+1;
 
         //prepare the data
         std::string ditem;
         getnextdata(ditem, 8192);
-        datatuple::len_t datalen = ditem.length()+1;
+        len_t datalen = ditem.length()+1;
 
         datatuple* newtuple = datatuple::create((*key_arr)[i].c_str(), keylen,
 						ditem.c_str(), datalen);
@@ -155,7 +155,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         //fflush(stdout);
 
         //get the key
-        datatuple::len_t keylen = (*key_arr)[ri].length()+1;
+        len_t keylen = (*key_arr)[ri].length()+1;
 
         datatuple* searchtuple = datatuple::create((*key_arr)[ri].c_str(), keylen);
 
@@ -174,6 +174,10 @@ void insertProbeIter(size_t NUM_ENTRIES)
         datatuple::freetuple(searchtuple);
     }
     printf("found %d\n", found_tuples);
+
+    printf("Stage 3: Initiating scan TODO: look at results\n");
+
+    logstore_client_op(l, OP_SCAN, NULL, NULL, 0); // start = NULL stop = NULL limit = NONE
 
     key_arr->clear();
     delete key_arr;
@@ -198,6 +202,9 @@ int main(int argc, char* argv[])
 	}
     //insertProbeIter(25000);
     insertProbeIter(100000);
+    //insertProbeIter(5000);
+//    insertProbeIter(100);
+
     /*
     insertProbeIter(5000);
     insertProbeIter(2500);

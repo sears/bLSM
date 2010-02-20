@@ -1,3 +1,5 @@
+#include <network.h>
+
 #ifndef _DATATUPLE_H_
 #define _DATATUPLE_H_
 
@@ -6,13 +8,12 @@ typedef unsigned char byte;
 #include <cstring>
 #include <assert.h>
 
+
 typedef struct datatuple
 {
 public:
-	typedef uint32_t len_t ;
 	typedef unsigned char* key_t ;
 	typedef unsigned char* data_t ;
-	static const len_t DELETE = ((len_t)0) - 1;
 private:
 	len_t datalen_;
 	byte* key_;
@@ -61,6 +62,10 @@ public:
 		//for char* ending with \0
 		return strcmp((char*)k1,(char*)k2);
 	}
+
+    static int compare_obj(const datatuple * a, const datatuple* b) {
+    	return compare(a->key(), b->key());
+    }
 
     inline void setDelete() {
 		datalen_ = DELETE;

@@ -36,8 +36,8 @@ datatuple* append_merger(datatuple *t1, datatuple *t2)
 {
 
 	assert(!(t1->isDelete() || t2->isDelete()));
-    datatuple::len_t keylen = t1->keylen();
-    datatuple::len_t datalen = t1->datalen() + t2->datalen();
+    len_t keylen = t1->keylen();
+    len_t datalen = t1->datalen() + t2->datalen();
     byte * data = (byte*)malloc(datalen);
     memcpy(data, t1->data(), t1->datalen());
     memcpy(data + t1->datalen(), t2->data(), t2->datalen());

@@ -16,7 +16,6 @@ int merge_scheduler::addlogtable(logtable *ltable)
     struct logtable_mergedata * mdata = new logtable_mergedata;
 
     // initialize merge data
-    mdata->header_lock = initlock();
     mdata->rbtree_mut = new pthread_mutex_t;
     pthread_mutex_init(mdata->rbtree_mut,0);
     ltable->set_tree_c0_mergeable(NULL);
@@ -47,7 +46,6 @@ merge_scheduler::~merge_scheduler()
         logtable_mergedata *mdata = mergedata[i].second;
 
         //delete the mergedata fields
-        deletelock(mdata->header_lock);
         delete mdata->rbtree_mut;        
         delete mdata->input_needed;
         delete mdata->input_ready_cond;
@@ -218,7 +216,7 @@ void* memMergeThread(void*arg)
     
     while(true)
     {
-        writelock(ltable->mergedata->header_lock,0);
+        writelock(ltable->header_lock,0);
         int done = 0;
         // wait for c0_mergable
         while(!ltable->get_tree_c0_mergeable())
@@ -235,12 +233,12 @@ void* memMergeThread(void*arg)
             }
             
             printf("mmt:\twaiting for block ready cond\n");
-            unlock(ltable->mergedata->header_lock);
+            unlock(ltable->header_lock);
             
             pthread_cond_wait(a->in_block_ready_cond, a->block_ready_mut);
             pthread_mutex_unlock(a->block_ready_mut);
             
-            writelock(ltable->mergedata->header_lock,0);
+            writelock(ltable->header_lock,0);
             printf("mmt:\tblock ready\n");
             
         }        
@@ -251,7 +249,7 @@ void* memMergeThread(void*arg)
             pthread_mutex_lock(a->block_ready_mut);
             pthread_cond_signal(a->out_block_ready_cond);  // no block is ready.  this allows the other thread to wake up, and see that we're shutting down.
             pthread_mutex_unlock(a->block_ready_mut);
-            unlock(ltable->mergedata->header_lock);
+            unlock(ltable->header_lock);
             break;
         }
 
@@ -261,7 +259,7 @@ void* memMergeThread(void*arg)
         // 4: Merge
 
         //create the iterators
-        treeIterator<datatuple> *itrA = new treeIterator<datatuple>(ltable->get_tree_c1()->get_root_rec()); // XXX don't want get_root_rec() to be here.
+        diskTreeIterator<datatuple> *itrA = new diskTreeIterator<datatuple>(ltable->get_tree_c1()->get_root_rec()); // XXX don't want get_root_rec() to be here.
         memTreeIterator<rbtree_t, datatuple> *itrB =
         		new memTreeIterator<rbtree_t, datatuple>(ltable->get_tree_c0_mergeable());
 
@@ -270,7 +268,7 @@ void* memMergeThread(void*arg)
         diskTreeComponent * c1_prime = new diskTreeComponent(xid); // XXX should not hardcode region size)
 
         //pthread_mutex_unlock(a->block_ready_mut);
-        unlock(ltable->mergedata->header_lock);
+        unlock(ltable->header_lock);
 
         //: do the merge
         printf("mmt:\tMerging:\n");
@@ -299,7 +297,7 @@ void* memMergeThread(void*arg)
         //now atomically replace the old c1 with new c1
         //pthread_mutex_lock(a->block_ready_mut);
 
-        writelock(ltable->mergedata->header_lock,0);
+        writelock(ltable->header_lock,0);
         merge_count++;        
         printf("mmt:\tmerge_count %d #pages written %lld\n", merge_count, npages);      
 
@@ -325,11 +323,11 @@ void* memMergeThread(void*arg)
             // XXX need to report backpressure here!  Also, shouldn't be inside a transaction while waiting on backpressure.
             while(ltable->get_tree_c1_mergeable()) {
                 pthread_mutex_lock(a->block_ready_mut);
-                unlock(ltable->mergedata->header_lock);
+                unlock(ltable->header_lock);
                 
                 pthread_cond_wait(a->out_block_needed_cond, a->block_ready_mut);
                 pthread_mutex_unlock(a->block_ready_mut);
-                writelock(ltable->mergedata->header_lock,0);
+                writelock(ltable->header_lock,0);
             }
             ltable->set_tree_c1_mergeable(c1_prime);
 
@@ -346,7 +344,7 @@ void* memMergeThread(void*arg)
 
 		Tcommit(xid);
 
-        unlock(ltable->mergedata->header_lock);
+        unlock(ltable->header_lock);
         
         //TODO: get the freeing outside of the lock
     }
@@ -372,7 +370,7 @@ void *diskMergeThread(void*arg)
     
     while(true)
     {
-        writelock(ltable->mergedata->header_lock,0);
+        writelock(ltable->header_lock,0);
         int done = 0;
         // get a new input for merge
         while(!ltable->get_tree_c1_mergeable())
@@ -388,28 +386,28 @@ void *diskMergeThread(void*arg)
             }
             
             printf("dmt:\twaiting for block ready cond\n");
-            unlock(ltable->mergedata->header_lock);
+            unlock(ltable->header_lock);
             
             pthread_cond_wait(a->in_block_ready_cond, a->block_ready_mut);
             pthread_mutex_unlock(a->block_ready_mut);
 
             printf("dmt:\tblock ready\n");
-            writelock(ltable->mergedata->header_lock,0);
+            writelock(ltable->header_lock,0);
         }        
         *a->in_block_needed = false;
         if(done==1)
         {
             pthread_cond_signal(a->out_block_ready_cond);
-            unlock(ltable->mergedata->header_lock);
+            unlock(ltable->header_lock);
             break;
         }
         
         int64_t mergedPages=0;
         
         //create the iterators
-        treeIterator<datatuple> *itrA = new treeIterator<datatuple>(ltable->get_tree_c2()->get_root_rec());
-        treeIterator<datatuple> *itrB =
-            new treeIterator<datatuple>(ltable->get_tree_c1_mergeable()->get_root_rec());
+        diskTreeIterator<datatuple> *itrA = new diskTreeIterator<datatuple>(ltable->get_tree_c2()->get_root_rec());
+        diskTreeIterator<datatuple> *itrB =
+            new diskTreeIterator<datatuple>(ltable->get_tree_c1_mergeable()->get_root_rec());
         
         xid = Tbegin();
         
@@ -417,7 +415,7 @@ void *diskMergeThread(void*arg)
         //TODO: maybe you want larger regions for the second tree?
         diskTreeComponent * c2_prime = new diskTreeComponent(xid);
 
-        unlock(ltable->mergedata->header_lock);
+        unlock(ltable->header_lock);
         
         
         //do the merge        
@@ -446,7 +444,7 @@ void *diskMergeThread(void*arg)
         //writes complete
         //now atomically replace the old c2 with new c2
         //pthread_mutex_lock(a->block_ready_mut);
-        writelock(ltable->mergedata->header_lock,0);
+        writelock(ltable->header_lock,0);
         
         merge_count++;        
         //update the current optimal R value
@@ -463,7 +461,7 @@ void *diskMergeThread(void*arg)
 
         Tcommit(xid);
         
-        unlock(ltable->mergedata->header_lock);
+        unlock(ltable->header_lock);
     }
     return 0;
 }

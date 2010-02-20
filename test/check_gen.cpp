@@ -24,8 +24,8 @@ int main(int argc, char **argv)
 //    lsmTableHandle<PAGELAYOUT>* h = TlsmTableStart<PAGELAYOUT>(lsmTable, INVALID_COL);
 
     xid = Tbegin();
-    lladdIterator_t * it = logtreeIterator::open(xid,ltable.get_tree_c2()->get_root_rec() );
-    logtreeIterator::close(xid, it);
+    lladdIterator_t * it = diskTreeComponentIterator::open(xid,ltable.get_tree_c2()->get_root_rec() );
+    diskTreeComponentIterator::close(xid, it);
     Tcommit(xid);
 
     diskTreeComponent::deinit_stasis();

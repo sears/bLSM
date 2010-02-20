@@ -129,12 +129,12 @@ void insertProbeIter_str(int  NUM_ENTRIES)
 
     
     int64_t count = 0;
-    lladdIterator_t * it = logtreeIterator::open(xid, tree);
+    lladdIterator_t * it = diskTreeComponentIterator::open(xid, tree);
 
-    while(logtreeIterator::next(xid, it)) {
+    while(diskTreeComponentIterator::next(xid, it)) {
         byte * key;
         byte **key_ptr = &key;
-        size_t keysize = logtreeIterator::key(xid, it, (byte**)key_ptr);
+        size_t keysize = diskTreeComponentIterator::key(xid, it, (byte**)key_ptr);
         
         pageid_t *value;
         pageid_t **value_ptr = &value;
@@ -147,7 +147,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
     }
     assert(count == NUM_ENTRIES);
 
-    logtreeIterator::close(xid, it);
+    diskTreeComponentIterator::close(xid, it);
 
 	Tcommit(xid);
     diskTreeComponent::deinit_stasis();

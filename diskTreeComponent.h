@@ -32,10 +32,12 @@ typedef struct RegionAllocConf_t
   pageid_t regionSize;
 } RegionAllocConf_t;
 
+struct indexnode_rec {
+    pageid_t ptr;
+};
 
-typedef pageid_t(*logtree_page_allocator_t)(int, void *);
-typedef void(*logtree_page_deallocator_t)(int, void *);
-
+typedef pageid_t(*diskTreeComponent_page_allocator_t)(int, void *);
+typedef void(*diskTreeComponent_page_deallocator_t)(int, void *);
 
 class diskTreeComponent{
 public:
@@ -55,7 +57,7 @@ public:
     static pageid_t*list_region_rid(int xid, void * ridp, pageid_t * region_len, pageid_t * region_count);
     static void dealloc_region_rid(int xid, recordid rid);
     static void free_region_rid(int xid, recordid tree,
-                                logtree_page_deallocator_t dealloc,
+                                diskTreeComponent_page_deallocator_t dealloc,
                                 void *allocator_state);
 
     static void writeNodeRecord(int xid, Page *p, recordid &rid,
@@ -92,20 +94,20 @@ public:
     //rmLeafID --> rightmost leaf id
     static recordid appendPage(int xid, recordid tree, pageid_t & rmLeafID,
                                const byte *key,size_t keySize,
-                               logtree_page_allocator_t allocator, void *allocator_state,
+                               diskTreeComponent_page_allocator_t allocator, void *allocator_state,
                                long val_page);
 
     static recordid appendInternalNode(int xid, Page *p,
                                        int64_t depth,
                                        const byte *key, size_t key_len,
                                        pageid_t val_page, pageid_t lastLeaf,
-                                       logtree_page_allocator_t allocator,
+                                       diskTreeComponent_page_allocator_t allocator,
                                        void *allocator_state);
 
     static recordid buildPathToLeaf(int xid, recordid root, Page *root_p,
                                     int64_t depth, const byte *key, size_t key_len,
                                     pageid_t val_page, pageid_t lastLeaf,
-                                    logtree_page_allocator_t allocator,
+                                    diskTreeComponent_page_allocator_t allocator,
                                     void *allocator_state);
 
     inline DataPage<datatuple>::RegionAllocator* get_alloc() { return region_alloc; }
@@ -141,6 +143,46 @@ private:
 
 
 };
+
+
+typedef struct {
+    Page * p;
+    recordid current;
+    indexnode_rec *t;
+    int justOnePage;
+} diskTreeComponentIterator_t;
+
+
+class diskTreeComponentIterator
+{
+
+public:
+    static lladdIterator_t* open(int xid, recordid root);
+    static lladdIterator_t* openAt(int xid, recordid root, const byte* key);
+    static int next(int xid, lladdIterator_t *it);
+    static void close(int xid, lladdIterator_t *it);
+
+
+    static inline size_t key (int xid, lladdIterator_t *it, byte **key)
+        {
+            diskTreeComponentIterator_t * impl = (diskTreeComponentIterator_t*)it->impl;
+            *key = (byte*)(impl->t+1);
+            return impl->current.size - sizeof(indexnode_rec);
+        }
+
+
+    static inline size_t value(int xid, lladdIterator_t *it, byte **value)
+        {
+            diskTreeComponentIterator_t * impl = (diskTreeComponentIterator_t*)it->impl;
+            *value = (byte*)&(impl->t->ptr);
+            return sizeof(impl->t->ptr);
+        }
+
+    static inline void tupleDone(int xid, void *it) { }
+    static inline void releaseLock(int xid, void *it) { }
+
+};
+
 
 
 #endif /* DISKTREECOMPONENT_H_ */

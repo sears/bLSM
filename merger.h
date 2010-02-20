@@ -4,12 +4,10 @@
 #include <vector>
 #include <utility>
 
-#include "logstore.h"
-#include "logiterators.h"
-
 //TODO: 400 bytes overhead per tuple, this is nuts, check if this is true...
 static const int RB_TREE_OVERHEAD = 400;
 static const double MIN_R = 3.0;
+class logtable;
 
 struct merger_args
 {
@@ -32,15 +30,12 @@ struct merger_args
 };
 
 
-
 struct logtable_mergedata
 {
     //merge threads
     pthread_t diskmerge_thread;
     pthread_t memmerge_thread;
 
-    rwl *header_lock;
-    
     pthread_mutex_t * rbtree_mut;
 
     bool *input_needed; // memmerge-input needed
@@ -56,13 +51,15 @@ struct logtable_mergedata
     
 };
 
+#include "logstore.h"            // XXX hacky include workaround.
+#include "logiterators.h"
+
 
 class merge_scheduler
 {
     std::vector<std::pair<logtable *, logtable_mergedata*> > mergedata; 
 
 public:
-    //static pageid_t C0_MEM_SIZE; 
     ~merge_scheduler();
     
     int addlogtable(logtable * ltable);
