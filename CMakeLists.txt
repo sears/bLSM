@@ -21,6 +21,7 @@ INCLUDE(CTest)
 INCLUDE(CheckFunctionExists)
 INCLUDE(CheckCSourceCompiles)
 
+
 SET(CMAKE_REQUIRED_FLAGS "-lm -lstasis -lpthread")
 
 MACRO(CREATE_CHECK NAME)
@@ -37,7 +38,7 @@ ENDMACRO(CREATE_EXECUTABLE)
 MACRO(CREATE_CLIENT_EXECUTABLE NAME)
   ADD_EXECUTABLE(${NAME} ${NAME}.cpp)
   TARGET_LINK_LIBRARIES(${NAME} ${CLIENT_LIBRARIES})
-ENDMACRO(CREATE_EXECUTABLE)
+ENDMACRO(CREATE_CLIENT_EXECUTABLE NAME)
 
 
 # Output the config.h file
@@ -48,6 +49,11 @@ INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/../stasis/
 		    /usr/include)
 # set linker path for this and all subdirs
 LINK_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/../stasis/build/src/stasis ${CMAKE_CURRENT_BINARY_DIR})
+
+FIND_LIBRARY(HAVE_STASIS NAMES stasis PATHS ${CMAKE_CURRENT_SOURCE_DIR}/../stasis/build/src/stasis)
+if(NOT HAVE_STASIS)
+  message(STATUS "stasis not found; only building client library")
+endif(NOT HAVE_STASIS)
 
 SET(CLIENT_LIBRARIES logstore_client)
 
@@ -69,6 +75,8 @@ ENDIF ( "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" )
 
 #CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 
-ADD_LIBRARY(logstore logserver.cpp logstore.cpp diskTreeComponent.cpp logiterators.cpp datapage.cpp merger.cpp tuplemerger.cpp)
+IF ( HAVE_STASIS )
+  ADD_LIBRARY(logstore logserver.cpp logstore.cpp diskTreeComponent.cpp logiterators.cpp datapage.cpp merger.cpp tuplemerger.cpp)
+  CREATE_EXECUTABLE(server)
+ENDIF ( HAVE_STASIS )
 ADD_LIBRARY(logstore_client tcpclient.cpp)
-CREATE_EXECUTABLE(server)
