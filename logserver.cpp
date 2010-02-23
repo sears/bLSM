@@ -16,6 +16,10 @@
 
 #include <stasis/operations/regions.h>
 
+#include <unistd.h>
+#include <fcntl.h>
+
+
 #undef begin
 #undef end
 #undef try
@@ -31,6 +35,13 @@ void logserver::startserver(logtable *ltable)
     selcond = new pthread_cond_t;
     pthread_cond_init(selcond, 0);
     
+    self_pipe = (int*)malloc(2 * sizeof(int));
+    pipe(self_pipe);
+
+    fcntl(self_pipe[0], F_SETFL, O_NONBLOCK);
+    fcntl(self_pipe[1], F_SETFL, O_NONBLOCK);
+
+
     //initialize threads
     for(size_t i=0; i<nthreads; i++)
     {
@@ -53,6 +64,7 @@ void logserver::startserver(logtable *ltable)
         worker_data->qlock = qlock;
 
         worker_data->selcond = selcond;
+        worker_data->self_pipe = self_pipe;
         
         worker_data->th_cond = new pthread_cond_t;
         pthread_cond_init(worker_data->th_cond,0);
@@ -79,6 +91,7 @@ void logserver::startserver(logtable *ltable)
     sdata->idleth_queue = &idleth_queue;
     sdata->ready_queue = &ready_queue;
     sdata->selcond = selcond;
+    sdata->self_pipe = self_pipe;
     sdata->qlock = qlock;
     
     pthread_create(&server_thread, 0, serverLoop, sdata);
@@ -161,6 +174,10 @@ void logserver::stopserver()
 
     th_list.clear();
 
+    close(self_pipe[0]);
+    close(self_pipe[1]);
+    free(self_pipe);
+
     #ifdef STATS_ENABLED
 
     printf("\n\nAggregated Stats:\n");
@@ -194,12 +211,15 @@ void logserver::eventLoop()
 {
 
     fd_set readfs;
-    std::vector<int> sel_list;
     
     int maxfd;
 
     struct timespec   ts;
+    std::vector<int> sel_list;
+    sel_list.push_back(self_pipe[0]);
          
+//    struct timeval no_timeout = { 0, 0 };
+
     while(true)
     {
         //clear readset
@@ -212,8 +232,10 @@ void logserver::eventLoop()
         //update select set
         pthread_mutex_lock(qlock);
 
-        if(sel_list.size() == 0)
+        assert(sel_list.size() != 0);  // self_pipe[0] should always be there.
+        if(sel_list.size() == 1)
         {
+			assert(sel_list[0] == self_pipe[0]);
             while(ready_queue.size() == 0)
                 pthread_cond_wait(selcond, qlock);
         }
@@ -237,7 +259,7 @@ void logserver::eventLoop()
         }
 
         //select events
-        int sel_res = select(maxfd+1, &readfs, NULL, NULL, NULL);// &Timeout);
+        int sel_res = select(maxfd+1, &readfs, NULL, NULL, NULL); //&no_timeout);// &Timeout);
 
         #ifdef STATS_ENABLED
         if(num_selcalls == 0)
@@ -251,32 +273,52 @@ void logserver::eventLoop()
         for(size_t i=0; i<sel_list.size(); i++ )
         {
             int currsock = sel_list[i];
-
+            DEBUG("processing request from currsock = %d\n", currsock);
             if (FD_ISSET(currsock, &readfs))
             {
+            	if(currsock == self_pipe[0]) {
+            		DEBUG("currsock = %d is self_pipe\n", currsock);
+            		char gunk;
+					int n;
+					while(1 == (n = read(self_pipe[0], &gunk, 1))) { }
+					if(n == -1) {
+						if(errno != EAGAIN) {
+							perror("Couldn't read self_pipe!");
+							abort();
+						}
+					} else {
+						assert(n == 1);
+					}
+            	} else {
+            		if(idleth_queue.size() > 0) //assign the job to an indle thread
+					{
+						DEBUG("push currsock = %d onto idleth\n", currsock);  fflush(stdout);
+						pthread_item idle_th = idleth_queue.front();
+						idleth_queue.pop();
 
-                if(idleth_queue.size() > 0) //assign the job to an indle thread
-                {
-                    pthread_item idle_th = idleth_queue.front();
-                    idleth_queue.pop();
-                    
-                    //wake up the thread to do work
-                    pthread_mutex_lock(idle_th.data->th_mut);
-                    //set the job of the idle thread
-		    assert(currsock != -1);
-                    *(idle_th.data->workitem) = currsock;
-                    pthread_cond_signal(idle_th.data->th_cond);
-                    pthread_mutex_unlock(idle_th.data->th_mut);
-                }
-                else
-                {
-                    //insert the given element to the work queue
-                    work_queue.push(currsock);                    
-                }
+						//wake up the thread to do work
+						pthread_mutex_lock(idle_th.data->th_mut);
+						//set the job of the idle thread
+						assert(currsock != -1);
+						*(idle_th.data->workitem) = currsock;
+						pthread_cond_signal(idle_th.data->th_cond);
+						pthread_mutex_unlock(idle_th.data->th_mut);
+					}
+					else
+					{
+						DEBUG("push currsock = %d onto workqueue\n", currsock); fflush(stdout);
+						//insert the given element to the work queue
+						work_queue.push(currsock);
+					}
+            	}
                 
                 //remove from the sel_list
-                sel_list.erase(sel_list.begin()+i);
-                i--;                
+            	if(currsock != self_pipe[0]) {
+            		sel_list.erase(sel_list.begin()+i);
+            		i--;
+            	}
+            } else {
+            	DEBUG("not set\n");
             }
         }
 
@@ -365,38 +407,190 @@ void *serverLoop(void *args)
 
    /*     if(sdata->ready_queue->size() == 1) //signal the event loop
             pthread_cond_signal(sdata->selcond);
-        else */ if(sdata->ready_queue->size()) //in case multiple events were received in race.
-        	pthread_cond_broadcast(sdata->selcond);
+        else */ if(sdata->ready_queue->size() == 1) { // signal the event loop
+        	pthread_cond_signal(sdata->selcond);
+        	char gunk = 42;
+        	int ret;
+        	if(-1 == (ret = write(sdata->self_pipe[1], &gunk, 1))) {
+        		if(errno != EAGAIN) {
+        			perror("Couldn't write to pipe!");
+        			abort();
+        		}
+        	} else {
+        		assert(ret == 1);
+        	}
+        }
         pthread_mutex_unlock(sdata->qlock);
     }
 }
 
-static void network_disconnect(pthread_item * item, bool iserror) {
-    pthread_mutex_lock(item->data->qlock);
-    if(iserror) {
-    	printf("network error. conn closed. (%d, %d, %d)\n",
-    		   errno, *(item->data->workitem), item->data->work_queue->size());
-    } else {
-    	printf("client done. conn closed. (%d, %d)\n",
-			   *(item->data->workitem), item->data->work_queue->size());
-    }
-	close(*(item->data->workitem));
-
-    if(item->data->work_queue->size() > 0)
+int dispatch_request(network_op_t opcode, datatuple * tuple, datatuple * tuple2, pthread_data* data) {
+	int err = 0;
+	if(opcode == OP_INSERT)
     {
-        int new_work = item->data->work_queue->front();
-        item->data->work_queue->pop();
-        *(item->data->workitem) = new_work;
+        //insert/update/delete
+        data->ltable->insertTuple(tuple);
+        //step 4: send response
+        err = writeoptosocket(*(data->workitem), LOGSTORE_RESPONSE_SUCCESS);
     }
-    else
+    else if(opcode == OP_FIND)
     {
-        //set work to -1
-        *(item->data->workitem) = -1;
-        //add self to idle queue
-        item->data->idleth_queue->push(*item);
-    }
+        //find the tuple
+        datatuple *dt = data->ltable->findTuple(-1, tuple->key(), tuple->keylen());
 
-    pthread_mutex_unlock(item->data->qlock);
+        #ifdef STATS_ENABLED
+
+        if(dt == 0) {
+            DEBUG("key not found:\t%s\n", datatuple::key_to_str(tuple.key()).c_str());
+        } else if( dt->datalen() != 1024) {
+            DEBUG("data len for\t%s:\t%d\n", datatuple::key_to_str(tuple.key()).c_str(),
+                   dt->datalen);
+            if(datatuple::compare(tuple->key(), tuple->keylen(), dt->key(), dt->keylen()) != 0) {
+                DEBUG("key not equal:\t%s\t%s\n", datatuple::key_to_str(tuple.key()).c_str(),
+                       datatuple::key_to_str(dt->key).c_str());
+            }
+
+        }
+        #endif
+
+        bool dt_needs_free;
+        if(dt == 0)  //tuple does not exist.
+        {
+        	dt = tuple;
+        	dt->setDelete();
+        	dt_needs_free = false;
+        } else {
+        	dt_needs_free = true;
+        }
+        DEBUG(stderr, "find result: %s\n", dt->isDelete() ? "not found" : "found");
+        //send the reply code
+        int err = writeoptosocket(*(data->workitem), LOGSTORE_RESPONSE_SENDING_TUPLES);
+        if(!err) {
+			//send the tuple
+			err = writetupletosocket(*(data->workitem), dt);
+        }
+        if(!err) {
+        	writeendofiteratortosocket(*(data->workitem));
+        }
+        //free datatuple
+        if(dt_needs_free) {
+        	datatuple::freetuple(dt);
+        }
+    }
+    else if(opcode == OP_SCAN)
+    {
+    	size_t limit = -1;
+    	size_t count = 0;
+    	if(!err) {  limit = readcountfromsocket(*(data->workitem), &err);     }
+        if(!err) {  err = writeoptosocket(*(data->workitem), LOGSTORE_RESPONSE_SENDING_TUPLES); }
+
+        if(!err) {
+    		logtableIterator<datatuple> * itr = new logtableIterator<datatuple>(data->ltable, tuple);
+    		datatuple * t;
+    		while(!err && (t = itr->getnext())) {
+    			if(tuple2) {  // are we at the end of range?
+    				if(datatuple::compare_obj(t, tuple2) >= 0) {
+    					datatuple::freetuple(t);
+    					break;
+    				}
+    			}
+    			err = writetupletosocket(*(data->workitem), t);
+				datatuple::freetuple(t);
+				count ++;
+				if(count == limit) { break; }  // did we hit limit?
+			}
+    		delete itr;
+    	}
+		if(!err) { writeendofiteratortosocket(*(data->workitem)); }
+    }
+    else if(opcode == OP_DBG_BLOCKMAP)
+    {
+    	// produce a list of stasis regions
+    	int xid = Tbegin();
+
+    	readlock(data->ltable->header_lock, 0);
+
+    	// produce a list of regions used by current tree components
+    	pageid_t datapage_c1_region_length, datapage_c1_mergeable_region_length = 0, datapage_c2_region_length;
+    	pageid_t datapage_c1_region_count,  datapage_c1_mergeable_region_count = 0, datapage_c2_region_count;
+    	pageid_t * datapage_c1_regions = data->ltable->get_tree_c1()->get_alloc()->list_regions(xid, &datapage_c1_region_length, &datapage_c1_region_count);
+    	pageid_t * datapage_c1_mergeable_regions = NULL;
+	if(data->ltable->get_tree_c1_mergeable()) {
+	  datapage_c1_mergeable_regions = data->ltable->get_tree_c1_mergeable()->get_alloc()->list_regions(xid, &datapage_c1_mergeable_region_length, &datapage_c1_mergeable_region_count);
+	}
+    	pageid_t * datapage_c2_regions = data->ltable->get_tree_c2()->get_alloc()->list_regions(xid, &datapage_c2_region_length, &datapage_c2_region_count);
+
+    	pageid_t tree_c1_region_length, tree_c1_mergeable_region_length = 0, tree_c2_region_length;
+    	pageid_t tree_c1_region_count,  tree_c1_mergeable_region_count = 0, tree_c2_region_count;
+
+    	recordid tree_c1_region_header = data->ltable->get_tree_c1()->get_tree_state();
+    	recordid tree_c2_region_header = data->ltable->get_tree_c2()->get_tree_state();
+
+    	pageid_t * tree_c1_regions = diskTreeComponent::list_region_rid(xid, &tree_c1_region_header, &tree_c1_region_length, &tree_c1_region_count);
+    	pageid_t * tree_c1_mergeable_regions = NULL;
+	if(data->ltable->get_tree_c1_mergeable()) {
+	  recordid tree_c1_mergeable_region_header = data->ltable->get_tree_c1_mergeable()->get_tree_state();
+	  tree_c1_mergeable_regions = diskTreeComponent::list_region_rid(xid, &tree_c1_mergeable_region_header, &tree_c1_mergeable_region_length, &tree_c1_mergeable_region_count);
+	}
+    	pageid_t * tree_c2_regions = diskTreeComponent::list_region_rid(xid, &tree_c2_region_header, &tree_c2_region_length, &tree_c2_region_count);
+    	unlock(data->ltable->header_lock);
+
+    	Tcommit(xid);
+
+    	printf("C1 Datapage Regions (each is %lld pages long):\n", datapage_c1_region_length);
+    	for(pageid_t i = 0; i < datapage_c1_region_count; i++) {
+    		printf("%lld ", datapage_c1_regions[i]);
+    	}
+
+    	printf("\nC1 Internal Node Regions (each is %lld pages long):\n", tree_c1_region_length);
+    	for(pageid_t i = 0; i < tree_c1_region_count; i++) {
+    		printf("%lld ", tree_c1_regions[i]);
+    	}
+
+    	printf("\nC2 Datapage Regions (each is %lld pages long):\n", datapage_c2_region_length);
+    	for(pageid_t i = 0; i < datapage_c2_region_count; i++) {
+    		printf("%lld ", datapage_c2_regions[i]);
+    	}
+
+    	printf("\nC2 Internal Node Regions (each is %lld pages long):\n", tree_c2_region_length);
+    	for(pageid_t i = 0; i < tree_c2_region_count; i++) {
+    		printf("%lld ", tree_c2_regions[i]);
+    	}
+    	printf("\nStasis Region Map\n");
+
+    	boundary_tag tag;
+    	pageid_t pid = ROOT_RECORD.page;
+    	TregionReadBoundaryTag(xid, pid, &tag);
+	pageid_t max_off = 0;
+    	bool done;
+    	do {
+	  max_off = pid + tag.size;
+    		// print tag.
+    		printf("\tPage %lld\tSize %lld\tAllocationManager %d\n", (long long)pid, (long long)tag.size, (int)tag.allocation_manager);
+    		done = ! TregionNextBoundaryTag(xid, &pid, &tag, 0/*all allocation managers*/);
+    	} while(!done);
+
+    	printf("\n");
+
+        printf("Tree components are using %lld megabytes.  File is using %lld megabytes.",
+	       PAGE_SIZE * (tree_c1_region_length * tree_c1_region_count
+			    + tree_c1_mergeable_region_length * tree_c1_mergeable_region_count
+			    + tree_c2_region_length * tree_c2_region_count
+			    + datapage_c1_region_length * datapage_c1_region_count
+			    + datapage_c1_mergeable_region_length * datapage_c1_mergeable_region_count
+			    + datapage_c2_region_length * datapage_c2_region_count) / (1024 * 1024),
+	       (PAGE_SIZE * max_off) / (1024*1024));
+
+    	free(datapage_c1_regions);
+	if(datapage_c1_mergeable_regions) free(datapage_c1_mergeable_regions);
+    	free(datapage_c2_regions);
+    	free(tree_c1_regions);
+	if(tree_c1_mergeable_regions) free(tree_c1_mergeable_regions);
+    	free(tree_c2_regions);
+        err = writeoptosocket(*(data->workitem), LOGSTORE_RESPONSE_SUCCESS);
+
+    }
+    return err;
 }
 
 void * thread_work_fn( void * args)
@@ -432,242 +626,101 @@ void * thread_work_fn( void * args)
         	printf("Obsolescent client closed connection uncleanly\n");
         }
 
-        if( opcode == OP_DONE || (opiserror(opcode))) //close the conn on failure
-        {
-        	network_disconnect(item, opiserror(opcode));
-        	continue;
-        }
+        int err = opcode == OP_DONE || opiserror(opcode); //close the conn on failure
 
-        int err = 0;
-        
         //step 2: read the first tuple from client
-        datatuple *tuple, *tuple2;
+        datatuple *tuple = 0, *tuple2 = 0;
         if(!err) { tuple  = readtuplefromsocket(*(item->data->workitem), &err); }
         //        read the second tuple from client
         if(!err) { tuple2 = readtuplefromsocket(*(item->data->workitem), &err); }
         //step 3: process the tuple
 
-	if(tuple) {
-	  printf("Tuple req = %d key = >%s<\n", opcode, tuple->key());
-	}
+//		if(tuple) {
+//		  printf("Tuple req = %d key = >%s<\n", opcode, tuple->key());
+//		}
 
-        if(opcode == OP_INSERT)
-        {
-            //insert/update/delete
-            item->data->ltable->insertTuple(tuple);
-            //step 4: send response
-            err = writeoptosocket(*(item->data->workitem), LOGSTORE_RESPONSE_SUCCESS);
-        }
-        else if(opcode == OP_FIND)
-        {
-            //find the tuple
-            datatuple *dt = item->data->ltable->findTuple(-1, tuple->key(), tuple->keylen());
-
-            #ifdef STATS_ENABLED
-
-            if(dt == 0) {
-                DEBUG("key not found:\t%s\n", datatuple::key_to_str(tuple.key()).c_str());
-            } else if( dt->datalen() != 1024) {
-                DEBUG("data len for\t%s:\t%d\n", datatuple::key_to_str(tuple.key()).c_str(),
-                       dt->datalen);
-                if(datatuple::compare(tuple->key(), tuple->keylen(), dt->key(), dt->keylen()) != 0) {
-                    DEBUG("key not equal:\t%s\t%s\n", datatuple::key_to_str(tuple.key()).c_str(),
-                           datatuple::key_to_str(dt->key).c_str());
-                }
-
-            }
-            #endif
-            
-            bool dt_needs_free;
-            if(dt == 0)  //tuple does not exist.
-            {
-            	dt = tuple;
-            	dt->setDelete();
-            	dt_needs_free = false;
-            } else {
-            	dt_needs_free = true;
-            }
-	    fprintf(stderr, "find result: %s\n", dt->isDelete() ? "not found" : "found");
-            //send the reply code
-            int err = writeoptosocket(*(item->data->workitem), LOGSTORE_RESPONSE_SENDING_TUPLES);
-            if(!err) {
-				//send the tuple
-				err = writetupletosocket(*(item->data->workitem), dt);
-            }
-            if(!err) {
-            	writeendofiteratortosocket(*(item->data->workitem));
-            }
-            //free datatuple
-            if(dt_needs_free) {
-            	datatuple::freetuple(dt);
-            }
-        }
-        else if(opcode == OP_SCAN)
-        {
-        	size_t limit = -1;
-        	size_t count = 0;
-        	if(!err) {  limit = readcountfromsocket(*(item->data->workitem), &err);     }
-            if(!err) {  err = writeoptosocket(*(item->data->workitem), LOGSTORE_RESPONSE_SENDING_TUPLES); }
-
-            if(!err) {
-        		logtableIterator<datatuple> * itr = new logtableIterator<datatuple>(item->data->ltable, tuple);
-        		datatuple * t;
-        		while(!err && (t = itr->getnext())) {
-        			if(tuple2) {  // are we at the end of range?
-        				if(datatuple::compare_obj(t, tuple2) >= 0) {
-        					datatuple::freetuple(t);
-        					break;
-        				}
-        			}
-        			err = writetupletosocket(*(item->data->workitem), t);
-					datatuple::freetuple(t);
-					count ++;
-					if(count == limit) { break; }  // did we hit limit?
-				}
-        		delete itr;
-        	}
-    		if(!err) { writeendofiteratortosocket(*(item->data->workitem)); }
-        }
-        else if(opcode == OP_DBG_BLOCKMAP)
-        {
-        	// produce a list of stasis regions
-        	int xid = Tbegin();
-
-        	readlock(item->data->ltable->header_lock, 0);
-
-        	// produce a list of regions used by current tree components
-        	pageid_t datapage_c1_region_length, datapage_c1_mergeable_region_length = 0, datapage_c2_region_length;
-        	pageid_t datapage_c1_region_count,  datapage_c1_mergeable_region_count = 0, datapage_c2_region_count;
-        	pageid_t * datapage_c1_regions = item->data->ltable->get_tree_c1()->get_alloc()->list_regions(xid, &datapage_c1_region_length, &datapage_c1_region_count);
-        	pageid_t * datapage_c1_mergeable_regions = NULL;
-		if(item->data->ltable->get_tree_c1_mergeable()) {
-		  datapage_c1_mergeable_regions = item->data->ltable->get_tree_c1_mergeable()->get_alloc()->list_regions(xid, &datapage_c1_mergeable_region_length, &datapage_c1_mergeable_region_count);
-		}
-        	pageid_t * datapage_c2_regions = item->data->ltable->get_tree_c2()->get_alloc()->list_regions(xid, &datapage_c2_region_length, &datapage_c2_region_count);
-
-        	pageid_t tree_c1_region_length, tree_c1_mergeable_region_length = 0, tree_c2_region_length;
-        	pageid_t tree_c1_region_count,  tree_c1_mergeable_region_count = 0, tree_c2_region_count;
-
-        	recordid tree_c1_region_header = item->data->ltable->get_tree_c1()->get_tree_state();
-        	recordid tree_c2_region_header = item->data->ltable->get_tree_c2()->get_tree_state();
-
-        	pageid_t * tree_c1_regions = diskTreeComponent::list_region_rid(xid, &tree_c1_region_header, &tree_c1_region_length, &tree_c1_region_count);
-        	pageid_t * tree_c1_mergeable_regions = NULL;
-		if(item->data->ltable->get_tree_c1_mergeable()) {
-		  recordid tree_c1_mergeable_region_header = item->data->ltable->get_tree_c1_mergeable()->get_tree_state();
-		  tree_c1_mergeable_regions = diskTreeComponent::list_region_rid(xid, &tree_c1_mergeable_region_header, &tree_c1_mergeable_region_length, &tree_c1_mergeable_region_count);
-		}
-        	pageid_t * tree_c2_regions = diskTreeComponent::list_region_rid(xid, &tree_c2_region_header, &tree_c2_region_length, &tree_c2_region_count);
-        	unlock(item->data->ltable->header_lock);
-
-        	Tcommit(xid);
-
-        	printf("C1 Datapage Regions (each is %lld pages long):\n", datapage_c1_region_length);
-        	for(pageid_t i = 0; i < datapage_c1_region_count; i++) {
-        		printf("%lld ", datapage_c1_regions[i]);
-        	}
-
-        	printf("\nC1 Internal Node Regions (each is %lld pages long):\n", tree_c1_region_length);
-        	for(pageid_t i = 0; i < tree_c1_region_count; i++) {
-        		printf("%lld ", tree_c1_regions[i]);
-        	}
-
-        	printf("\nC2 Datapage Regions (each is %lld pages long):\n", datapage_c2_region_length);
-        	for(pageid_t i = 0; i < datapage_c2_region_count; i++) {
-        		printf("%lld ", datapage_c2_regions[i]);
-        	}
-
-        	printf("\nC2 Internal Node Regions (each is %lld pages long):\n", tree_c2_region_length);
-        	for(pageid_t i = 0; i < tree_c2_region_count; i++) {
-        		printf("%lld ", tree_c2_regions[i]);
-        	}
-        	printf("\nStasis Region Map\n");
-
-        	boundary_tag tag;
-        	pageid_t pid = ROOT_RECORD.page;
-        	TregionReadBoundaryTag(xid, pid, &tag);
-		pageid_t max_off = 0;
-        	bool done;
-        	do {
-		  max_off = pid + tag.size;
-        		// print tag.
-        		printf("\tPage %lld\tSize %lld\tAllocationManager %d\n", (long long)pid, (long long)tag.size, (int)tag.allocation_manager);
-        		done = ! TregionNextBoundaryTag(xid, &pid, &tag, 0/*all allocation managers*/);
-        	} while(!done);
-
-        	printf("\n");
-
-	        printf("Tree components are using %lld megabytes.  File is using %lld megabytes.",
-		       PAGE_SIZE * (tree_c1_region_length * tree_c1_region_count
-				    + tree_c1_mergeable_region_length * tree_c1_mergeable_region_count
-				    + tree_c2_region_length * tree_c2_region_count
-				    + datapage_c1_region_length * datapage_c1_region_count
-				    + datapage_c1_mergeable_region_length * datapage_c1_mergeable_region_count
-				    + datapage_c2_region_length * datapage_c2_region_count) / (1024 * 1024),
-		       (PAGE_SIZE * max_off) / (1024*1024));
-
-        	free(datapage_c1_regions);
-		if(datapage_c1_mergeable_regions) free(datapage_c1_mergeable_regions);
-        	free(datapage_c2_regions);
-        	free(tree_c1_regions);
-		if(tree_c1_mergeable_regions) free(tree_c1_mergeable_regions);
-        	free(tree_c2_regions);
-            err = writeoptosocket(*(item->data->workitem), LOGSTORE_RESPONSE_SUCCESS);
-
-        }
+		if(!err) { err = dispatch_request(opcode, tuple, tuple2, item->data); }
 
         //free the tuple
         if(tuple)  datatuple::freetuple(tuple);
         if(tuple2) datatuple::freetuple(tuple2);
 
-        if(err) {
+		pthread_mutex_lock(item->data->qlock);
+
+		// Deal with old work_queue item by freeing it or putting it back in the queue.
+
+		if(err) {
 			perror("could not respond to client");
-			network_disconnect(item, true);
-			continue;
-		} else {
-			pthread_mutex_lock(item->data->qlock);
+
+		    if(true) { // XXX iserror) {
+		    	printf("network error. conn closed. (%d, %d, %d)\n",
+		    		   errno, *(item->data->workitem), item->data->work_queue->size());
+		    } else {
+		    	printf("client done. conn closed. (%d, %d)\n",
+					   *(item->data->workitem), item->data->work_queue->size());
+		    }
+			close(*(item->data->workitem));
+
+        } else {
 
 			//add conn desc to ready queue
 			item->data->ready_queue->push(*(item->data->workitem));
-			if(item->data->ready_queue->size() == 1) //signal the event loop
+
+			if(item->data->ready_queue->size() == 1) { //signal the event loop
 				pthread_cond_signal(item->data->selcond);
-
-			if(item->data->work_queue->size() > 0)
-			{
-				int new_work = item->data->work_queue->front();
-				item->data->work_queue->pop();
-				*(item->data->workitem) = new_work;
+				char gunk = 13;
+				int ret =write(item->data->self_pipe[1], &gunk, 1);
+				if(ret == -1) {
+					if(errno != EAGAIN) {
+						perror("Couldn't write to self_pipe!");
+						abort();
+					}
+				} else {
+					assert(ret == 1);
+				}
 			}
-			else
-			{
-				//set work to -1
-				*(item->data->workitem) = -1;
-				//add self to idle queue
-				item->data->idleth_queue->push(*item);
-			}
-			pthread_mutex_unlock(item->data->qlock);
-		}
-        #ifdef STATS_ENABLED
-        if( item->data->num_reqs == 0 )
-            item->data->work_time = 0;
-        gettimeofday(& (item->data->stop_tv), 0);
-        (item->data->num_reqs)++;
-        item->data->work_time += (item->data->stop_tv.tv_sec - item->data->start_tv.tv_sec) * 1000 +
-               (item->data->stop_tv.tv_usec / 1000 - item->data->start_tv.tv_usec / 1000);
-
-        int iopcode = opcode;
-        ostr << iopcode;
-        std::string clientkey = ostr.str();
-        if(item->data->num_reqsc.find(clientkey) == item->data->num_reqsc.end())
-        {
-            item->data->num_reqsc[clientkey]=0;
-            item->data->work_timec[clientkey]=0;
         }
-        
-        item->data->num_reqsc[clientkey]++;
-        item->data->work_timec[clientkey] += (item->data->stop_tv.tv_sec - item->data->start_tv.tv_sec) * 1000 +
-            (item->data->stop_tv.tv_usec / 1000 - item->data->start_tv.tv_usec / 1000);;        
-        #endif
+
+
+		if(item->data->work_queue->size() > 0)
+		{
+			int new_work = item->data->work_queue->front();
+			item->data->work_queue->pop();
+			*(item->data->workitem) = new_work;
+		}
+		else
+		{
+			//set work to -1
+			*(item->data->workitem) = -1;
+			//add self to idle queue
+			item->data->idleth_queue->push(*item);
+		}
+		pthread_mutex_unlock(item->data->qlock);
+
+		if(!err) {
+#ifdef STATS_ENABLED
+			if( item->data->num_reqs == 0 )
+				item->data->work_time = 0;
+			gettimeofday(& (item->data->stop_tv), 0);
+			(item->data->num_reqs)++;
+			item->data->work_time += (item->data->stop_tv.tv_sec - item->data->start_tv.tv_sec) * 1000 +
+				   (item->data->stop_tv.tv_usec / 1000 - item->data->start_tv.tv_usec / 1000);
+
+			int iopcode = opcode;
+			ostr << iopcode;
+			std::string clientkey = ostr.str();
+			if(item->data->num_reqsc.find(clientkey) == item->data->num_reqsc.end())
+			{
+				item->data->num_reqsc[clientkey]=0;
+				item->data->work_timec[clientkey]=0;
+			}
+
+			item->data->num_reqsc[clientkey]++;
+			item->data->work_timec[clientkey] += (item->data->stop_tv.tv_sec - item->data->start_tv.tv_sec) * 1000 +
+				(item->data->stop_tv.tv_usec / 1000 - item->data->start_tv.tv_usec / 1000);;
+#endif
+
+		}
     }
     pthread_mutex_unlock(item->data->th_mut);
 

@@ -32,6 +32,7 @@ struct pthread_data {
     pthread_mutex_t * qlock;
 
     pthread_cond_t *selcond;
+    int* self_pipe;
     
     pthread_cond_t * th_cond;
     pthread_mutex_t * th_mut;
@@ -64,6 +65,7 @@ struct serverth_data
     std::queue<int> *ready_queue;
 
     pthread_cond_t *selcond;
+    int * self_pipe;
 
     pthread_mutex_t *qlock;
 };
@@ -121,7 +123,7 @@ private:
     pthread_t server_thread;
     serverth_data *sdata;
     pthread_cond_t *selcond; //server loop cond
-    
+    int * self_pipe; // write a byte to self_pipe[1] to wake up select().
     std::vector<pthread_item *> th_list; // list of threads
 
     logtable *ltable;
