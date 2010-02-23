@@ -263,6 +263,7 @@ void logserver::eventLoop()
                     //wake up the thread to do work
                     pthread_mutex_lock(idle_th.data->th_mut);
                     //set the job of the idle thread
+		    assert(currsock != -1);
                     *(idle_th.data->workitem) = currsock;
                     pthread_cond_signal(idle_th.data->th_cond);
                     pthread_mutex_unlock(idle_th.data->th_mut);
@@ -362,9 +363,10 @@ void *serverLoop(void *args)
         //insert the given element to the ready queue
         sdata->ready_queue->push(newsockfd);
 
-        if(sdata->ready_queue->size() == 1) //signal the event loop
+   /*     if(sdata->ready_queue->size() == 1) //signal the event loop
             pthread_cond_signal(sdata->selcond);
-        
+        else */ if(sdata->ready_queue->size()) //in case multiple events were received in race.
+        	pthread_cond_broadcast(sdata->selcond);
         pthread_mutex_unlock(sdata->qlock);
     }
 }
@@ -445,6 +447,10 @@ void * thread_work_fn( void * args)
         if(!err) { tuple2 = readtuplefromsocket(*(item->data->workitem), &err); }
         //step 3: process the tuple
 
+	if(tuple) {
+	  printf("Tuple req = %d key = >%s<\n", opcode, tuple->key());
+	}
+
         if(opcode == OP_INSERT)
         {
             //insert/update/delete
@@ -464,7 +470,7 @@ void * thread_work_fn( void * args)
             } else if( dt->datalen() != 1024) {
                 DEBUG("data len for\t%s:\t%d\n", datatuple::key_to_str(tuple.key()).c_str(),
                        dt->datalen);
-                if(datatuple::compare(tuple->key(), dt->key()) != 0) {
+                if(datatuple::compare(tuple->key(), tuple->keylen(), dt->key(), dt->keylen()) != 0) {
                     DEBUG("key not equal:\t%s\t%s\n", datatuple::key_to_str(tuple.key()).c_str(),
                            datatuple::key_to_str(dt->key).c_str());
                 }
@@ -481,7 +487,7 @@ void * thread_work_fn( void * args)
             } else {
             	dt_needs_free = true;
             }
-
+	    fprintf(stderr, "find result: %s\n", dt->isDelete() ? "not found" : "found");
             //send the reply code
             int err = writeoptosocket(*(item->data->workitem), LOGSTORE_RESPONSE_SENDING_TUPLES);
             if(!err) {

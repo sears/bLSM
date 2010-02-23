@@ -726,7 +726,8 @@ recordid diskTreeComponent::lookup(int xid,
     for(int i = FIRST_SLOT+1; i < *stasis_page_slotted_numslots_ptr(node); i++)
     {
         rec = (const indexnode_rec*)readRecord(xid,node,i,0);
-        int cmpval = datatuple::compare((datatuple::key_t) (rec+1),(datatuple::key_t) key);
+        int cmpval = datatuple::compare((datatuple::key_t) (rec+1), *stasis_page_slotted_slot_length_ptr(node, i)-sizeof(*rec),
+					(datatuple::key_t) key, keySize);
         if(cmpval>0) //changed it from >
             break;
         match = i;
@@ -738,7 +739,7 @@ recordid diskTreeComponent::lookup(int xid,
         pageid_t child_id = ((const indexnode_rec*)readRecord(xid,node,match,0))->ptr;
         Page* child_page = loadPage(xid, child_id);
         readlock(child_page->rwlatch,0);
-        recordid ret = lookup(xid,child_page,depth-1,key,0);
+        recordid ret = lookup(xid,child_page,depth-1,key,keySize);
         unlock(child_page->rwlatch);
         releasePage(child_page);
         return ret;

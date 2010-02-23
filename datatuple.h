@@ -49,7 +49,7 @@ public:
 
     //this is used by the stl set
     bool operator() (const datatuple* lhs, const datatuple* rhs) const {
-		return compare(lhs->key(), rhs->key()) < 0; //strcmp((char*)lhs.key(),(char*)rhs.key()) < 0;
+		return compare(lhs->key(), lhs->keylen(), rhs->key(), rhs->keylen()) < 0; //strcmp((char*)lhs.key(),(char*)rhs.key()) < 0;
 	}
 
     /**
@@ -57,14 +57,27 @@ public:
      * 0 if k1 == k2
      * 1 of k1 > k2
     **/
-    static int compare(const byte* k1,const byte* k2) {
-		// XXX string comparison is probably not the right approach.
-		//for char* ending with \0
-		return strcmp((char*)k1,(char*)k2);
+    static int compare(const byte* k1,size_t k1l, const byte* k2, size_t k2l) {
+		// This function handles ASCII and UTF-8 correctly.
+    	// It also handles a Sherpa LSM-Tree specific encoding, where multiple utf-8 strings
+    	// are concatenated with \254., and the \254 is replaced with a \255 for 'max value in range'.
+
+    	size_t min_l = k1l < k2l ? k1l : k2l;
+
+    	int ret = memcmp(k1,k2, min_l);
+    	if(ret)        return ret;
+    	if(k1l < k2l)  return -1;
+    	if(k1l == k2l) return 0;
+    	return 1;
+
+		//for testing with char* ending with \0
+    	/*assert(strlen((char*)k1) == k1l - 1);
+		  assert(strlen((char*)k2) == k2l - 1);
+	      return strcmp((char*)k1,(char*)k2); */
 	}
 
     static int compare_obj(const datatuple * a, const datatuple* b) {
-    	return compare(a->key(), b->key());
+    	return compare(a->key(), a->keylen(), b->key(), b->keylen());
     }
 
     inline void setDelete() {

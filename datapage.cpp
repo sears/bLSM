@@ -276,7 +276,7 @@ bool DataPage<TUPLE>::recordRead(typename TUPLE::key_t key, size_t keySize,  TUP
     int match = -1;
     while((*buf=itr.getnext()) != 0)
         {
-            match = TUPLE::compare((*buf)->key(), key);
+	  match = TUPLE::compare((*buf)->key(), (*buf)->keylen(), key, keySize);
             
             if(match<0) //keep searching
             {

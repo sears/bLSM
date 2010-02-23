@@ -488,7 +488,7 @@ int64_t merge_iterators(int xid,
         DEBUG("tuple\t%lld: keylen %d datalen %d\n",
                ntuples, *(t2->keylen),*(t2->datalen) );        
 
-        while(t1 != 0 && datatuple::compare(t1->key(), t2->key()) < 0) // t1 is less than t2
+        while(t1 != 0 && datatuple::compare(t1->key(), t1->keylen(), t2->key(), t2->keylen()) < 0) // t1 is less than t2
         {
             //insert t1
             dp = insertTuple(xid, dp, t1, ltable, scratch_tree,
@@ -500,7 +500,7 @@ int64_t merge_iterators(int xid,
             t1 = itrA->getnext();
         }
 
-        if(t1 != 0 && datatuple::compare(t1->key(), t2->key()) == 0)
+        if(t1 != 0 && datatuple::compare(t1->key(), t1->keylen(), t2->key(), t2->keylen()) == 0)
         {
             datatuple *mtuple = ltable->gettuplemerger()->merge(t1,t2);
             
