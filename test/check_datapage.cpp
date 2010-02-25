@@ -73,7 +73,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
             dpages++;
             if(dp)
                 delete dp;
-	    
+
             dp = new DataPage<datatuple>(xid, pcount, alloc);
 
 			bool succ = dp->append(newtuple);
@@ -81,8 +81,9 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
             dsp.push_back(dp->get_start_pid());
         }
-        
-        
+    }
+    if(dp) {
+      delete dp;
     }
 
     printf("Total data set length: %lld\n", (long long)datasize);
