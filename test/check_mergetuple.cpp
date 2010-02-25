@@ -112,13 +112,12 @@ void insertProbeIter(size_t NUM_ENTRIES)
     recordid table_root = ltable.allocTable(xid);
 
     Tcommit(xid);
-    
-    xid = Tbegin();
-
+    writelock(ltable.header_lock,0);
     int lindex = mscheduler.addlogtable(&ltable);
     ltable.setMergeData(mscheduler.getMergeData(lindex));
-    
+
     mscheduler.startlogtable(lindex);
+    unlock(ltable.header_lock);
 
     printf("Stage 1: Writing %d keys\n", NUM_ENTRIES);
     
@@ -197,7 +196,6 @@ void insertProbeIter(size_t NUM_ENTRIES)
     printf("\nTREE STRUCTURE\n");
     printf("datasize: %lld\n", datasize);
 
-    Tcommit(xid);
     xid = Tbegin();
 
 
