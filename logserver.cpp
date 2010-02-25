@@ -424,171 +424,216 @@ void *serverLoop(void *args)
     }
 }
 
+int op_insert(pthread_data* data, datatuple * tuple) {
+    //insert/update/delete
+    data->ltable->insertTuple(tuple);
+    //step 4: send response
+    return writeoptosocket(*(data->workitem), LOGSTORE_RESPONSE_SUCCESS);
+}
+int op_find(pthread_data* data, datatuple * tuple) {
+    //find the tuple
+    datatuple *dt = data->ltable->findTuple(-1, tuple->key(), tuple->keylen());
+
+    #ifdef STATS_ENABLED
+
+    if(dt == 0) {
+        DEBUG("key not found:\t%s\n", datatuple::key_to_str(tuple.key()).c_str());
+    } else if( dt->datalen() != 1024) {
+        DEBUG("data len for\t%s:\t%d\n", datatuple::key_to_str(tuple.key()).c_str(),
+               dt->datalen);
+        if(datatuple::compare(tuple->key(), tuple->keylen(), dt->key(), dt->keylen()) != 0) {
+            DEBUG("key not equal:\t%s\t%s\n", datatuple::key_to_str(tuple.key()).c_str(),
+                   datatuple::key_to_str(dt->key).c_str());
+        }
+
+    }
+    #endif
+
+    bool dt_needs_free;
+    if(dt == 0)  //tuple does not exist.
+    {
+    	dt = tuple;
+    	dt->setDelete();
+    	dt_needs_free = false;
+    } else {
+    	dt_needs_free = true;
+    }
+    DEBUG(stderr, "find result: %s\n", dt->isDelete() ? "not found" : "found");
+    //send the reply code
+    int err = writeoptosocket(*(data->workitem), LOGSTORE_RESPONSE_SENDING_TUPLES);
+    if(!err) {
+		//send the tuple
+		err = writetupletosocket(*(data->workitem), dt);
+    }
+    if(!err) {
+    	writeendofiteratortosocket(*(data->workitem));
+    }
+    //free datatuple
+    if(dt_needs_free) {
+    	datatuple::freetuple(dt);
+    }
+    return err;
+}
+int op_scan(pthread_data *data, datatuple * tuple, datatuple * tuple2, size_t limit) {
+	size_t count = 0;
+    int err = writeoptosocket(*(data->workitem), LOGSTORE_RESPONSE_SENDING_TUPLES);
+
+    if(!err) {
+		logtableIterator<datatuple> * itr = new logtableIterator<datatuple>(data->ltable, tuple);
+		datatuple * t;
+		while(!err && (t = itr->getnext())) {
+			if(tuple2) {  // are we at the end of range?
+				if(datatuple::compare_obj(t, tuple2) >= 0) {
+					datatuple::freetuple(t);
+					break;
+				}
+			}
+			err = writetupletosocket(*(data->workitem), t);
+			datatuple::freetuple(t);
+			count ++;
+			if(count == limit) { break; }  // did we hit limit?
+		}
+		delete itr;
+	}
+	if(!err) { writeendofiteratortosocket(*(data->workitem)); }
+	return err;
+}
+
+int op_dbg_blockmap(pthread_data* data) {
+	// produce a list of stasis regions
+	int xid = Tbegin();
+
+	readlock(data->ltable->header_lock, 0);
+
+	// produce a list of regions used by current tree components
+	pageid_t datapage_c1_region_length, datapage_c1_mergeable_region_length = 0, datapage_c2_region_length;
+	pageid_t datapage_c1_region_count,  datapage_c1_mergeable_region_count = 0, datapage_c2_region_count;
+	pageid_t * datapage_c1_regions = data->ltable->get_tree_c1()->get_alloc()->list_regions(xid, &datapage_c1_region_length, &datapage_c1_region_count);
+	pageid_t * datapage_c1_mergeable_regions = NULL;
+if(data->ltable->get_tree_c1_mergeable()) {
+  datapage_c1_mergeable_regions = data->ltable->get_tree_c1_mergeable()->get_alloc()->list_regions(xid, &datapage_c1_mergeable_region_length, &datapage_c1_mergeable_region_count);
+}
+	pageid_t * datapage_c2_regions = data->ltable->get_tree_c2()->get_alloc()->list_regions(xid, &datapage_c2_region_length, &datapage_c2_region_count);
+
+	pageid_t tree_c1_region_length, tree_c1_mergeable_region_length = 0, tree_c2_region_length;
+	pageid_t tree_c1_region_count,  tree_c1_mergeable_region_count = 0, tree_c2_region_count;
+
+	recordid tree_c1_region_header = data->ltable->get_tree_c1()->get_tree_state();
+	recordid tree_c2_region_header = data->ltable->get_tree_c2()->get_tree_state();
+
+	pageid_t * tree_c1_regions = diskTreeComponent::list_region_rid(xid, &tree_c1_region_header, &tree_c1_region_length, &tree_c1_region_count);
+	pageid_t * tree_c1_mergeable_regions = NULL;
+if(data->ltable->get_tree_c1_mergeable()) {
+  recordid tree_c1_mergeable_region_header = data->ltable->get_tree_c1_mergeable()->get_tree_state();
+  tree_c1_mergeable_regions = diskTreeComponent::list_region_rid(xid, &tree_c1_mergeable_region_header, &tree_c1_mergeable_region_length, &tree_c1_mergeable_region_count);
+}
+	pageid_t * tree_c2_regions = diskTreeComponent::list_region_rid(xid, &tree_c2_region_header, &tree_c2_region_length, &tree_c2_region_count);
+	unlock(data->ltable->header_lock);
+
+	Tcommit(xid);
+
+	printf("C1 Datapage Regions (each is %lld pages long):\n", datapage_c1_region_length);
+	for(pageid_t i = 0; i < datapage_c1_region_count; i++) {
+		printf("%lld ", datapage_c1_regions[i]);
+	}
+
+	printf("\nC1 Internal Node Regions (each is %lld pages long):\n", tree_c1_region_length);
+	for(pageid_t i = 0; i < tree_c1_region_count; i++) {
+		printf("%lld ", tree_c1_regions[i]);
+	}
+
+	printf("\nC2 Datapage Regions (each is %lld pages long):\n", datapage_c2_region_length);
+	for(pageid_t i = 0; i < datapage_c2_region_count; i++) {
+		printf("%lld ", datapage_c2_regions[i]);
+	}
+
+	printf("\nC2 Internal Node Regions (each is %lld pages long):\n", tree_c2_region_length);
+	for(pageid_t i = 0; i < tree_c2_region_count; i++) {
+		printf("%lld ", tree_c2_regions[i]);
+	}
+	printf("\nStasis Region Map\n");
+
+	boundary_tag tag;
+	pageid_t pid = ROOT_RECORD.page;
+	TregionReadBoundaryTag(xid, pid, &tag);
+	pageid_t max_off = 0;
+	bool done;
+	do {
+		max_off = pid + tag.size;
+		// print tag.
+		printf("\tPage %lld\tSize %lld\tAllocationManager %d\n", (long long)pid, (long long)tag.size, (int)tag.allocation_manager);
+		done = ! TregionNextBoundaryTag(xid, &pid, &tag, 0/*all allocation managers*/);
+	} while(!done);
+
+	printf("\n");
+
+    printf("Tree components are using %lld megabytes.  File is using %lld megabytes.",
+       PAGE_SIZE * (tree_c1_region_length * tree_c1_region_count
+		    + tree_c1_mergeable_region_length * tree_c1_mergeable_region_count
+		    + tree_c2_region_length * tree_c2_region_count
+		    + datapage_c1_region_length * datapage_c1_region_count
+		    + datapage_c1_mergeable_region_length * datapage_c1_mergeable_region_count
+		    + datapage_c2_region_length * datapage_c2_region_count) / (1024 * 1024),
+       (PAGE_SIZE * max_off) / (1024*1024));
+
+	free(datapage_c1_regions);
+	if(datapage_c1_mergeable_regions) free(datapage_c1_mergeable_regions);
+	free(datapage_c2_regions);
+	free(tree_c1_regions);
+	if(tree_c1_mergeable_regions) free(tree_c1_mergeable_regions);
+	free(tree_c2_regions);
+    return writeoptosocket(*(data->workitem), LOGSTORE_RESPONSE_SUCCESS);
+}
+
+int op_dbg_drop_database(pthread_data * data) {
+	logtableIterator<datatuple> * itr = new logtableIterator<datatuple>(data->ltable);
+	datatuple * del;
+	fprintf(stderr, "DROPPING DATABASE...\n");
+	long long n = 0;
+	while((del = itr->getnext())) {
+	  if(!del->isDelete()) {
+	    del->setDelete();
+	    data->ltable->insertTuple(del);
+	    n++;
+	    if(!(n % 1000)) {
+	      printf("X %lld %s\n", n, (char*)del->key()); fflush(stdout);
+	    }
+	  } else {
+	    n++;
+	    if(!(n % 1000)) {
+	      printf("? %lld %s\n", n, (char*)del->key()); fflush(stdout);
+	    }
+	  }
+	  datatuple::freetuple(del);
+	}
+	delete itr;
+	fprintf(stderr, "...DROP DATABASE COMPLETE\n");
+	return writeoptosocket(*(data->workitem), LOGSTORE_RESPONSE_SUCCESS);
+}
+
 int dispatch_request(network_op_t opcode, datatuple * tuple, datatuple * tuple2, pthread_data* data) {
 	int err = 0;
 	if(opcode == OP_INSERT)
     {
-        //insert/update/delete
-        data->ltable->insertTuple(tuple);
-        //step 4: send response
-        err = writeoptosocket(*(data->workitem), LOGSTORE_RESPONSE_SUCCESS);
+		err = op_insert(data, tuple);
     }
     else if(opcode == OP_FIND)
     {
-        //find the tuple
-        datatuple *dt = data->ltable->findTuple(-1, tuple->key(), tuple->keylen());
-
-        #ifdef STATS_ENABLED
-
-        if(dt == 0) {
-            DEBUG("key not found:\t%s\n", datatuple::key_to_str(tuple.key()).c_str());
-        } else if( dt->datalen() != 1024) {
-            DEBUG("data len for\t%s:\t%d\n", datatuple::key_to_str(tuple.key()).c_str(),
-                   dt->datalen);
-            if(datatuple::compare(tuple->key(), tuple->keylen(), dt->key(), dt->keylen()) != 0) {
-                DEBUG("key not equal:\t%s\t%s\n", datatuple::key_to_str(tuple.key()).c_str(),
-                       datatuple::key_to_str(dt->key).c_str());
-            }
-
-        }
-        #endif
-
-        bool dt_needs_free;
-        if(dt == 0)  //tuple does not exist.
-        {
-        	dt = tuple;
-        	dt->setDelete();
-        	dt_needs_free = false;
-        } else {
-        	dt_needs_free = true;
-        }
-        DEBUG(stderr, "find result: %s\n", dt->isDelete() ? "not found" : "found");
-        //send the reply code
-        int err = writeoptosocket(*(data->workitem), LOGSTORE_RESPONSE_SENDING_TUPLES);
-        if(!err) {
-			//send the tuple
-			err = writetupletosocket(*(data->workitem), dt);
-        }
-        if(!err) {
-        	writeendofiteratortosocket(*(data->workitem));
-        }
-        //free datatuple
-        if(dt_needs_free) {
-        	datatuple::freetuple(dt);
-        }
+    	err = op_find(data, tuple);
     }
     else if(opcode == OP_SCAN)
     {
-    	size_t limit = -1;
-    	size_t count = 0;
-    	if(!err) {  limit = readcountfromsocket(*(data->workitem), &err);     }
-        if(!err) {  err = writeoptosocket(*(data->workitem), LOGSTORE_RESPONSE_SENDING_TUPLES); }
-
-        if(!err) {
-    		logtableIterator<datatuple> * itr = new logtableIterator<datatuple>(data->ltable, tuple);
-    		datatuple * t;
-    		while(!err && (t = itr->getnext())) {
-    			if(tuple2) {  // are we at the end of range?
-    				if(datatuple::compare_obj(t, tuple2) >= 0) {
-    					datatuple::freetuple(t);
-    					break;
-    				}
-    			}
-    			err = writetupletosocket(*(data->workitem), t);
-				datatuple::freetuple(t);
-				count ++;
-				if(count == limit) { break; }  // did we hit limit?
-			}
-    		delete itr;
-    	}
-		if(!err) { writeendofiteratortosocket(*(data->workitem)); }
+    	size_t limit = readcountfromsocket(*(data->workitem), &err);
+    	if(!err) {  err = op_scan(data, tuple, tuple2, limit); }
     }
     else if(opcode == OP_DBG_BLOCKMAP)
     {
-    	// produce a list of stasis regions
-    	int xid = Tbegin();
+    	err = op_dbg_blockmap(data);
 
-    	readlock(data->ltable->header_lock, 0);
-
-    	// produce a list of regions used by current tree components
-    	pageid_t datapage_c1_region_length, datapage_c1_mergeable_region_length = 0, datapage_c2_region_length;
-    	pageid_t datapage_c1_region_count,  datapage_c1_mergeable_region_count = 0, datapage_c2_region_count;
-    	pageid_t * datapage_c1_regions = data->ltable->get_tree_c1()->get_alloc()->list_regions(xid, &datapage_c1_region_length, &datapage_c1_region_count);
-    	pageid_t * datapage_c1_mergeable_regions = NULL;
-	if(data->ltable->get_tree_c1_mergeable()) {
-	  datapage_c1_mergeable_regions = data->ltable->get_tree_c1_mergeable()->get_alloc()->list_regions(xid, &datapage_c1_mergeable_region_length, &datapage_c1_mergeable_region_count);
-	}
-    	pageid_t * datapage_c2_regions = data->ltable->get_tree_c2()->get_alloc()->list_regions(xid, &datapage_c2_region_length, &datapage_c2_region_count);
-
-    	pageid_t tree_c1_region_length, tree_c1_mergeable_region_length = 0, tree_c2_region_length;
-    	pageid_t tree_c1_region_count,  tree_c1_mergeable_region_count = 0, tree_c2_region_count;
-
-    	recordid tree_c1_region_header = data->ltable->get_tree_c1()->get_tree_state();
-    	recordid tree_c2_region_header = data->ltable->get_tree_c2()->get_tree_state();
-
-    	pageid_t * tree_c1_regions = diskTreeComponent::list_region_rid(xid, &tree_c1_region_header, &tree_c1_region_length, &tree_c1_region_count);
-    	pageid_t * tree_c1_mergeable_regions = NULL;
-	if(data->ltable->get_tree_c1_mergeable()) {
-	  recordid tree_c1_mergeable_region_header = data->ltable->get_tree_c1_mergeable()->get_tree_state();
-	  tree_c1_mergeable_regions = diskTreeComponent::list_region_rid(xid, &tree_c1_mergeable_region_header, &tree_c1_mergeable_region_length, &tree_c1_mergeable_region_count);
-	}
-    	pageid_t * tree_c2_regions = diskTreeComponent::list_region_rid(xid, &tree_c2_region_header, &tree_c2_region_length, &tree_c2_region_count);
-    	unlock(data->ltable->header_lock);
-
-    	Tcommit(xid);
-
-    	printf("C1 Datapage Regions (each is %lld pages long):\n", datapage_c1_region_length);
-    	for(pageid_t i = 0; i < datapage_c1_region_count; i++) {
-    		printf("%lld ", datapage_c1_regions[i]);
-    	}
-
-    	printf("\nC1 Internal Node Regions (each is %lld pages long):\n", tree_c1_region_length);
-    	for(pageid_t i = 0; i < tree_c1_region_count; i++) {
-    		printf("%lld ", tree_c1_regions[i]);
-    	}
-
-    	printf("\nC2 Datapage Regions (each is %lld pages long):\n", datapage_c2_region_length);
-    	for(pageid_t i = 0; i < datapage_c2_region_count; i++) {
-    		printf("%lld ", datapage_c2_regions[i]);
-    	}
-
-    	printf("\nC2 Internal Node Regions (each is %lld pages long):\n", tree_c2_region_length);
-    	for(pageid_t i = 0; i < tree_c2_region_count; i++) {
-    		printf("%lld ", tree_c2_regions[i]);
-    	}
-    	printf("\nStasis Region Map\n");
-
-    	boundary_tag tag;
-    	pageid_t pid = ROOT_RECORD.page;
-    	TregionReadBoundaryTag(xid, pid, &tag);
-	pageid_t max_off = 0;
-    	bool done;
-    	do {
-	  max_off = pid + tag.size;
-    		// print tag.
-    		printf("\tPage %lld\tSize %lld\tAllocationManager %d\n", (long long)pid, (long long)tag.size, (int)tag.allocation_manager);
-    		done = ! TregionNextBoundaryTag(xid, &pid, &tag, 0/*all allocation managers*/);
-    	} while(!done);
-
-    	printf("\n");
-
-        printf("Tree components are using %lld megabytes.  File is using %lld megabytes.",
-	       PAGE_SIZE * (tree_c1_region_length * tree_c1_region_count
-			    + tree_c1_mergeable_region_length * tree_c1_mergeable_region_count
-			    + tree_c2_region_length * tree_c2_region_count
-			    + datapage_c1_region_length * datapage_c1_region_count
-			    + datapage_c1_mergeable_region_length * datapage_c1_mergeable_region_count
-			    + datapage_c2_region_length * datapage_c2_region_count) / (1024 * 1024),
-	       (PAGE_SIZE * max_off) / (1024*1024));
-
-    	free(datapage_c1_regions);
-	if(datapage_c1_mergeable_regions) free(datapage_c1_mergeable_regions);
-    	free(datapage_c2_regions);
-    	free(tree_c1_regions);
-	if(tree_c1_mergeable_regions) free(tree_c1_mergeable_regions);
-    	free(tree_c2_regions);
-        err = writeoptosocket(*(data->workitem), LOGSTORE_RESPONSE_SUCCESS);
-
+    }
+    else if(opcode == OP_DBG_DROP_DATABASE)
+    {
+    	err = op_dbg_drop_database(data);
     }
     return err;
 }

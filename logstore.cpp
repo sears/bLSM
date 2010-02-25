@@ -521,4 +521,25 @@ datatuple * logtable::findTuple(int xid, datatuple::key_t key, size_t keySize,  
     return tup;
 }
 
+void logtable::registerIterator(logtableIterator<datatuple> * it) {
+  its.push_back(it);
+}
+void logtable::forgetIterator(logtableIterator<datatuple> * it) {
+  for(unsigned int i = 0; i < its.size(); i++) {
+    if(its[i] == it) {
+      its.erase(its.begin()+i);
+      break;
+    }
+  }
+}
+void logtable::bump_epoch() {
+  assert(!trywritelock(header_lock,0));
+  epoch++;
+  for(unsigned int i = 0; i < its.size(); i++) {
+    its[i]->invalidate();
+  }
+}
+
+
+
 template class logtableIterator<datatuple>;

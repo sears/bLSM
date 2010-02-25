@@ -5,11 +5,10 @@
 // XXX test / reason about this...
 datatuple* tuplemerger::merge(datatuple *t1, datatuple *t2)
 {
-    assert(!t1->isDelete() || !t2->isDelete()); //both cannot be delete
-
     datatuple *t;
-
-    if(t1->isDelete()) //delete - t2
+    if(t1->isDelete() && t2->isDelete()) {
+		t = t2->create_copy();
+    } else if(t1->isDelete()) //delete -> t2
     {
         t = t2->create_copy();
     }
@@ -34,7 +33,6 @@ datatuple* tuplemerger::merge(datatuple *t1, datatuple *t2)
  **/
 datatuple* append_merger(datatuple *t1, datatuple *t2)
 {
-
 	assert(!(t1->isDelete() || t2->isDelete()));
     len_t keylen = t1->keylen();
     len_t datalen = t1->datalen() + t2->datalen();

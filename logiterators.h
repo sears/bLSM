@@ -22,23 +22,34 @@ public:
     	if(s_->begin() == s_->end()) {
     		next_ret_ = NULL;
     	} else {
-    		next_ret_ = (*s->begin())->create_copy();  // the create_copy() calls have to happen before we release mut_...
+    		next_ret_ = (*s_->begin())->create_copy();  // the create_copy() calls have to happen before we release mut_...
     	}
     	pthread_mutex_unlock(mut_);
     }
-    changingMemTreeIterator( MEMTREE *s, pthread_mutex_t * rb_mut, TUPLE *&key ) {
+    changingMemTreeIterator( MEMTREE *s, pthread_mutex_t * rb_mut, TUPLE *&key ) : s_(s), mut_(rb_mut) {
     	pthread_mutex_lock(mut_);
-    	if(s_->find(key) != s_->end()) {
-    		next_ret_ = (*(s_->find(key)))->create_copy();
-    	} else if(s_->upper_bound(key) != s->end()) {
-    		next_ret_ = (*(s_->upper_bound(key)))->create_copy();
-    	} else {
+	if(key) {
+	  if(s_->find(key) != s_->end()) {
+	    next_ret_ = (*(s_->find(key)))->create_copy();
+	  } else if(s_->upper_bound(key) != s_->end()) {
+	    next_ret_ = (*(s_->upper_bound(key)))->create_copy();
+	  } else {
+	    next_ret_ = NULL;
+	  }
+	} else {
+	  if(s_->begin() == s_->end()) {
     		next_ret_ = NULL;
-    	}
+	  } else {
+	    next_ret_ = (*s_->begin())->create_copy();  // the create_copy() calls have to happen before we release mut_...
+	  }
+	}
+	DEBUG("changing mem next ret = %s key = %s\n", next_ret_ ?  (const char*)next_ret_->key() : "NONE", key ? (const char*)key->key() : "NULL");
     	pthread_mutex_unlock(mut_);
     }
 
-    ~changingMemTreeIterator() { if(next_ret_) delete next_ret_; }
+    ~changingMemTreeIterator() {
+    	if(next_ret_) datatuple::freetuple(next_ret_);
+    }
 
     TUPLE* getnext() {
     	pthread_mutex_lock(mut_);
@@ -108,6 +119,14 @@ private:
   	if(s) {
   		it_    = key1 ? new MTITER(s->find(key1))  : new MTITER(s->begin());
   		itend_ = key2 ? new MTITER(s->find(key2)) : new MTITER(s->end());
+		if(*it_ == *itend_) { done_ = true; }
+		if(key1) {
+		  if(done_) {
+		    DEBUG("memtree opened at eot\n");
+		  } else {
+		    DEBUG("memtree opened key = %s\n", (**it_)->key());
+		  }
+		}
   	} else {
   		it_ = NULL;
   		itend_ = NULL;
@@ -144,7 +163,7 @@ public:
     
 private:
     void init_iterators(TUPLE * key1, TUPLE * key2);
-    inline void init_helper();
+    inline void init_helper(TUPLE* key1);
 
   explicit diskTreeIterator() { abort(); }
   void operator=(diskTreeIterator & t) { abort(); }
@@ -159,8 +178,6 @@ private:
     DataPage<TUPLE>    *curr_page;   //current page
     typedef typename DataPage<TUPLE>::RecordIterator DPITR_T;
     DPITR_T *dp_itr;
-    TUPLE    *curr_tuple;  //current tuple
 };
 
 #endif
-

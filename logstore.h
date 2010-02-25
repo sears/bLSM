@@ -43,6 +43,9 @@ typedef rbtree_t* rbtree_ptr_t;
 
 #include "merger.h"
 
+template<class TUPLE>
+class logtableIterator ;
+
 class logtable
 {
 public:
@@ -71,24 +74,27 @@ public:
     
     inline uint64_t get_epoch() { return epoch; }
 
+    void registerIterator(logtableIterator<datatuple> * it);
+    void forgetIterator(logtableIterator<datatuple> * it);
+    void bump_epoch() ;
 
     inline diskTreeComponent * get_tree_c2(){return tree_c2;}
     inline diskTreeComponent * get_tree_c1(){return tree_c1;}
     inline diskTreeComponent * get_tree_c1_mergeable(){return tree_c1_mergeable;}
 
-    inline void set_tree_c1(diskTreeComponent *t){tree_c1=t;                      epoch++; }
-    inline void set_tree_c1_mergeable(diskTreeComponent *t){tree_c1_mergeable=t;  epoch++; }
-    inline void set_tree_c2(diskTreeComponent *t){tree_c2=t;                      epoch++; }
+    inline void set_tree_c1(diskTreeComponent *t){tree_c1=t;                      bump_epoch(); }
+    inline void set_tree_c1_mergeable(diskTreeComponent *t){tree_c1_mergeable=t;  bump_epoch(); }
+    inline void set_tree_c2(diskTreeComponent *t){tree_c2=t;                      bump_epoch(); }
     
     inline rbtree_ptr_t get_tree_c0(){return tree_c0;}
     inline rbtree_ptr_t get_tree_c0_mergeable(){return tree_c0_mergeable;}
-    void set_tree_c0(rbtree_ptr_t newtree){tree_c0 = newtree;                     epoch++; }
-    void set_tree_c0_mergeable(rbtree_ptr_t newtree){tree_c0_mergeable = newtree; epoch++; }
+    void set_tree_c0(rbtree_ptr_t newtree){tree_c0 = newtree;                     bump_epoch(); }
+    void set_tree_c0_mergeable(rbtree_ptr_t newtree){tree_c0_mergeable = newtree; bump_epoch(); }
 
     int get_fixed_page_count(){return fixed_page_count;}
     void set_fixed_page_count(int count){fixed_page_count = count;}
 
-    void setMergeData(logtable_mergedata * mdata) { this->mergedata = mdata;      epoch++; }
+    void setMergeData(logtable_mergedata * mdata) { this->mergedata = mdata;      bump_epoch(); }
     logtable_mergedata* getMergeData(){return mergedata;}
 
     inline tuplemerger * gettuplemerger(){return tmerger;}
@@ -136,6 +142,8 @@ private:
 
     tuplemerger *tmerger;
 
+    std::vector<logtableIterator<datatuple> *> its;
+
     bool still_running_;
 };
 
@@ -172,6 +180,11 @@ public:
     free(iters_);
     free(dups);
   }
+  TUPLE * peek() {
+	  TUPLE * ret = getnext();
+	  last_iter_ = -1; // don't advance iterator on next peek() or getnext() call.
+	  return ret;
+  }
   TUPLE * getnext() {
     int num_dups = 0;
     if(last_iter_ != -1) {
@@ -179,8 +192,10 @@ public:
   	  //TUPLE::freetuple(current_[last_iter_]); // should never be null
       if(last_iter_ == 0) {
 		  current_[last_iter_] = first_iter_->getnext();
-      } else {
+      } else if(last_iter_ != -1){
     	  current_[last_iter_] = iters_[last_iter_-1]->getnext();
+      } else {
+    	  // last call was 'peek'
       }
     }
     // find the first non-empty iterator.  (Don't need to special-case ITRA since we're looking at current.)
@@ -241,34 +256,59 @@ public:
       epoch(ltable->get_epoch()),
 	  merge_it_(NULL),
 	  last_returned(NULL),
-      key(NULL) {
-    	readlock(ltable->header_lock, 0);
-    	validate();
-		unlock(ltable->header_lock);
-	}
+      key(NULL),
+      valid(false) {
+      writelock(ltable->header_lock, 0);
+      ltable->registerIterator(this);
+      validate();
+      unlock(ltable->header_lock);
+    }
 
     explicit logtableIterator(logtable* ltable,TUPLE *key)
     : ltable(ltable),
       epoch(ltable->get_epoch()),
-	  merge_it_(NULL),
-	  last_returned(NULL),
-	  key(key) {
-    	readlock(ltable->header_lock, 0);
-		validate();
-		unlock(ltable->header_lock);
-	}
+      merge_it_(NULL),
+      last_returned(NULL),
+      key(key),
+      valid(false)
+	{
+      writelock(ltable->header_lock, 0);
+      ltable->registerIterator(this);
+      validate();
+      unlock(ltable->header_lock);
+    }
 
     ~logtableIterator() {
+        ltable->forgetIterator(this);
     	invalidate();
+	if(last_returned) TUPLE::freetuple(last_returned);
     }
 
     TUPLE * getnext() {
     	readlock(ltable->header_lock, 0);
     	revalidate();
-    	last_returned = merge_it_->getnext();
+		TUPLE * tmp = merge_it_->getnext();
+    	if(last_returned && tmp) {
+			assert(TUPLE::compare(last_returned->key(), last_returned->keylen(), tmp->key(), tmp->keylen()) < 0);
+    		TUPLE::freetuple(last_returned);
+    	}
+		last_returned = tmp;
     	unlock(ltable->header_lock);
-    	return last_returned;
+		if(last_returned) {
+		  TUPLE * ret = last_returned->create_copy(); // XXX hate making copy!  Caller should not manage our memory.
+		  return ret;
+		} else {
+		  return NULL;
+		}
 
+    }
+
+    void invalidate() {
+      if(valid) {
+		delete merge_it_;
+		merge_it_ = NULL;
+		valid = false;
+      }
     }
 
 private:
@@ -292,20 +332,16 @@ private:
 
     TUPLE * last_returned;
     TUPLE * key;
-
+    bool valid;
     void revalidate() {
-    	if(ltable->get_epoch() != epoch) {
-    		TUPLE* delme = last_returned = last_returned->create_copy();
-    		invalidate();
-    		validate();
-    		TUPLE::freetuple(delme);
-    	}
+      if(!valid) {
+	validate();
+      } else {
+	assert(epoch == ltable->get_epoch());
+      }
     }
 
 
-	void invalidate() {
-		delete merge_it_;
-	}
 	void validate() {
 	    changingMemTreeIterator<rbtree_t, TUPLE> * c0_it;
 		memTreeIterator<rbtree_t, TUPLE>  * c0_mergeable_it[1];
@@ -334,6 +370,14 @@ private:
 		inner_merge_it_t * inner_merge_it =
 			   new inner_merge_it_t(c0_it, c0_mergeable_it, 1, NULL, TUPLE::compare_obj);
 		merge_it_ = new merge_it_t(inner_merge_it, disk_it, 3, NULL, TUPLE::compare_obj); // XXX Hardcodes comparator, and does not handle merges
+		if(last_returned) {
+			TUPLE * junk = merge_it_->peek();
+			if(junk && !TUPLE::compare(junk->key(), junk->keylen(), last_returned->key(), last_returned->keylen())) {
+				// we already returned junk
+				TUPLE::freetuple(merge_it_->getnext());
+			}
+		}
+		valid = true;
 	}
 
 };

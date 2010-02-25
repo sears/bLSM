@@ -199,7 +199,8 @@ recordid diskTreeComponent::create(int xid)
            && tmp.slot == DEPTH
            && tmp.size == root_rec_size);
 
-    writeRecord(xid, p, tmp, (byte*)&DEPTH, root_rec_size);
+    int64_t zero = 0;
+    writeRecord(xid, p, tmp, (byte*)&zero, root_rec_size);
 
     tmp = stasis_record_alloc_begin(xid, p, root_rec_size);
     stasis_record_alloc_done(xid,p,tmp);
@@ -377,7 +378,7 @@ recordid diskTreeComponent::appendPage(int xid, recordid tree, pageid_t & rmLeaf
           // NOTE: stasis_record_free call goes to slottedFree in slotted.c
           // this function only reduces the numslots when you call it
           // with the last slot. so thats why i go backwards here.
-	  printf("slots %d (%d) keysize=%lld\n", (int)*stasis_page_slotted_numslots_ptr(p), (int)FIRST_SLOT+1, (long long int)keySize);
+	  DEBUG("slots %d (%d) keysize=%lld\n", (int)*stasis_page_slotted_numslots_ptr(p), (int)FIRST_SLOT+1, (long long int)keySize);
 	  assert(*stasis_page_slotted_numslots_ptr(p) >= FIRST_SLOT+1);
 	  for(int i = *stasis_page_slotted_numslots_ptr(p)-1; i>FIRST_SLOT; i--)
           {
@@ -393,7 +394,7 @@ recordid diskTreeComponent::appendPage(int xid, recordid tree, pageid_t & rmLeaf
           // reinsert first.
           recordid pFirstSlot = { p->id, FIRST_SLOT, readRecordLength(xid, p, FIRST_SLOT)};
           if(*stasis_page_slotted_numslots_ptr(p) != FIRST_SLOT+1) {
-	    printf("slots %d (%d)\n", *stasis_page_slotted_numslots_ptr(p), (int)FIRST_SLOT+1);
+	    DEBUG("slots %d (%d)\n", *stasis_page_slotted_numslots_ptr(p), (int)FIRST_SLOT+1);
 	    assert(*stasis_page_slotted_numslots_ptr(p) == FIRST_SLOT+1);
 	  }
 
@@ -679,9 +680,7 @@ pageid_t diskTreeComponent::findPage(int xid, recordid tree, const byte *key, si
   Page *p = loadPage(xid, tree.page);
   readlock(p->rwlatch,0);
 
-  const indexnode_rec *depth_nr = (const indexnode_rec*)readRecord(xid, p , DEPTH, 0);
-
-  int64_t depth = *((int64_t*)depth_nr);
+  int64_t depth = *(int64_t*)readRecord(xid, p , DEPTH, 0);
 
   recordid rid = lookup(xid, p, depth, key, keySize);
   pageid_t ret = lookupLeafPageFromRid(xid,rid);//,keySize);
@@ -873,7 +872,7 @@ lladdIterator_t* diskTreeComponentIterator::open(int xid, recordid root)
     return it;
 }
 
-lladdIterator_t* diskTreeComponentIterator::openAt(int xid, recordid root, const byte* key)
+lladdIterator_t* diskTreeComponentIterator::openAt(int xid, recordid root, const byte* key, len_t keylen)
 {
   if(root.page == NULLRID.page && root.slot == NULLRID.slot)
       return 0;
@@ -887,7 +886,7 @@ lladdIterator_t* diskTreeComponentIterator::openAt(int xid, recordid root, const
 
   int64_t depth = *((int64_t*)nr);
 
-  recordid lsm_entry_rid = diskTreeComponent::lookup(xid,p,depth,key,0);//keySize,comparators[cmp_nr->ptr]);
+  recordid lsm_entry_rid = diskTreeComponent::lookup(xid,p,depth,key,keylen);//keySize,comparators[cmp_nr->ptr]);
 
   if(lsm_entry_rid.page == NULLRID.page && lsm_entry_rid.slot == NULLRID.slot) {
     unlock(p->rwlatch);
@@ -903,15 +902,22 @@ lladdIterator_t* diskTreeComponentIterator::openAt(int xid, recordid root, const
     readlock(p->rwlatch,0);
   }
 
+//  indexnode_rec * rec = (indexnode_rec *)malloc(stasis_record_length_read(xid, p, lsm_entry_rid));
+
+//  stasis_record_read(xid, p, lsm_entry_rid, (byte*)rec);
   diskTreeComponentIterator_t *impl = (diskTreeComponentIterator_t*) malloc(sizeof(diskTreeComponentIterator_t));
   impl->p = p;
 
   impl->current.page = lsm_entry_rid.page;
-  impl->current.slot = lsm_entry_rid.slot - 1;  // slot before thing of interest
+  impl->current.slot = lsm_entry_rid.slot;  // this is current rid, so set it to the slot of the entry that matches.
   impl->current.size = lsm_entry_rid.size;
 
   impl->t = 0; // must be zero so free() doesn't croak.
   impl->justOnePage = (depth==0);
+
+  DEBUG("diskTreeComponentIterator: index root %lld index page %lld data page %lld key %s\n", root.page, impl->current.page, rec->ptr, key);
+  DEBUG("entry = %s key = %s\n", (char*)(rec+1), (char*)key);
+//  free(rec);
 
   lladdIterator_t *it = (lladdIterator_t*) malloc(sizeof(lladdIterator_t));
   it->type = -1; // XXX LSM_TREE_ITERATOR

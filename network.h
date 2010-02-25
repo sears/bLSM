@@ -37,9 +37,9 @@ static const network_op_t OP_FIND                = 9;   // Read
 static const network_op_t OP_SCAN                = 11;
 static const network_op_t OP_DONE                = 12;  // Please close the connection.
 
-static const network_op_t OP_DBG_BLOCKMAP            = 13;
-
-static const network_op_t LOGSTORE_LAST_REQUEST_CODE   = 13;
+static const network_op_t OP_DBG_DROP_DATABASE            = 13;
+static const network_op_t OP_DBG_BLOCKMAP             = 14;
+static const network_op_t LOGSTORE_LAST_REQUEST_CODE  = 14;
 
 //error codes
 static const network_op_t LOGSTORE_FIRST_ERROR  = 28;

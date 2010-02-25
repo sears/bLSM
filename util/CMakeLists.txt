@@ -1,1 +1,2 @@
 CREATE_CLIENT_EXECUTABLE(dump_blockmap)
+CREATE_CLIENT_EXECUTABLE(drop_database)

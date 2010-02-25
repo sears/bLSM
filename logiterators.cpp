@@ -12,7 +12,7 @@ void diskTreeIterator<TUPLE>::init_iterators(TUPLE * key1, TUPLE * key2) {
   		lsmIterator_ = NULL;
   	} else {
   		if(key1) {
-  			lsmIterator_ = diskTreeComponentIterator::openAt(-1, tree_, key1->key());
+  			lsmIterator_ = diskTreeComponentIterator::openAt(-1, tree_, key1->key(), key1->keylen());
   		} else {
   			lsmIterator_ = diskTreeComponentIterator::open(-1, tree_);
   		}
@@ -22,42 +22,34 @@ void diskTreeIterator<TUPLE>::init_iterators(TUPLE * key1, TUPLE * key2) {
 
 template <class TUPLE>
 diskTreeIterator<TUPLE>::diskTreeIterator(recordid tree) :
-    tree_(tree),    
-//    lsmIterator_(diskTreeComponentIterator::open(-1,tree)),
-    curr_tuple(0)
+    tree_(tree)
 {
 	init_iterators(NULL,NULL);
-    init_helper();
+    init_helper(NULL);
 }
 
 template <class TUPLE>
 diskTreeIterator<TUPLE>::diskTreeIterator(recordid tree, TUPLE& key) :
-    tree_(tree),
-    //lsmIterator_(diskTreeComponentIterator::openAt(-1,tree,key.key()))
-    curr_tuple(0)
+    tree_(tree)
 {
 	init_iterators(&key,NULL);
-    init_helper();
+    init_helper(&key);
 
 }
 template <class TUPLE>
 diskTreeIterator<TUPLE>::diskTreeIterator(diskTreeComponent *tree) :
-    tree_(tree ? tree->get_root_rec() : NULLRID),
-    //lsmIterator_(diskTreeComponentIterator::open(-1,tree->get_root_rec())),
-    curr_tuple(0)
+    tree_(tree ? tree->get_root_rec() : NULLRID)
 {
 	init_iterators(NULL, NULL);
-    init_helper();
+    init_helper(NULL);
 }
 
 template <class TUPLE>
 diskTreeIterator<TUPLE>::diskTreeIterator(diskTreeComponent *tree, TUPLE& key) :
-    tree_(tree ? tree->get_root_rec() : NULLRID),
-//    lsmIterator_(diskTreeComponentIterator::openAt(-1,tree->get_root_rec(),key.key()))
-    curr_tuple(0)
+    tree_(tree ? tree->get_root_rec() : NULLRID)
 {
 	init_iterators(&key,NULL);
-	init_helper();
+	init_helper(&key);
 
 }
 
@@ -67,9 +59,6 @@ diskTreeIterator<TUPLE>::~diskTreeIterator()
     if(lsmIterator_) 
         diskTreeComponentIterator::close(-1, lsmIterator_);
 
-    if(curr_tuple != NULL)
-        free(curr_tuple);
-    
     if(curr_page!=NULL)
     {
         delete curr_page;
@@ -80,11 +69,11 @@ diskTreeIterator<TUPLE>::~diskTreeIterator()
 }
 
 template <class TUPLE>
-void diskTreeIterator<TUPLE>::init_helper()
+void diskTreeIterator<TUPLE>::init_helper(TUPLE* key1)
 {
     if(!lsmIterator_)
     {
-      //  printf("treeIterator:\t__error__ init_helper():\tnull lsmIterator_");
+        DEBUG("treeIterator:\t__error__ init_helper():\tnull lsmIterator_");
         curr_page = 0;
         dp_itr = 0;
     }
@@ -92,7 +81,7 @@ void diskTreeIterator<TUPLE>::init_helper()
     {
         if(diskTreeComponentIterator::next(-1, lsmIterator_) == 0)
         {    
-            //printf("diskTreeIterator:\t__error__ init_helper():\tlogtreeIteratr::next returned 0." );
+            DEBUG("diskTreeIterator:\t__error__ init_helper():\tlogtreeIteratr::next returned 0." );
             curr_page = 0;
             dp_itr = 0;
         }
@@ -104,7 +93,9 @@ void diskTreeIterator<TUPLE>::init_helper()
             
             curr_pageid = *pid_tmp;
             curr_page = new DataPage<TUPLE>(-1, curr_pageid);
-            dp_itr = new DPITR_T(curr_page->begin());
+
+            DEBUG("opening datapage iterator %lld at key %s\n.", curr_pageid, key1 ? (char*)key1->key() : "NULL");
+            dp_itr = new DPITR_T(curr_page, key1);
         }
         
     }
@@ -136,6 +127,7 @@ TUPLE * diskTreeIterator<TUPLE>::getnext()
             diskTreeComponentIterator::value(-1,lsmIterator_,(byte**)hack);
             curr_pageid = *pid_tmp;
             curr_page = new DataPage<TUPLE>(-1, curr_pageid);
+            DEBUG("opening datapage iterator %lld at beginning\n.", curr_pageid);
             dp_itr = new DPITR_T(curr_page->begin());
             
 
@@ -145,8 +137,7 @@ TUPLE * diskTreeIterator<TUPLE>::getnext()
       // else readTuple is null.  We're done.
     }
     
-    curr_tuple = readTuple;
-    return curr_tuple;
+    return readTuple;
 }
 
 template class diskTreeIterator<datatuple>;

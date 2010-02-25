@@ -21,6 +21,10 @@
 logserver *lserver=0;
 merge_scheduler *mscheduler=0;
 
+/*void ignore_pipe(int param)
+{
+  printf("Ignoring SIGPIPE\n");
+  }*/
 void terminate (int param)
 {
   printf ("Stopping server...\n");  
@@ -42,14 +46,15 @@ void initialize_server()
 {
     //signal handling
     void (*prev_fn)(int);
+    //    void (*prev_pipe)(int);
+
+    prev_fn = signal (SIGINT,terminate);
 
     diskTreeComponent::init_stasis();
 
-    prev_fn = signal (SIGINT,terminate);
-    
     int xid = Tbegin();
 
-    mscheduler = new merge_scheduler;    
+    mscheduler = new merge_scheduler;
     logtable ltable;
 
     int pcount = 40;
@@ -59,17 +64,20 @@ void initialize_server()
 
     Tcommit(xid);
 
+    writelock(ltable.header_lock,0);
+
     int lindex = mscheduler->addlogtable(&ltable);
     ltable.setMergeData(mscheduler->getMergeData(lindex));
-    
+
     int64_t c0_size = 1024 * 1024 * 10;
     printf("warning: running w/ tiny c0 for testing"); // XXX
     mscheduler->startlogtable(lindex, c0_size);
 
+    unlock(ltable.header_lock);
+
     lserver = new logserver(10, 32432);
 
     lserver->startserver(&ltable);
-    
 }
 
 

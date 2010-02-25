@@ -16,9 +16,30 @@ public:
     
     class RecordIterator
     {
+    private:
+      void scan_to_key(TUPLE * key) {
+	if(key) {
+	  len_t old_off = read_offset_;
+	  TUPLE * t = getnext();
+	  while(t && TUPLE::compare(key->key(), key->keylen(), t->key(), t->keylen()) > 0) {
+	    TUPLE::freetuple(t);
+	    old_off = read_offset_;
+	    t = getnext();
+	  }
+	  if(t) {
+	    DEBUG("datapage opened at %s\n", t->key());
+	    TUPLE::freetuple(t);
+	    read_offset_ = old_off;
+	  } else {
+		  DEBUG("datapage key not found.  Offset = %lld", read_offset_);
+		  dp = NULL;
+	  }
+	}
+      }
     public:
-        RecordIterator(DataPage *dp) : read_offset_(0), dp(dp) { }
-        RecordIterator(const RecordIterator &rhs) : read_offset_(rhs.read_offset_), dp(rhs.dp) {}
+      RecordIterator(DataPage *dp, TUPLE * key) : read_offset_(0), dp(dp) {
+    	  scan_to_key(key);
+      }
 
         void operator=(const RecordIterator &rhs)
             {
@@ -97,17 +118,16 @@ public:
 	  void dealloc_regions(int xid) {
 	    pageid_t regionCount = TarrayListLength(xid, header_.region_list);
 
-		printf("{%lld %lld %lld}\n", header_.region_list.page, (long long)header_.region_list.slot, (long long)header_.region_list.size);
+		DEBUG("{%lld %lld %lld}\n", header_.region_list.page, (long long)header_.region_list.slot, (long long)header_.region_list.size);
 
 	    for(recordid list_entry = header_.region_list;
 	        list_entry.slot < regionCount; list_entry.slot++) {
 	      pageid_t pid;
 	      Tread(xid, list_entry, &pid);
-//#ifndef CHECK_FOR_SCRIBBLING  // Don't actually free the page if we'll be checking that pages are used exactly once below.
+#ifndef CHECK_FOR_SCRIBBLING  // Don't actually free the page if we'll be checking that pages are used exactly once below.
 	      TregionDealloc(xid, pid);
-//#endif
+#endif
 	    }
-//	    printf("Warning: leaking arraylist %lld in datapage\n", (long long)header_.region_list.page);
 	    TarrayListDealloc(xid, header_.region_list);
 	    Tdealloc(xid, rid_);
 	  }
@@ -168,7 +188,7 @@ public:
     inline uint16_t recordCount();
 
 
-    RecordIterator begin(){return RecordIterator(this);}
+    RecordIterator begin(){return RecordIterator(this, NULL);}
 
     pageid_t get_start_pid(){return first_page_;}
     int get_page_count(){return page_count_;}

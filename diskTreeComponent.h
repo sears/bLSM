@@ -158,7 +158,7 @@ class diskTreeComponentIterator
 
 public:
     static lladdIterator_t* open(int xid, recordid root);
-    static lladdIterator_t* openAt(int xid, recordid root, const byte* key);
+    static lladdIterator_t* openAt(int xid, recordid root, const byte* key, len_t keylen);
     static int next(int xid, lladdIterator_t *it);
     static void close(int xid, lladdIterator_t *it);
 
