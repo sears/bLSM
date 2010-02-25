@@ -37,7 +37,7 @@ public:
 	}
       }
     public:
-      RecordIterator(DataPage *dp, TUPLE * key) : read_offset_(0), dp(dp) {
+      RecordIterator(DataPage *dp, TUPLE * key=NULL) : read_offset_(0), dp(dp) {
     	  scan_to_key(key);
       }
 
@@ -188,7 +188,7 @@ public:
     inline uint16_t recordCount();
 
 
-    RecordIterator begin(){return RecordIterator(this, NULL);}
+    RecordIterator begin(){return RecordIterator(this);}
 
     pageid_t get_start_pid(){return first_page_;}
     int get_page_count(){return page_count_;}
