@@ -909,7 +909,7 @@ lladdIterator_t* diskTreeComponentIterator::openAt(int xid, recordid root, const
   impl->p = p;
 
   impl->current.page = lsm_entry_rid.page;
-  impl->current.slot = lsm_entry_rid.slot;  // this is current rid, so set it to the slot of the entry that matches.
+  impl->current.slot = lsm_entry_rid.slot-1;  // this is current rid, which is one less than the first thing next will return (so subtract 1)
   impl->current.size = lsm_entry_rid.size;
 
   impl->t = 0; // must be zero so free() doesn't croak.
