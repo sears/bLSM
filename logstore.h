@@ -221,7 +221,7 @@ public:
     if(!merge_) {
     	ret = current_[min];
     } else {
-    	// use merge function to build a new ret.
+    	// XXX use merge function to build a new ret.
     	abort();
     }
     // advance the iterators that match the tuple we're returning.
@@ -283,24 +283,32 @@ public:
     	invalidate();
 	if(last_returned) TUPLE::freetuple(last_returned);
     }
-
-    TUPLE * getnext() {
-    	readlock(ltable->header_lock, 0);
-    	revalidate();
+private:
+    TUPLE * getnextHelper() {
 		TUPLE * tmp = merge_it_->getnext();
     	if(last_returned && tmp) {
 			assert(TUPLE::compare(last_returned->key(), last_returned->keylen(), tmp->key(), tmp->keylen()) < 0);
     		TUPLE::freetuple(last_returned);
     	}
 		last_returned = tmp;
+		return last_returned;
+    }
+public:
+    TUPLE * getnextIncludingTombstones() {
+    	readlock(ltable->header_lock, 0);
+    	revalidate();
+    	TUPLE * ret = getnextHelper();
     	unlock(ltable->header_lock);
-		if(last_returned) {
-		  TUPLE * ret = last_returned->create_copy(); // XXX hate making copy!  Caller should not manage our memory.
-		  return ret;
-		} else {
-		  return NULL;
-		}
+		return ret ? ret->create_copy() : NULL;
+    }
 
+    TUPLE * getnext() {
+    	readlock(ltable->header_lock, 0);
+    	revalidate();
+    	TUPLE * ret;
+    	while((ret = getnextHelper()) && ret->isDelete()) { }  // getNextHelper handles its own memory.
+    	unlock(ltable->header_lock);
+		return ret ? ret->create_copy() : NULL; // XXX hate making copy!  Caller should not manage our memory.
     }
 
     void invalidate() {
