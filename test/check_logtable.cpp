@@ -108,7 +108,9 @@ void insertProbeIter(size_t NUM_ENTRIES)
     printf("Storage utilization: %.2f\n", (datasize+.0) / (PAGE_SIZE * npages));
     printf("Number of datapages: %d\n", dpages);
     printf("Writes complete.\n");
-    
+    if(dp)
+    	delete dp;
+
     Tcommit(xid);
     xid = Tbegin();
 
