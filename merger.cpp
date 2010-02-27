@@ -344,10 +344,9 @@ void* memMergeThread(void*arg)
         	ltable->set_tree_c1(c1_prime);
         }
 
-        // XXX want to set this stuff somewhere.
-        logtable::table_header h;
         printf("mmt:\tUpdated C1's position on disk to %lld\n",ltable->get_tree_c1()->get_root_rec().page);
         // 13
+        ltable->update_persistent_header(xid);
         Tcommit(xid);
 
         unlock(ltable->header_lock);
@@ -465,10 +464,9 @@ void *diskMergeThread(void*arg)
         // 10: C2 is never to big
         ltable->set_tree_c2(c2_prime);
 
-        logtable::table_header h; // XXX Need to set header.
-
         printf("dmt:\tUpdated C2's position on disk to %lld\n",(long long)-1);
         // 13
+        ltable->update_persistent_header(xid);
         Tcommit(xid);
         
         unlock(ltable->header_lock);

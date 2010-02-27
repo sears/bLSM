@@ -91,6 +91,8 @@ public:
     void set_tree_c0(rbtree_ptr_t newtree){tree_c0 = newtree;                     bump_epoch(); }
     void set_tree_c0_mergeable(rbtree_ptr_t newtree){tree_c0_mergeable = newtree; bump_epoch(); }
 
+    void update_persistent_header(int xid);
+
     int get_fixed_page_count(){return fixed_page_count;}
     void set_fixed_page_count(int count){fixed_page_count = count;}
 

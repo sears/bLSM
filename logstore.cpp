@@ -48,7 +48,6 @@ logtable::logtable()
     epoch = 0;
     
 }
-
 void logtable::tearDownTree(rbtree_ptr_t tree) {
     datatuple * t = 0;
     rbtree_t::iterator old;
@@ -92,14 +91,18 @@ recordid logtable::allocTable(int xid)
     table_rec = Talloc(xid, sizeof(tbl_header));
     
     //create the big tree
-    tbl_header.c2_dp_state = Talloc(xid, DataPage<datatuple>::RegionAllocator::header_size);
     tree_c2 = new diskTreeComponent(xid);
 
     //create the small tree
-    tbl_header.c1_dp_state = Talloc(xid, DataPage<datatuple>::RegionAllocator::header_size);
     tree_c1 = new diskTreeComponent(xid);
-    
-    tbl_header.c2_root = tree_c2->get_root_rec();
+
+    update_persistent_header(xid);
+
+    return table_rec;
+}
+void logtable::update_persistent_header(int xid) {
+
+	tbl_header.c2_root = tree_c2->get_root_rec();
     tbl_header.c2_dp_state = tree_c2->get_alloc()->header_rid();
     tbl_header.c2_state = tree_c2->get_tree_state();
     tbl_header.c1_root = tree_c1->get_root_rec();
@@ -107,8 +110,6 @@ recordid logtable::allocTable(int xid)
     tbl_header.c1_state = tree_c1->get_tree_state();
     
     Tset(xid, table_rec, &tbl_header);    
-    
-    return table_rec;
 }
 
 void logtable::flushTable()
@@ -539,7 +540,5 @@ void logtable::bump_epoch() {
     its[i]->invalidate();
   }
 }
-
-
 
 template class logtableIterator<datatuple>;
