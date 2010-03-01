@@ -27,19 +27,19 @@ merge_scheduler *mscheduler=0;
   }*/
 void terminate (int param)
 {
-  printf ("Stopping server...\n");  
-  lserver->stopserver();
-  delete lserver;
+	  printf ("Stopping server...\n");
+	  lserver->stopserver();
+	  delete lserver;
 
-  printf("Stopping merge threads...\n");
-  mscheduler->shutdown();
-  delete mscheduler;
-  
-  printf("Deinitializing stasis...\n");
-  fflush(stdout);
-  diskTreeComponent::deinit_stasis();
-  
-  exit(0);
+	  printf("Stopping merge threads...\n");
+	  mscheduler->shutdown();
+	  delete mscheduler;
+
+	  printf("Deinitializing stasis...\n");
+	  fflush(stdout);
+	  diskTreeComponent::deinit_stasis();
+
+	  exit(0);
 }
 
 void initialize_server()
@@ -59,8 +59,17 @@ void initialize_server()
 
     int pcount = 40;
     ltable.set_fixed_page_count(pcount);
-
-    recordid table_root = ltable.allocTable(xid);
+    recordid table_root = ROOT_RECORD;
+    if(TrecordType(xid, ROOT_RECORD) == INVALID_SLOT) {
+    	printf("Creating empty logstore\n");
+    	table_root = ltable.allocTable(xid);
+		assert(table_root.page == ROOT_RECORD.page &&
+			   table_root.slot == ROOT_RECORD.slot);
+    } else {
+    	printf("Opened existing logstore\n");
+        table_root.size = TrecordSize(xid, ROOT_RECORD);
+    	ltable.openTable(xid, table_root);
+    }
 
     Tcommit(xid);
 

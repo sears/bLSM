@@ -12,31 +12,18 @@
 void usage(char * argv[]) {
 	fprintf(stderr, "usage %s [host [port]]\n", argv[0]);
 }
-
+#include "util_main.h"
 int main(int argc, char * argv[]) {
-	bool ok = true;
-	int svrport = 32432;
-	char * svrname = "localhost";
-	if(argc == 3) {
-		svrport = atoi(argv[2]);
-	}
-	if(argc == 2 || argc == 3) {
-		svrname = argv[1];
-	}
-	if(!ok || argc > 3) {
-		usage(argv); return 1;
-	}
+	int op = OP_DBG_BLOCKMAP;
+	logstore_handle_t * l = util_open_conn(argc, argv);
 
-    logstore_handle_t * l = logstore_client_open(svrname, svrport, 100);
-
-    if(l == NULL) { perror("Couldn't open connection"); return 2; }
-
-    datatuple * t = datatuple::create("", 1);
-    datatuple * ret = logstore_client_op(l, OP_DBG_BLOCKMAP, t);
+    datatuple * ret = logstore_client_op(l, op);
     if(ret == NULL) {
-    	perror("Blockmap request failed."); return 3;
+    	perror("Dump blockmap failed."); return 3;
+    } else {
+    	datatuple::freetuple(ret);
     }
     logstore_client_close(l);
-    printf("Success\n");
+    printf("Dump blockmap succeeded\n");
     return 0;
 }

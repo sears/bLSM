@@ -100,13 +100,19 @@ recordid logtable::allocTable(int xid)
 
     return table_rec;
 }
+void logtable::openTable(int xid, recordid rid) {
+	table_rec = rid;
+	Tread(xid, table_rec, &tbl_header);
+	tree_c2 = new diskTreeComponent(xid, tbl_header.c2_root, tbl_header.c2_state, tbl_header.c2_dp_state);
+	tree_c1 = new diskTreeComponent(xid, tbl_header.c1_root, tbl_header.c1_state, tbl_header.c1_dp_state);
+}
 void logtable::update_persistent_header(int xid) {
 
 	tbl_header.c2_root = tree_c2->get_root_rec();
     tbl_header.c2_dp_state = tree_c2->get_alloc()->header_rid();
     tbl_header.c2_state = tree_c2->get_tree_state();
     tbl_header.c1_root = tree_c1->get_root_rec();
-    tbl_header.c2_dp_state = tree_c1->get_alloc()->header_rid();
+    tbl_header.c1_dp_state = tree_c1->get_alloc()->header_rid();
     tbl_header.c1_state = tree_c1->get_tree_state();
     
     Tset(xid, table_rec, &tbl_header);    

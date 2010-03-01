@@ -61,7 +61,7 @@ public:
 
     //other class functions
     recordid allocTable(int xid);
-
+    void openTable(int xid, recordid rid);
     void flushTable();    
     
     static void tearDownTree(rbtree_ptr_t t);

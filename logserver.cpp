@@ -398,7 +398,7 @@ void *serverLoop(void *args)
 
         char clientip[20];
         inet_ntop(AF_INET, (void*) &(cli_addr.sin_addr), clientip, 20);
-        printf("Connection from:\t%s\n", clientip);
+//        printf("Connection from:\t%s\n", clientip);
 
         pthread_mutex_lock(sdata->qlock);
 
@@ -498,7 +498,97 @@ int op_scan(pthread_data *data, datatuple * tuple, datatuple * tuple2, size_t li
 	if(!err) { writeendofiteratortosocket(*(data->workitem)); }
 	return err;
 }
+int op_flush(pthread_data* data) {
+	data->ltable->flushTable();
+	return writeoptosocket(*(data->workitem), LOGSTORE_RESPONSE_SUCCESS);
+}
+int op_shutdown(pthread_data* data) {
+	// XXX
+	return writeoptosocket(*(data->workitem), LOGSTORE_UNIMPLEMENTED_ERROR);
+}
+int op_stat_space_usage(pthread_data* data) {
 
+
+	int xid = Tbegin();
+
+	readlock(data->ltable->header_lock, 0);
+
+	pageid_t datapage_c1_region_length, datapage_c1_mergeable_region_length = 0, datapage_c2_region_length;
+	pageid_t datapage_c1_region_count,  datapage_c1_mergeable_region_count = 0, datapage_c2_region_count;
+	pageid_t tree_c1_region_length, tree_c1_mergeable_region_length = 0, tree_c2_region_length;
+	pageid_t tree_c1_region_count,  tree_c1_mergeable_region_count = 0, tree_c2_region_count;
+
+	pageid_t * datapage_c1_regions = data->ltable->get_tree_c1()->get_alloc()->list_regions(xid, &datapage_c1_region_length, &datapage_c1_region_count);
+
+	pageid_t * datapage_c1_mergeable_regions = NULL;
+	if(data->ltable->get_tree_c1_mergeable()) {
+	  datapage_c1_mergeable_regions = data->ltable->get_tree_c1_mergeable()->get_alloc()->list_regions(xid, &datapage_c1_mergeable_region_length, &datapage_c1_mergeable_region_count);
+	}
+	pageid_t * datapage_c2_regions = data->ltable->get_tree_c2()->get_alloc()->list_regions(xid, &datapage_c2_region_length, &datapage_c2_region_count);
+
+	recordid tree_c1_region_header = data->ltable->get_tree_c1()->get_tree_state();
+	pageid_t * tree_c1_regions = diskTreeComponent::list_region_rid(xid, &tree_c1_region_header, &tree_c1_region_length, &tree_c1_region_count);
+
+	pageid_t * tree_c1_mergeable_regions = NULL;
+	if(data->ltable->get_tree_c1_mergeable()) {
+		  recordid tree_c1_mergeable_region_header = data->ltable->get_tree_c1_mergeable()->get_tree_state();
+		  tree_c1_mergeable_regions = diskTreeComponent::list_region_rid(xid, &tree_c1_mergeable_region_header, &tree_c1_mergeable_region_length, &tree_c1_mergeable_region_count);
+	}
+
+	recordid tree_c2_region_header = data->ltable->get_tree_c2()->get_tree_state();
+	pageid_t * tree_c2_regions = diskTreeComponent::list_region_rid(xid, &tree_c2_region_header, &tree_c2_region_length, &tree_c2_region_count);
+
+	free(datapage_c1_regions);
+	free(datapage_c1_mergeable_regions);
+	free(datapage_c2_regions);
+
+	free(tree_c1_regions);
+	free(tree_c1_mergeable_regions);
+	free(tree_c2_regions);
+
+
+	uint64_t treesize = PAGE_SIZE *
+				( ( datapage_c1_region_count           * datapage_c1_region_length )
+				+ ( datapage_c1_mergeable_region_count * datapage_c1_mergeable_region_length )
+				+ ( datapage_c2_region_count           * datapage_c2_region_length)
+				+ ( tree_c1_region_count           * tree_c1_region_length )
+				+ ( tree_c1_mergeable_region_count * tree_c1_mergeable_region_length )
+				+ ( tree_c2_region_count           * tree_c2_region_length) );
+
+	boundary_tag tag;
+	pageid_t pid = ROOT_RECORD.page;
+	TregionReadBoundaryTag(xid, pid, &tag);
+	uint64_t max_off = 0;
+	do {
+		max_off = pid + tag.size;
+		;
+	} while(TregionNextBoundaryTag(xid, &pid, &tag, 0/*all allocation managers*/));
+
+	unlock(data->ltable->header_lock);
+
+	Tcommit(xid);
+
+	uint64_t filesize = max_off * PAGE_SIZE;
+	datatuple *tup = datatuple::create(&treesize, sizeof(treesize), &filesize, sizeof(filesize));
+
+	DEBUG("tree size: %lld, filesize %lld\n", treesize, filesize);
+
+	int err = 0;
+	if(!err){ err = writeoptosocket(*(data->workitem), LOGSTORE_RESPONSE_SENDING_TUPLES); }
+	if(!err){ err = writetupletosocket(*(data->workitem), tup);                           }
+	if(!err){ err = writeendofiteratortosocket(*(data->workitem));                        }
+
+
+	datatuple::freetuple(tup);
+
+	return err;
+}
+int op_stat_perf_report(pthread_data* data) {
+
+}
+int op_stat_histogram(pthread_data* data, size_t limit) {
+
+}
 int op_dbg_blockmap(pthread_data* data) {
 	// produce a list of stasis regions
 	int xid = Tbegin();
@@ -510,9 +600,9 @@ int op_dbg_blockmap(pthread_data* data) {
 	pageid_t datapage_c1_region_count,  datapage_c1_mergeable_region_count = 0, datapage_c2_region_count;
 	pageid_t * datapage_c1_regions = data->ltable->get_tree_c1()->get_alloc()->list_regions(xid, &datapage_c1_region_length, &datapage_c1_region_count);
 	pageid_t * datapage_c1_mergeable_regions = NULL;
-if(data->ltable->get_tree_c1_mergeable()) {
-  datapage_c1_mergeable_regions = data->ltable->get_tree_c1_mergeable()->get_alloc()->list_regions(xid, &datapage_c1_mergeable_region_length, &datapage_c1_mergeable_region_count);
-}
+	if(data->ltable->get_tree_c1_mergeable()) {
+	  datapage_c1_mergeable_regions = data->ltable->get_tree_c1_mergeable()->get_alloc()->list_regions(xid, &datapage_c1_mergeable_region_length, &datapage_c1_mergeable_region_count);
+	}
 	pageid_t * datapage_c2_regions = data->ltable->get_tree_c2()->get_alloc()->list_regions(xid, &datapage_c2_region_length, &datapage_c2_region_count);
 
 	pageid_t tree_c1_region_length, tree_c1_mergeable_region_length = 0, tree_c2_region_length;
@@ -523,10 +613,10 @@ if(data->ltable->get_tree_c1_mergeable()) {
 
 	pageid_t * tree_c1_regions = diskTreeComponent::list_region_rid(xid, &tree_c1_region_header, &tree_c1_region_length, &tree_c1_region_count);
 	pageid_t * tree_c1_mergeable_regions = NULL;
-if(data->ltable->get_tree_c1_mergeable()) {
-  recordid tree_c1_mergeable_region_header = data->ltable->get_tree_c1_mergeable()->get_tree_state();
-  tree_c1_mergeable_regions = diskTreeComponent::list_region_rid(xid, &tree_c1_mergeable_region_header, &tree_c1_mergeable_region_length, &tree_c1_mergeable_region_count);
-}
+	if(data->ltable->get_tree_c1_mergeable()) {
+	  recordid tree_c1_mergeable_region_header = data->ltable->get_tree_c1_mergeable()->get_tree_state();
+	  tree_c1_mergeable_regions = diskTreeComponent::list_region_rid(xid, &tree_c1_mergeable_region_header, &tree_c1_mergeable_region_length, &tree_c1_mergeable_region_count);
+	}
 	pageid_t * tree_c2_regions = diskTreeComponent::list_region_rid(xid, &tree_c2_region_header, &tree_c2_region_length, &tree_c2_region_count);
 	unlock(data->ltable->header_lock);
 
@@ -567,7 +657,7 @@ if(data->ltable->get_tree_c1_mergeable()) {
 
 	printf("\n");
 
-    printf("Tree components are using %lld megabytes.  File is using %lld megabytes.",
+    printf("Tree components are using %lld megabytes.  File is using %lld megabytes.\n",
        PAGE_SIZE * (tree_c1_region_length * tree_c1_region_count
 		    + tree_c1_mergeable_region_length * tree_c1_mergeable_region_count
 		    + tree_c2_region_length * tree_c2_region_count
@@ -626,10 +716,30 @@ int dispatch_request(network_op_t opcode, datatuple * tuple, datatuple * tuple2,
     	size_t limit = readcountfromsocket(*(data->workitem), &err);
     	if(!err) {  err = op_scan(data, tuple, tuple2, limit); }
     }
-    else if(opcode == OP_DBG_BLOCKMAP)
+    else if(opcode == OP_FLUSH)
+    {
+    	err = op_flush(data);
+    }
+    else if(opcode == OP_SHUTDOWN)
+    {
+    	err = op_shutdown(data);
+    }
+    else if(opcode == OP_STAT_SPACE_USAGE)
+    {
+    	err = op_stat_space_usage(data);
+    }
+    else if(opcode == OP_STAT_PERF_REPORT)
+    {
+    	err = op_stat_perf_report(data);
+    }
+    else if(opcode == OP_STAT_HISTOGRAM)
+    {
+    	size_t limit = readcountfromsocket(*(data->workitem), &err);
+    	err = op_stat_histogram(data, limit);
+    }
+	else if(opcode == OP_DBG_BLOCKMAP)
     {
     	err = op_dbg_blockmap(data);
-
     }
     else if(opcode == OP_DBG_DROP_DATABASE)
     {
@@ -668,7 +778,7 @@ void * thread_work_fn( void * args)
         network_op_t opcode = readopfromsocket(*(item->data->workitem), LOGSTORE_CLIENT_REQUEST);
         if(opcode == LOGSTORE_CONN_CLOSED_ERROR) {
         	opcode = OP_DONE;
-        	printf("Obsolescent client closed connection uncleanly\n");
+        	printf("Broken client closed connection uncleanly\n");
         }
 
         int err = opcode == OP_DONE || opiserror(opcode); //close the conn on failure
@@ -695,14 +805,18 @@ void * thread_work_fn( void * args)
 		// Deal with old work_queue item by freeing it or putting it back in the queue.
 
 		if(err) {
-			perror("could not respond to client");
-
-		    if(true) { // XXX iserror) {
-		    	printf("network error. conn closed. (%d, %d, %d)\n",
-		    		   errno, *(item->data->workitem), item->data->work_queue->size());
+		    if(opcode != OP_DONE) {
+		    	char *msg;
+		    	if(-1 != asprintf(&msg, "network error. conn closed. (%d, %d) ",
+		    			*(item->data->workitem), item->data->work_queue->size())) {
+		    		perror(msg);
+		    		free(msg);
+		    	} else {
+		    		printf("error preparing string for perror!");
+		    	}
 		    } else {
-		    	printf("client done. conn closed. (%d, %d)\n",
-					   *(item->data->workitem), item->data->work_queue->size());
+//		    	printf("client done. conn closed. (%d, %d)\n",
+//					   *(item->data->workitem), item->data->work_queue->size());
 		    }
 			close(*(item->data->workitem));
 

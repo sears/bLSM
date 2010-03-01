@@ -42,6 +42,10 @@ typedef void(*diskTreeComponent_page_deallocator_t)(int, void *);
 class diskTreeComponent{
 public:
     diskTreeComponent(int xid): region_alloc(new DataPage<datatuple>::RegionAllocator(xid, 10000)) {create(xid);}  // XXX shouldn't hardcode region size.
+    diskTreeComponent(int xid, recordid root, recordid state, recordid dp_state)
+    : tree_state(state),
+      root_rec(root),
+      region_alloc(new DataPage<datatuple>::RegionAllocator(xid, dp_state)) { lastLeaf = -1; }
 private:
     recordid create(int xid);
 public:

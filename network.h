@@ -34,15 +34,22 @@ static const network_op_t LOGSTORE_LAST_RESPONSE_CODE = 3;
 static const network_op_t LOGSTORE_FIRST_REQUEST_CODE  = 8;
 static const network_op_t OP_INSERT              = 8;   // Create, Update, Delete
 static const network_op_t OP_FIND                = 9;   // Read
-static const network_op_t OP_SCAN                = 11;
-static const network_op_t OP_DONE                = 12;  // Please close the connection.
+static const network_op_t OP_SCAN                = 10;
+static const network_op_t OP_DONE                = 11;  // Please close the connection.
+static const network_op_t OP_FLUSH               = 12;
+static const network_op_t OP_SHUTDOWN            = 13;
+static const network_op_t OP_STAT_SPACE_USAGE    = 14;
+static const network_op_t OP_STAT_PERF_REPORT    = 15;
+static const network_op_t OP_STAT_HISTOGRAM      = 16;  // Return N approximately equal size partitions (including split points + cardinalities)  N=1 estimates table cardinality.
 
-static const network_op_t OP_DBG_DROP_DATABASE            = 13;
-static const network_op_t OP_DBG_BLOCKMAP             = 14;
-static const network_op_t LOGSTORE_LAST_REQUEST_CODE  = 14;
+
+static const network_op_t OP_DBG_DROP_DATABASE            = 17;
+static const network_op_t OP_DBG_BLOCKMAP             = 18;
+static const network_op_t LOGSTORE_LAST_REQUEST_CODE  = 18;
 
 //error codes
-static const network_op_t LOGSTORE_FIRST_ERROR  = 28;
+static const network_op_t LOGSTORE_FIRST_ERROR  = 27;
+static const network_op_t LOGSTORE_UNIMPLEMENTED_ERROR  = 27;
 static const network_op_t LOGSTORE_CONN_CLOSED_ERROR = 28;   // Unexpected EOF
 static const network_op_t LOGSTORE_SOCKET_ERROR = 29;   // The OS returned an error.
 static const network_op_t LOGSTORE_REMOTE_ERROR = 30;   // The other side didn't like our request
