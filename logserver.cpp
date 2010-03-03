@@ -586,8 +586,63 @@ int op_stat_space_usage(pthread_data* data) {
 int op_stat_perf_report(pthread_data* data) {
 
 }
+
+//pageid_t diskTreeComponent::build_histogram(int xid, pageid_t bucket_count, const byte **key_array, size_t * size_array) {
+//
+//}
+
+
 int op_stat_histogram(pthread_data* data, size_t limit) {
 
+	if(limit < 3) {
+		return writeoptosocket(*(data->workitem), LOGSTORE_PROTOCOL_ERROR);
+	}
+
+	int xid = Tbegin();
+	lladdIterator_t * it = diskTreeComponentIterator::open(xid, data->ltable->get_tree_c2()->get_root_rec());
+	size_t count = 0;
+	int err = 0;
+
+	while(diskTreeComponentIterator::next(xid, it)) { count++; }
+	diskTreeComponentIterator::close(xid, it);
+
+	uint64_t stride;
+
+	if(count > limit) {
+		stride = count / (limit-1);
+	} else {
+		stride = 1;
+	}
+
+	datatuple * tup = datatuple::create(&stride, sizeof(stride));
+
+	if(!err) { err = writeoptosocket(*(data->workitem), LOGSTORE_RESPONSE_SENDING_TUPLES); }
+	if(!err) { err = writetupletosocket(*(data->workitem), tup);                           }
+
+	datatuple::freetuple(tup);
+
+	size_t cur_stride = 0;
+	size_t i = 0;
+	it = diskTreeComponentIterator::open(xid, data->ltable->get_tree_c2()->get_root_rec());
+	while(diskTreeComponentIterator::next(xid, it)) {
+		i++;
+		if(i == count || !cur_stride) {  // do we want to send this key? (this matches the first, last and interior keys)
+			byte * key;
+			size_t keylen= diskTreeComponentIterator::key(xid, it, &key);
+			tup = datatuple::create(key, keylen);
+
+			if(!err) { err = writetupletosocket(*(data->workitem), tup);                   }
+
+			datatuple::freetuple(tup);
+			cur_stride = stride;
+		}
+		cur_stride--;
+	}
+
+	diskTreeComponentIterator::close(xid, it);
+	if(!err){ err = writeendofiteratortosocket(*(data->workitem));                         }
+	Tcommit(xid);
+	return err;
 }
 int op_dbg_blockmap(pthread_data* data) {
 	// produce a list of stasis regions
@@ -788,12 +843,8 @@ void * thread_work_fn( void * args)
         if(!err) { tuple  = readtuplefromsocket(*(item->data->workitem), &err); }
         //        read the second tuple from client
         if(!err) { tuple2 = readtuplefromsocket(*(item->data->workitem), &err); }
+
         //step 3: process the tuple
-
-//		if(tuple) {
-//		  printf("Tuple req = %d key = >%s<\n", opcode, tuple->key());
-//		}
-
 		if(!err) { err = dispatch_request(opcode, tuple, tuple2, item->data); }
 
         //free the tuple

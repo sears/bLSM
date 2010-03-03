@@ -63,10 +63,10 @@ static inline void close_conn(logstore_handle_t *l) {
 	close(l->server_socket); //close the connection
     l->server_socket = -1;
 }
-datatuple *
-logstore_client_op(logstore_handle_t *l,
-          uint8_t opcode,  datatuple * tuple, datatuple * tuple2, uint64_t count)
-{
+
+uint8_t
+logstore_client_op_returns_many(logstore_handle_t *l,
+				uint8_t opcode,  datatuple * tuple, datatuple * tuple2, uint64_t count) {
 
     if(l->server_socket < 0)
     {
@@ -103,46 +103,73 @@ logstore_client_op(logstore_handle_t *l,
         DEBUG("sock opened %d\n", l->server_socket);
     }
 
-
+    network_op_t err = 0;
 
     //send the opcode
-    if( writetosocket(l->server_socket, &opcode, sizeof(opcode))  ) { close_conn(l); return 0; }
+    if( !err) { err = writetosocket(l->server_socket, &opcode, sizeof(opcode));  }
 
     //send the first tuple
-    if( writetupletosocket(l->server_socket, tuple)               ) { close_conn(l); return 0; }
+    if( !err) { err = writetupletosocket(l->server_socket, tuple);               }
 
     //send the second tuple
-    if( writetupletosocket(l->server_socket, tuple2)              ) { close_conn(l); return 0; }
+    if( !err) { err = writetupletosocket(l->server_socket, tuple2);              }
 
-    if( count != (uint64_t)-1) {
-    	if( writecounttosocket(l->server_socket, count)           ) { close_conn(l); return 0; }
+    if( (!err) && (count != (uint64_t)-1) ) {
+                err = writecounttosocket(l->server_socket, count);               }
+
+    network_op_t rcode = LOGSTORE_CONN_CLOSED_ERROR;
+    if( !err) {
+      rcode = readopfromsocket(l->server_socket,LOGSTORE_SERVER_RESPONSE);
     }
 
+    if( opiserror(rcode) ) { close_conn(l); }
 
-    network_op_t rcode = readopfromsocket(l->server_socket,LOGSTORE_SERVER_RESPONSE);
+    return rcode;
 
-    if( opiserror(rcode)                                          ) { close_conn(l); return 0; }
+}
+datatuple *
+logstore_client_next_tuple(logstore_handle_t *l) {
+	assert(l->server_socket != -1); // otherwise, then the client forgot to check a return value...
+	int err = 0;
+	datatuple * ret = readtuplefromsocket(l->server_socket, &err);
+	if(err) {
+		close_conn(l);
+		if(ret) {
+			datatuple::freetuple(ret);
+			ret = NULL;
+		}
+	}
+	return ret;
+}
+datatuple *
+logstore_client_op(logstore_handle_t *l,
+          uint8_t opcode,  datatuple * tuple, datatuple * tuple2, uint64_t count)
+{
+    network_op_t rcode = logstore_client_op_returns_many(l, opcode, tuple, tuple2, count);
 
-    datatuple * ret = 0;
+    if(opiserror(rcode)) { return NULL; }
+
+    datatuple * ret = NULL;
 
     if(rcode == LOGSTORE_RESPONSE_SENDING_TUPLES)
-    {	int err;
-		uint64_t count = 0; // XXX
-		datatuple *nxt;
-    	while(( nxt = readtuplefromsocket(l->server_socket, &err) )) {
-    		if(ret) datatuple::freetuple(ret); // XXX
-    		ret = nxt;
-    		if(err) { close_conn(l); return 0; }
-    		count++;
-    	}
-    	if(count > 1) { fprintf(stderr, "XXX return count: %lld but iterators are not handled by the logstore_client_op api\n", count); }
+    {
+		ret =     logstore_client_next_tuple(l);
+		if(ret) {
+			datatuple *nxt = logstore_client_next_tuple(l);
+			if(nxt) {
+				fprintf(stderr, "Opcode %d returned multiple tuples, but caller expects zero or one.  Closing connection.\n", (int)opcode);
+				datatuple::freetuple(nxt);
+				datatuple::freetuple(ret);
+				close_conn(l);
+				ret = 0;
+			}
+		}
     } else if(rcode == LOGSTORE_RESPONSE_SUCCESS) {
     	ret = tuple ? tuple : datatuple::create("", 1);
     } else {
     	assert(rcode == LOGSTORE_RESPONSE_FAIL); // if this is an invalid response, we should have noticed above
     	ret = 0;
     }
-
     return ret;
 }
 
