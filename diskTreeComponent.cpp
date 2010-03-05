@@ -63,7 +63,6 @@ void diskTreeComponent::deinit_stasis() { Tdeinit(); }
 void diskTreeComponent::free_region_rid(int xid, recordid tree,
           diskTreeComponent_page_deallocator_t dealloc, void *allocator_state)
 {
-  //  Tdealloc(xid,tree);
   dealloc(xid,allocator_state);
   // XXX fishy shouldn't caller do this?
   Tdealloc(xid, *(recordid*)allocator_state);
@@ -83,7 +82,6 @@ void diskTreeComponent::dealloc_region_rid(int xid, recordid rid)
      TregionDealloc(xid,pid);
     }
     a.regionList.slot = 0;
-//    printf("Warning: leaking arraylist %lld in diskTreeComponent\n", (long long)a.regionList.page);
     TarrayListDealloc(xid, a.regionList);
 }
 
@@ -714,19 +712,18 @@ recordid diskTreeComponent::lookup(int xid,
 
     assert(*stasis_page_slotted_numslots_ptr(node) > FIRST_SLOT);
 
-    int match = FIRST_SLOT;
-
-    // don't need to compare w/ first item in tree.
-    const indexnode_rec * rec = (indexnode_rec*)readRecord(xid,node,FIRST_SLOT,0); //TODO: why read it then?
+    // don't need to compare w/ first item in tree, since we need to position ourselves at the the max tree value <= key.
+    // positioning at FIRST_SLOT puts us "before" the first value
+    int match = FIRST_SLOT; // (so match is now < key)
 
     for(int i = FIRST_SLOT+1; i < *stasis_page_slotted_numslots_ptr(node); i++)
     {
-        rec = (const indexnode_rec*)readRecord(xid,node,i,0);
+        const indexnode_rec *rec = (const indexnode_rec*)readRecord(xid,node,i,0);
         int cmpval = datatuple::compare((datatuple::key_t) (rec+1), *stasis_page_slotted_slot_length_ptr(node, i)-sizeof(*rec),
 					(datatuple::key_t) key, keySize);
-        if(cmpval>0) //changed it from >
+        if(cmpval>0) // key of current node is too big; there can be no matches under it.
             break;
-        match = i;
+        match = i; // only increment match after comparing with the current node.
     }
 
 
