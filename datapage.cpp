@@ -97,13 +97,26 @@ DataPage<TUPLE>::DataPage(int xid, pageid_t page_count, RegionAllocator *alloc) 
 }
 
 template<class TUPLE>
-void DataPage<TUPLE>::initialize()
-{
+void DataPage<TUPLE>::initialize() {
+	initialize_page(first_page_);
+}
+template<class TUPLE>
+void DataPage<TUPLE>::initialize_page(pageid_t pageid) {
     //load the first page
-    Page *p = loadUninitializedPage(xid_, first_page_);
+    Page *p;
+#ifdef CHECK_FOR_SCRIBBLING
+    p = loadPage(xid_, pageid);
+    if(*stasis_page_type_ptr(p) == DATA_PAGE) {
+    	printf("Collision on page %lld\n", (long long)pageid); fflush(stdout);
+    	assert(*stasis_page_type_ptr(p) != DATA_PAGE);
+    }
+#else
+    p = loadUninitializedPage(xid_, pageid);
+#endif
+    //XXX this is pretty obnoxious.  Perhaps stasis shouldn't check for the latch
     writelock(p->rwlatch,0);
     
-    DEBUG("\t\t\t\t\t\t->%lld\n", first_page_);
+    DEBUG("\t\t\t\t\t\t->%lld\n", pageid);
 
     //initialize header
     p->pageType = DATA_PAGE;
@@ -112,7 +125,7 @@ void DataPage<TUPLE>::initialize()
     *is_another_page_ptr(p) = 0;
     
     //write 0 to first data size    
-    *length_at_offset_ptr(p, write_offset_) = 0;
+    *length_at_offset_ptr(p, calc_chunk_from_offset(write_offset_).slot) = 0;
 
     //set the page dirty
     stasis_page_lsn_write(xid_, p, get_lsn(xid_));
@@ -121,7 +134,6 @@ void DataPage<TUPLE>::initialize()
     unlock(p->rwlatch);
     releasePage(p);
 }
-
 template <class TUPLE>
 size_t DataPage<TUPLE>::write_bytes(const byte * buf, size_t remaining) {
 	recordid chunk = calc_chunk_from_offset(write_offset_);
@@ -186,25 +198,7 @@ bool DataPage<TUPLE>::initialize_next_page() {
   unlock(p->rwlatch);
   releasePage(p);
 
-
-  // XXX this is repeated in initialize()!
-#ifdef CHECK_FOR_SCRIBBLING
-  p = loadPage(xid_, rid.page);
-  if(*stasis_page_type_ptr(p) == DATA_PAGE) {
-	  printf("Collision on page %lld\n", (long long)rid.page); fflush(stdout);
-	  assert(*stasis_page_type_ptr(p) != DATA_PAGE);  // XXX DO NOT COMMIT THIS LINE
-  }
-#else
-  p = loadUninitializedPage(xid_, rid.page);
-#endif
-  DEBUG("\t\t\t\t%lld\n", (long long)rid.page);
-
-  p->pageType = DATA_PAGE;
-  *is_another_page_ptr(p) = 0;
-  writelock(p->rwlatch, 0); //XXX this is pretty obnoxious.  Perhaps stasis shouldn't check for the latch
-  stasis_page_lsn_write(xid_, p, get_lsn(xid_));
-  unlock(p->rwlatch);
-  releasePage(p);
+  initialize_page(rid.page);
   return true;
 }
 

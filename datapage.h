@@ -229,6 +229,7 @@ private:
     bool write_data(const byte * buf, size_t len, bool init_next = true);
     bool read_data(byte * buf, off_t offset, size_t len);
     bool initialize_next_page();
+    void initialize_page(pageid_t pageid);
 
     int xid_;
     pageid_t page_count_;
