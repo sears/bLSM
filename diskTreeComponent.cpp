@@ -176,9 +176,6 @@ recordid diskTreeComponent::create(int xid)
 
     tree_state = Talloc(xid,sizeof(RegionAllocConf_t));
 
-    //int ptype = TpageGetType(xid, tree_state.page);
-    //DEBUG("page type %d\n", ptype); //returns a slotted page
-
     Tset(xid,tree_state, &REGION_ALLOC_STATIC_INITIALIZER);
 
     pageid_t root = alloc_region_rid(xid, &tree_state);
@@ -859,10 +856,12 @@ lladdIterator_t* diskTreeComponentIterator::open(int xid, recordid root)
     diskTreeComponentIterator_t *impl = (diskTreeComponentIterator_t*)malloc(sizeof(diskTreeComponentIterator_t));
     impl->p = p;
     {
-        recordid rid = { p->id, 1, 0};//keySize }; //TODO: why does this start from 1?
+    	// Position just before the first slot.
+    	// The first call to next() will increment us to the first slot, or return NULL.
+        recordid rid = { p->id, diskTreeComponent::FIRST_SLOT-1, 0};
         impl->current = rid;
     }
-    //DEBUG("keysize = %d, slot = %d\n", keySize, impl->current.slot);
+    DEBUG("keysize = %d, slot = %d\n", keySize, impl->current.slot);
     impl->t = 0;
     impl->justOnePage = (depth == 0);
 
@@ -879,14 +878,12 @@ lladdIterator_t* diskTreeComponentIterator::openAt(int xid, recordid root, const
 
   Page *p = loadPage(xid,root.page);
   readlock(p->rwlatch,0);
-  //size_t keySize = getKeySize(xid,p);
-  //assert(keySize);
+
   const byte *nr = diskTreeComponent::readRecord(xid,p,diskTreeComponent::DEPTH, diskTreeComponent::root_rec_size);
-  //const byte *cmp_nr = diskTreeComponent::readRecord(xid, p , diskTreeComponent::COMPARATOR, diskTreeComponent::root_rec_size);
 
   int64_t depth = *((int64_t*)nr);
 
-  recordid lsm_entry_rid = diskTreeComponent::lookup(xid,p,depth,key,keylen);//keySize,comparators[cmp_nr->ptr]);
+  recordid lsm_entry_rid = diskTreeComponent::lookup(xid,p,depth,key,keylen);
 
   if(lsm_entry_rid.page == NULLRID.page && lsm_entry_rid.slot == NULLRID.slot) {
     unlock(p->rwlatch);
@@ -902,9 +899,6 @@ lladdIterator_t* diskTreeComponentIterator::openAt(int xid, recordid root, const
     readlock(p->rwlatch,0);
   }
 
-//  indexnode_rec * rec = (indexnode_rec *)malloc(stasis_record_length_read(xid, p, lsm_entry_rid));
-
-//  stasis_record_read(xid, p, lsm_entry_rid, (byte*)rec);
   diskTreeComponentIterator_t *impl = (diskTreeComponentIterator_t*) malloc(sizeof(diskTreeComponentIterator_t));
   impl->p = p;
 
@@ -917,7 +911,6 @@ lladdIterator_t* diskTreeComponentIterator::openAt(int xid, recordid root, const
 
   DEBUG("diskTreeComponentIterator: index root %lld index page %lld data page %lld key %s\n", root.page, impl->current.page, rec->ptr, key);
   DEBUG("entry = %s key = %s\n", (char*)(rec+1), (char*)key);
-//  free(rec);
 
   lladdIterator_t *it = (lladdIterator_t*) malloc(sizeof(lladdIterator_t));
   it->type = -1; // XXX LSM_TREE_ITERATOR
