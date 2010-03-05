@@ -175,9 +175,20 @@ void insertProbeIter(size_t NUM_ENTRIES)
     }
     printf("found %d\n", found_tuples);
 
-    printf("Stage 3: Initiating scan TODO: look at results\n");
+    printf("Stage 3: Initiating scan\n");
 
-    logstore_client_op(l, OP_SCAN, NULL, NULL, 0); // start = NULL stop = NULL limit = NONE
+    network_op_t ret = logstore_client_op_returns_many(l, OP_SCAN, NULL, NULL, 0); // start = NULL stop = NULL limit = NONE
+    assert(ret == LOGSTORE_RESPONSE_SENDING_TUPLES);
+    datatuple * tup;
+    size_t i = 0;
+    while((tup = logstore_client_next_tuple(l))) {
+      assert(!tup->isDelete());
+      assert(tup->keylen() == (*key_arr)[i].length()+1);
+      assert(!memcmp(tup->key(), (*key_arr)[i].c_str(), (*key_arr)[i].length()));
+      datatuple::freetuple(tup);
+      i++;
+    }
+    assert(i == NUM_ENTRIES);
 
     key_arr->clear();
     delete key_arr;
