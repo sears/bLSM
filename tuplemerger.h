@@ -3,11 +3,10 @@
 
 struct datatuple;
 
-typedef datatuple* (*merge_fn_t) (datatuple*, datatuple *);
+typedef datatuple* (*merge_fn_t) (const datatuple*, const datatuple *);
 
-datatuple* append_merger(datatuple *t1, datatuple *t2);
-
-datatuple* replace_merger(datatuple *t1, datatuple *t2);
+datatuple* append_merger(const datatuple *t1, const datatuple *t2);
+datatuple* replace_merger(const datatuple *t1, const datatuple *t2);
 
 
 class tuplemerger
@@ -21,7 +20,7 @@ public:
         }
 
     
-    datatuple* merge(datatuple *t1, datatuple *t2);
+    datatuple* merge(const datatuple *t1, const datatuple *t2);
 
 private:
 

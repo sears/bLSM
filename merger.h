@@ -70,15 +70,6 @@ public:
     void shutdown();
 };
 
-template <class ITA, class ITB>
-int64_t merge_iterators(int xid,
-                    ITA *itrA,
-                    ITB *itrB,
-                    logtable *ltable,
-                    diskTreeComponent *scratch_tree,
-                    int64_t &npages,
-                    bool dropDeletes);
-
 void* memMergeThread(void* arg);
 void* diskMergeThread(void* arg);
 

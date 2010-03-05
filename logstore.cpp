@@ -139,12 +139,9 @@ void logtable::flushTable()
 
     //this is for waiting the previous merger of the mem-tree
     //hopefullly this wont happen
-    printf("prv merge not complete\n");
-
 
     while(get_tree_c0_mergeable()) {
         unlock(header_lock);
-//        pthread_mutex_lock(mergedata->rbtree_mut);
         if(tree_bytes >= max_c0_size)
             pthread_cond_wait(mergedata->input_needed_cond, mergedata->rbtree_mut);
         else
@@ -168,17 +165,12 @@ void logtable::flushTable()
         
     }
 
-    printf("prv merge complete\n");
-
     gettimeofday(&stop_tv,0);
     stop = tv_to_double(stop_tv);
     
-    //rbtree_ptr *tmp_ptr = new rbtree_ptr_t; //(typeof(h->scratch_tree)*) malloc(sizeof(void*));
     set_tree_c0_mergeable(get_tree_c0());
 
-//    pthread_mutex_lock(mergedata->rbtree_mut);
     pthread_cond_signal(mergedata->input_ready_cond);
-//    pthread_mutex_unlock(mergedata->rbtree_mut);
 
     merge_count ++;
     set_tree_c0(new rbtree_t);
@@ -190,12 +182,12 @@ void logtable::flushTable()
     unlock(header_lock);
     if(first)
     {
-        printf("flush waited %f sec\n", stop-start);
+        printf("Blocked writes for %f sec\n", stop-start);
         first = 0;
     }
     else
     {
-        printf("flush waited %f sec (worked %f)\n",
+        printf("Blocked writes for %f sec (serviced writes for %f sec)\n",
                stop-start, start-last_start);
     }
     last_start = stop;

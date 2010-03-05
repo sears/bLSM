@@ -587,10 +587,6 @@ int op_stat_perf_report(pthread_data* data) {
 
 }
 
-//pageid_t diskTreeComponent::build_histogram(int xid, pageid_t bucket_count, const byte **key_array, size_t * size_array) {
-//
-//}
-
 
 int op_stat_histogram(pthread_data* data, size_t limit) {
 

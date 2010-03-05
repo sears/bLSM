@@ -1,9 +1,8 @@
 #include "tuplemerger.h"
 #include "logstore.h"
 
-// XXX make the imputs 'const'
 // XXX test / reason about this...
-datatuple* tuplemerger::merge(datatuple *t1, datatuple *t2)
+datatuple* tuplemerger::merge(const datatuple *t1, const datatuple *t2)
 {
     datatuple *t;
     if(t1->isDelete() && t2->isDelete()) {
@@ -31,7 +30,7 @@ datatuple* tuplemerger::merge(datatuple *t1, datatuple *t2)
  * deletes are handled by the tuplemerger::merge function
  * so here neither t1 nor t2 is a delete datatuple
  **/
-datatuple* append_merger(datatuple *t1, datatuple *t2)
+datatuple* append_merger(const datatuple *t1, const datatuple *t2)
 {
 	assert(!(t1->isDelete() || t2->isDelete()));
     len_t keylen = t1->keylen();
@@ -49,7 +48,7 @@ datatuple* append_merger(datatuple *t1, datatuple *t2)
  * deletes are handled by the tuplemerger::merge function
  * so here neither t1 nor t2 is a delete datatuple
  **/
-datatuple* replace_merger(datatuple *t1, datatuple *t2)
+datatuple* replace_merger(const datatuple *t1, const datatuple *t2)
 {
 	return t2->create_copy();
 }
