@@ -12,9 +12,9 @@ void diskTreeIterator<TUPLE>::init_iterators(TUPLE * key1, TUPLE * key2) {
   		lsmIterator_ = NULL;
   	} else {
   		if(key1) {
-  			lsmIterator_ = diskTreeComponentIterator::openAt(-1, tree_, key1->key(), key1->keylen());
+  			lsmIterator_ = new diskTreeComponentIterator(-1, tree_, key1->key(), key1->keylen());
   		} else {
-  			lsmIterator_ = diskTreeComponentIterator::open(-1, tree_);
+  			lsmIterator_ = new diskTreeComponentIterator(-1, tree_);
   		}
   	}
   }
@@ -48,16 +48,18 @@ template <class TUPLE>
 diskTreeIterator<TUPLE>::diskTreeIterator(diskTreeComponent *tree, TUPLE& key) :
     tree_(tree ? tree->get_root_rec() : NULLRID)
 {
-	init_iterators(&key,NULL);
-	init_helper(&key);
+    init_iterators(&key,NULL);
+    init_helper(&key);
 
 }
 
 template <class TUPLE>
 diskTreeIterator<TUPLE>::~diskTreeIterator()
 {
-    if(lsmIterator_) 
-        diskTreeComponentIterator::close(-1, lsmIterator_);
+    if(lsmIterator_) {
+        lsmIterator_->close();
+        delete lsmIterator_;
+    }
 
     if(curr_page!=NULL)
     {
@@ -79,7 +81,7 @@ void diskTreeIterator<TUPLE>::init_helper(TUPLE* key1)
     }
     else
     {
-        if(diskTreeComponentIterator::next(-1, lsmIterator_) == 0)
+        if(lsmIterator_->next() == 0)
         {    
             DEBUG("diskTreeIterator:\t__error__ init_helper():\tlogtreeIteratr::next returned 0." );
             curr_page = 0;
@@ -89,7 +91,7 @@ void diskTreeIterator<TUPLE>::init_helper(TUPLE* key1)
         {
             pageid_t * pid_tmp;
             pageid_t ** hack = &pid_tmp;
-            diskTreeComponentIterator::value(-1,lsmIterator_,(byte**)hack);
+            lsmIterator_->value((byte**)hack);
             
             curr_pageid = *pid_tmp;
             curr_page = new DataPage<TUPLE>(-1, curr_pageid);
@@ -119,12 +121,13 @@ TUPLE * diskTreeIterator<TUPLE>::getnext()
         delete curr_page;
         curr_page = 0;
         
-        if(diskTreeComponentIterator::next(-1,lsmIterator_))
+        if(lsmIterator_->next())
         {
             pageid_t *pid_tmp;
 
             pageid_t **hack = &pid_tmp;
-            diskTreeComponentIterator::value(-1,lsmIterator_,(byte**)hack);
+            size_t ret = lsmIterator_->value((byte**)hack);
+            assert(ret == sizeof(pageid_t));
             curr_pageid = *pid_tmp;
             curr_page = new DataPage<TUPLE>(-1, curr_pageid);
             DEBUG("opening datapage iterator %lld at beginning\n.", curr_pageid);

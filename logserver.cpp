@@ -595,12 +595,12 @@ int op_stat_histogram(pthread_data* data, size_t limit) {
 	}
 
 	int xid = Tbegin();
-	lladdIterator_t * it = diskTreeComponentIterator::open(xid, data->ltable->get_tree_c2()->get_root_rec());
+	diskTreeComponentIterator * it = new diskTreeComponentIterator(xid, data->ltable->get_tree_c2()->get_root_rec());
 	size_t count = 0;
 	int err = 0;
 
-	while(diskTreeComponentIterator::next(xid, it)) { count++; }
-	diskTreeComponentIterator::close(xid, it);
+	while(it->next()) { count++; }
+	it->close();
 
 	uint64_t stride;
 
@@ -619,12 +619,12 @@ int op_stat_histogram(pthread_data* data, size_t limit) {
 
 	size_t cur_stride = 0;
 	size_t i = 0;
-	it = diskTreeComponentIterator::open(xid, data->ltable->get_tree_c2()->get_root_rec());
-	while(diskTreeComponentIterator::next(xid, it)) {
+	it = new diskTreeComponentIterator(xid, data->ltable->get_tree_c2()->get_root_rec());
+	while(it->next()) {
 		i++;
 		if(i == count || !cur_stride) {  // do we want to send this key? (this matches the first, last and interior keys)
 			byte * key;
-			size_t keylen= diskTreeComponentIterator::key(xid, it, &key);
+			size_t keylen= it->key(&key);
 			tup = datatuple::create(key, keylen);
 
 			if(!err) { err = writetupletosocket(*(data->workitem), tup);                   }
@@ -635,7 +635,8 @@ int op_stat_histogram(pthread_data* data, size_t limit) {
 		cur_stride--;
 	}
 
-	diskTreeComponentIterator::close(xid, it);
+	it->close();
+	delete(it);
 	if(!err){ err = writeendofiteratortosocket(*(data->workitem));                         }
 	Tcommit(xid);
 	return err;

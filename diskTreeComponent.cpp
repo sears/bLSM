@@ -755,12 +755,9 @@ void diskTreeComponent::print_tree(int xid, pageid_t pid, int64_t depth) {
 //diskTreeComponentIterator implementation
 /////////////////////////////////////////////////
 
-lladdIterator_t* diskTreeComponentIterator::open(int xid, recordid root)
-{
-  if(root.page == 0 && root.slot == 0 && root.size == -1)
-      return 0;
-
-  Page *p = loadPage(xid,root.page);
+diskTreeComponentIterator::diskTreeComponentIterator(int xid, recordid root) {
+  if(root.page == 0 && root.slot == 0 && root.size == -1) abort();
+  p = loadPage(xid,root.page);
   readlock(p->rwlatch,0);
 
   DEBUG("ROOT_REC_SIZE %d\n", diskTreeComponent::root_rec_size);
@@ -782,32 +779,24 @@ lladdIterator_t* diskTreeComponentIterator::open(int xid, recordid root)
     assert(depth == 0);
   }
 
-  diskTreeComponentIterator_t *impl = (diskTreeComponentIterator_t*)malloc(sizeof(diskTreeComponentIterator_t));
-  impl->p = p;
-
   {
       // Position just before the first slot.
       // The first call to next() will increment us to the first slot, or return NULL.
       recordid rid = { p->id, diskTreeComponent::FIRST_SLOT-1, 0};
-      impl->current = rid;
+      current = rid;
   }
 
-  DEBUG("keysize = %d, slot = %d\n", keySize, impl->current.slot);
-  impl->t = 0;
-  impl->justOnePage = (depth == 0);
-
-  lladdIterator_t *it = (lladdIterator_t*) malloc(sizeof(lladdIterator_t));
-  it->type = -1; // XXX  LSM_TREE_ITERATOR;
-  it->impl = impl;
-  return it;
+  DEBUG("keysize = %d, slot = %d\n", keySize, current.slot);
+  xid_ = xid;
+  done = false;
+  t = 0;
+  justOnePage = (depth == 0);
 }
 
-lladdIterator_t* diskTreeComponentIterator::openAt(int xid, recordid root, const byte* key, len_t keylen)
-{
-  if(root.page == NULLRID.page && root.slot == NULLRID.slot)
-    return 0;
+diskTreeComponentIterator::diskTreeComponentIterator(int xid, recordid root, const byte* key, len_t keylen) {
+  if(root.page == NULLRID.page && root.slot == NULLRID.slot) abort();
 
-  Page *p = loadPage(xid,root.page);
+  p = loadPage(xid,root.page);
   readlock(p->rwlatch,0);
 
   const byte *nr = diskTreeComponent::readRecord(xid,p,diskTreeComponent::DEPTH, diskTreeComponent::root_rec_size);
@@ -818,95 +807,85 @@ lladdIterator_t* diskTreeComponentIterator::openAt(int xid, recordid root, const
 
   if(lsm_entry_rid.page == NULLRID.page && lsm_entry_rid.slot == NULLRID.slot) {
     unlock(p->rwlatch);
-    return 0;
+    done = true;
+  } else {
+    assert(lsm_entry_rid.size != INVALID_SLOT);
+
+    if(root.page != lsm_entry_rid.page)
+    {
+      unlock(p->rwlatch);
+      releasePage(p);
+      p = loadPage(xid,lsm_entry_rid.page);
+      readlock(p->rwlatch,0);
+    }
+
+    done = false;
+    current.page = lsm_entry_rid.page;
+    current.slot = lsm_entry_rid.slot-1;  // this is current rid, which is one less than the first thing next will return (so subtract 1)
+    current.size = lsm_entry_rid.size;
+
+    xid_ = xid;
+    t = 0; // must be zero so free() doesn't croak.
+    justOnePage = (depth==0);
+
+    DEBUG("diskTreeComponentIterator: index root %lld index page %lld data page %lld key %s\n", root.page, current.page, rec->ptr, key);
+    DEBUG("entry = %s key = %s\n", (char*)(rec+1), (char*)key);
   }
-  assert(lsm_entry_rid.size != INVALID_SLOT);
-
-  if(root.page != lsm_entry_rid.page)
-  {
-    unlock(p->rwlatch);
-    releasePage(p);
-    p = loadPage(xid,lsm_entry_rid.page);
-    readlock(p->rwlatch,0);
-  }
-
-  diskTreeComponentIterator_t *impl = (diskTreeComponentIterator_t*) malloc(sizeof(diskTreeComponentIterator_t));
-  impl->p = p;
-
-  impl->current.page = lsm_entry_rid.page;
-  impl->current.slot = lsm_entry_rid.slot-1;  // this is current rid, which is one less than the first thing next will return (so subtract 1)
-  impl->current.size = lsm_entry_rid.size;
-
-  impl->t = 0; // must be zero so free() doesn't croak.
-  impl->justOnePage = (depth==0);
-
-  DEBUG("diskTreeComponentIterator: index root %lld index page %lld data page %lld key %s\n", root.page, impl->current.page, rec->ptr, key);
-  DEBUG("entry = %s key = %s\n", (char*)(rec+1), (char*)key);
-
-  lladdIterator_t *it = (lladdIterator_t*) malloc(sizeof(lladdIterator_t));
-  it->type = -1; // XXX LSM_TREE_ITERATOR
-  it->impl = impl;
-  return it;
 }
 
 /**
  * move to the next page
  **/
-int diskTreeComponentIterator::next(int xid, lladdIterator_t *it)
+int diskTreeComponentIterator::next()
 {
-  diskTreeComponentIterator_t *impl = (diskTreeComponentIterator_t*) it->impl;
+  if(done) return 0;
 
-  impl->current = stasis_record_next(xid, impl->p, impl->current);
+  current = stasis_record_next(xid_, p, current);
 
-  if(impl->current.size == INVALID_SLOT) {
+  if(current.size == INVALID_SLOT) {
 
-    const indexnode_rec next_rec = *(const indexnode_rec*)diskTreeComponent::readRecord(xid,impl->p,
+    const indexnode_rec next_rec = *(const indexnode_rec*)diskTreeComponent::readRecord(xid_,p,
                                                                diskTreeComponent::NEXT_LEAF,
                                                                0);
-    unlock(impl->p->rwlatch);
-    releasePage(impl->p);
+    unlock(p->rwlatch);
+    releasePage(p);
 
-    DEBUG("done with page %lld next = %lld\n", impl->p->id, next_rec.ptr);
+    DEBUG("done with page %lld next = %lld\n", p->id, next_rec.ptr);
 
 
-    if(next_rec.ptr != -1 && ! impl->justOnePage) {
-      impl->p = loadPage(xid, next_rec.ptr);
-      readlock(impl->p->rwlatch,0);
-      impl->current.page = next_rec.ptr;
-      impl->current.slot = 2;
-      impl->current.size = stasis_record_length_read(xid, impl->p, impl->current); //keySize;
+    if(next_rec.ptr != -1 && ! justOnePage) {
+      p = loadPage(xid_, next_rec.ptr);
+      readlock(p->rwlatch,0);
+      current.page = next_rec.ptr;
+      current.slot = 2;
+      current.size = stasis_record_length_read(xid_, p, current);
     } else {
-      impl->p = 0;
-      impl->current.size = INVALID_SLOT;
+      p = 0;
+      current.size = INVALID_SLOT;
     }
 
   }
 
-  if(impl->current.size != INVALID_SLOT) {
-    if(impl->t != NULL) free(impl->t);
+  if(current.size != INVALID_SLOT) {
+    if(t != NULL) { free(t); t = NULL; }
 
-    impl->t = (indexnode_rec*)malloc(impl->current.size);
-    memcpy(impl->t, diskTreeComponent::readRecord(xid,impl->p,impl->current), impl->current.size);
+    t = (indexnode_rec*)malloc(current.size);
+    memcpy(t, diskTreeComponent::readRecord(xid_,p,current), current.size);
 
     return 1;
   } else {
-    assert(!impl->p);
-    if(impl->t != NULL) free(impl->t);
-    impl->t = 0;
+    assert(!p);
+    if(t != NULL) { free(t); t = NULL; }
+    t = 0;
     return 0;
   }
 }
 
-void diskTreeComponentIterator::close(int xid, lladdIterator_t *it) {
+void diskTreeComponentIterator::close() {
 
-  diskTreeComponentIterator_t *impl = (diskTreeComponentIterator_t*)it->impl;
-
-  if(impl->p) {
-    unlock(impl->p->rwlatch);
-    releasePage(impl->p);
+  if(p) {
+    unlock(p->rwlatch);
+    releasePage(p);
   }
-  if(impl->t) free(impl->t);
-
-  free(impl);
-  free(it);
+  if(t) free(t);
 }

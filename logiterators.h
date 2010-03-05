@@ -1,12 +1,6 @@
 #ifndef _LOG_ITERATORS_H_
 #define _LOG_ITERATORS_H_
 
-#include <assert.h>
-#include <stasis/iterator.h>
-
-#undef begin
-#undef end
-
 template <class TUPLE>
 class DataPage;
 
@@ -172,7 +166,7 @@ private:
 private:
     recordid tree_; //root of the tree
     
-    lladdIterator_t * lsmIterator_; //diskTreeComponent iterator
+    diskTreeComponentIterator* lsmIterator_;
     
     pageid_t curr_pageid; //current page id
     DataPage<TUPLE>    *curr_page;   //current page

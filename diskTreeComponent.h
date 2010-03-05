@@ -147,39 +147,35 @@ private:
 
 };
 
-
-typedef struct {
-  Page * p;
-  recordid current;
-  indexnode_rec *t;
-  int justOnePage;
-} diskTreeComponentIterator_t;
-
-
 class diskTreeComponentIterator {
 
 public:
-  static lladdIterator_t* open(int xid, recordid root);
-  static lladdIterator_t* openAt(int xid, recordid root, const byte* key, len_t keylen);
-  static int next(int xid, lladdIterator_t *it);
-  static void close(int xid, lladdIterator_t *it);
+  diskTreeComponentIterator(int xid, recordid root);
+  diskTreeComponentIterator(int xid, recordid root, const byte* key, len_t keylen);
+  int next();
+  void close();
 
 
-  static inline size_t key (int xid, lladdIterator_t *it, byte **key) {
-    diskTreeComponentIterator_t * impl = (diskTreeComponentIterator_t*)it->impl;
-    *key = (byte*)(impl->t+1);
-    return impl->current.size - sizeof(indexnode_rec);
+  inline size_t key (byte **key) {
+    *key = (byte*)(t+1);
+    return current.size - sizeof(indexnode_rec);
   }
 
-  static inline size_t value(int xid, lladdIterator_t *it, byte **value) {
-    diskTreeComponentIterator_t * impl = (diskTreeComponentIterator_t*)it->impl;
-    *value = (byte*)&(impl->t->ptr);
-    return sizeof(impl->t->ptr);
+  inline size_t value(byte **value) {
+    *value = (byte*)&(t->ptr);
+    return sizeof(t->ptr);
   }
 
-  static inline void tupleDone(int xid, void *it) { }
-  static inline void releaseLock(int xid, void *it) { }
+  inline void tupleDone() { }
+  inline void releaseLock() { }
 
+private:
+  Page * p;
+  int xid_;
+  bool done;
+  recordid current;
+  indexnode_rec *t;
+  int justOnePage;
 };
 
 #endif /* DISKTREECOMPONENT_H_ */

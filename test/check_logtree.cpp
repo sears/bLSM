@@ -129,17 +129,16 @@ void insertProbeIter_str(int  NUM_ENTRIES)
 
     
     int64_t count = 0;
-    lladdIterator_t * it = diskTreeComponentIterator::open(xid, tree);
+    diskTreeComponentIterator * it = new diskTreeComponentIterator(xid, tree);
 
-    while(diskTreeComponentIterator::next(xid, it)) {
+    while(it->next()) {
         byte * key;
         byte **key_ptr = &key;
-        size_t keysize = diskTreeComponentIterator::key(xid, it, (byte**)key_ptr);
+        size_t keysize = it->key((byte**)key_ptr);
         
         pageid_t *value;
         pageid_t **value_ptr = &value;
-        int valsize = lsmTreeIterator_value(xid, it, (byte**)value_ptr);
-        //printf("keylen %d key %s\n", keysize, (char*)(key)) ;
+        size_t valsize = it->value((byte**)value_ptr);
         assert(valsize == sizeof(pageid_t));
         assert(!mycmp(std::string((char*)key), arr[count]) && !mycmp(arr[count],std::string((char*)key)));
         assert(keysize == arr[count].length()+1);
@@ -147,7 +146,8 @@ void insertProbeIter_str(int  NUM_ENTRIES)
     }
     assert(count == NUM_ENTRIES);
 
-    diskTreeComponentIterator::close(xid, it);
+    it->close();
+    delete it;
 
 	Tcommit(xid);
     diskTreeComponent::deinit_stasis();
