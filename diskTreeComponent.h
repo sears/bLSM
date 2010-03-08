@@ -68,17 +68,6 @@ public:
   static void writeNodeRecord(int xid, Page *p, recordid &rid,
                               const byte *key, size_t keylen, pageid_t ptr);
 
-  static void writeRecord(int xid, Page *p, recordid &rid,
-                          const byte *data, size_t datalen);
-
-  static void writeRecord(int xid, Page *p, slotid_t slot,
-                          const byte *data, size_t datalen);
-
-  static const byte* readRecord(int xid, Page * p, recordid &rid);
-  static const byte* readRecord(int xid, Page * p, slotid_t slot, int64_t size);
-
-  static int32_t readRecordLength(int xid, Page *p, slotid_t slot);
-
   //return the left-most leaf, these are not data pages, although referred to as leaf
   static pageid_t findFirstLeaf(int xid, Page *root, int64_t depth);
   //return the right-most leaf

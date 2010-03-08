@@ -79,7 +79,7 @@ void initialize_server()
     ltable.setMergeData(mscheduler->getMergeData(lindex));
 
     int64_t c0_size = 1024 * 1024 * 10;
-    printf("warning: running w/ tiny c0 for testing"); // XXX
+    printf("warning: running w/ tiny c0 for testing"); // XXX build a separate test server and deployment server?
     mscheduler->startlogtable(lindex, c0_size);
 
     unlock(ltable.header_lock);
