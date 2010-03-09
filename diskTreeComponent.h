@@ -52,7 +52,7 @@ public:
     static void deinit_stasis();
   private:
 
-    static void writeNodeRecord(int xid, Page *p, recordid &rid,
+    void writeNodeRecord(int xid, Page *p, recordid &rid,
                                 const byte *key, size_t keylen, pageid_t ptr);
     //reads the given record and returns the page id stored in it
     static pageid_t lookupLeafPageFromRid(int xid, recordid rid);
@@ -60,11 +60,11 @@ public:
     recordid appendInternalNode(int xid, Page *p,
                                        int64_t depth,
                                        const byte *key, size_t key_len,
-                                       pageid_t val_page, pageid_t lastLeaf);
+                                       pageid_t val_page);
 
     recordid buildPathToLeaf(int xid, recordid root, Page *root_p,
                                     int64_t depth, const byte *key, size_t key_len,
-                                    pageid_t val_page, pageid_t lastLeaf);
+                                    pageid_t val_page);
 
     /**
        Initialize a page for use as an internal node of the tree.

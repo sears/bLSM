@@ -19,14 +19,6 @@ static void dataPageFlushed(Page* p) {
 }
 static int notSupported(int xid, Page * p) { return 0; }
 
-static lsn_t get_lsn(int xid) {
-	lsn_t xid_lsn = stasis_transaction_table_get((stasis_transaction_table_t*)stasis_runtime_transaction_table(), xid)->prevLSN;
-	lsn_t log_lsn = ((stasis_log_t*)stasis_log())->next_available_lsn((stasis_log_t*)stasis_log());
-	lsn_t ret = xid_lsn == INVALID_LSN ? log_lsn-1 : xid_lsn;
-	assert(ret != INVALID_LSN);
-	return ret;
-}
-
 END_C_DECLS
 
 template <class TUPLE>
@@ -128,7 +120,7 @@ void DataPage<TUPLE>::initialize_page(pageid_t pageid) {
     *length_at_offset_ptr(p, calc_chunk_from_offset(write_offset_).slot) = 0;
 
     //set the page dirty
-    stasis_page_lsn_write(xid_, p, get_lsn(xid_));
+    stasis_page_lsn_write(xid_, p, alloc_->get_lsn(xid_));
 
     //release the page
     unlock(p->rwlatch);
@@ -146,7 +138,7 @@ size_t DataPage<TUPLE>::write_bytes(const byte * buf, size_t remaining) {
 		Page *p = loadPage(xid_, chunk.page);
 		memcpy(data_at_offset_ptr(p, chunk.slot), buf, chunk.size);
 		writelock(p->rwlatch,0);
-		stasis_page_lsn_write(xid_, p, get_lsn(xid_));
+		stasis_page_lsn_write(xid_, p, alloc_->get_lsn(xid_));
 		unlock(p->rwlatch);
 		releasePage(p);
 		write_offset_ += chunk.size;
@@ -194,7 +186,7 @@ bool DataPage<TUPLE>::initialize_next_page() {
   Page *p = loadPage(xid_, rid.page-1);
   *is_another_page_ptr(p) = (rid.page-1 == first_page_) ? 2 : 1;
   writelock(p->rwlatch, 0);
-  stasis_page_lsn_write(xid_, p, get_lsn(xid_));
+  stasis_page_lsn_write(xid_, p, alloc_->get_lsn(xid_));
   unlock(p->rwlatch);
   releasePage(p);
 
