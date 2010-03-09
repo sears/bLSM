@@ -44,8 +44,6 @@ void insertProbeIter_str(int  NUM_ENTRIES)
     
     xid = Tbegin();
     diskTreeComponent::internalNodes *lt = ltable.get_tree_c1();
-    
-    recordid tree = lt->get_root_rec();
   
     long oldpagenum = -1;
 
@@ -73,24 +71,14 @@ void insertProbeIter_str(int  NUM_ENTRIES)
         currkey[keylen-1]='\0';      
       
         //printf("\n#########\ni=%d\nkey:\t%s\nkeylen:%d\n",i,((char*)currkey),keylen);
-        long pagenum = diskTreeComponent::internalNodes::findPage(xid, tree, currkey, keylen);
+        long pagenum = lt->findPage(xid, currkey, keylen);
         //printf("pagenum:%d\n", pagenum);
         assert(pagenum == -1 || pagenum == oldpagenum || oldpagenum == -1);
         //printf("TlsmAppendPage %d\n",i);
 
-        recordid rid = lt->get_tree_state();
-        diskTreeComponent::internalNodes::RegionAllocConf_t alloc_conf;
-        Tread(xid,rid,&alloc_conf);
-      
-        diskTreeComponent::internalNodes::appendPage(xid, tree, lt->lastLeaf, currkey, keylen, lt->alloc_region, &alloc_conf, i + OFFSET);
+        lt->appendPage(xid, currkey, keylen, i + OFFSET);
 
-        //DEBUG("{%lld <- alloc region extend}\n", conf.regionList.page);
-        // XXX get rid of Tset by storing next page in memory, and losing it
-        //     on crash.
-        Tset(xid,rid,&alloc_conf);
-      
-      
-        pagenum = diskTreeComponent::internalNodes::findPage(xid, tree, currkey,keylen);
+        pagenum = lt->findPage(xid, currkey,keylen);
         oldpagenum = pagenum;
         //printf("pagenum:%d\n", pagenum);      
         assert(pagenum == i + OFFSET);
@@ -101,7 +89,6 @@ void insertProbeIter_str(int  NUM_ENTRIES)
 
     printf("Writes complete.");
     
-    tree = lt->get_root_rec();
     Tcommit(xid);
     xid = Tbegin();
 
@@ -118,7 +105,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
         currkey[keylen-1]='\0';
 
         //printf("\n#########\ni=%d\nkey:\t%s\nkeylen:%d\n",i,((char*)currkey),keylen);
-        long pagenum = diskTreeComponent::internalNodes::findPage(xid, tree, currkey, keylen);
+        long pagenum = lt->findPage(xid, currkey, keylen);
         //printf("pagenum:%d\n", pagenum);      
         assert(pagenum == i + OFFSET);
         free(currkey);
@@ -129,7 +116,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
 
     
     int64_t count = 0;
-    diskTreeComponent::internalNodes::iterator * it = new diskTreeComponent::internalNodes::iterator(xid, tree);
+    diskTreeComponent::internalNodes::iterator * it = new diskTreeComponent::internalNodes::iterator(xid, lt->get_root_rec());
 
     while(it->next()) {
         byte * key;
@@ -178,8 +165,6 @@ void insertProbeIter_int(int  NUM_ENTRIES)
     
     xid = Tbegin();
     diskTreeComponent::internalNodes *lt = ltable.get_tree_c1();
-    
-    recordid tree = lt->get_root_rec();
   
     long oldpagenum = -1;
     
@@ -190,24 +175,14 @@ void insertProbeIter_int(int  NUM_ENTRIES)
         //currkey[]='\0';
       
         printf("\n#########\ni=%d\nkey:\t%d\nkeylen:%d\n",i,*((int32_t*)currkey),keylen);
-        pageid_t pagenum = diskTreeComponent::internalNodes::findPage(xid, tree, currkey, keylen);
+        pageid_t pagenum = lt->findPage(xid, currkey, keylen);
         printf("pagenum:%lld\n", (long long)pagenum);
         assert(pagenum == -1 || pagenum == oldpagenum || oldpagenum == -1);
         printf("TlsmAppendPage %d\n",i);
 
-        recordid rid = lt->get_tree_state();
-        diskTreeComponent::internalNodes::RegionAllocConf_t alloc_conf;
-        Tread(xid,rid,&alloc_conf);
-      
-        diskTreeComponent::internalNodes::appendPage(xid, tree, lt->lastLeaf, currkey, keylen, lt->alloc_region, &alloc_conf, i + OFFSET);
+        lt->appendPage(xid, currkey, keylen, i + OFFSET);
 
-        //DEBUG("{%lld <- alloc region extend}\n", conf.regionList.page);
-        // XXX get rid of Tset by storing next page in memory, and losing it
-        //     on crash.
-        Tset(xid,rid,&alloc_conf);
-      
-      
-        pagenum = diskTreeComponent::internalNodes::findPage(xid, tree, currkey,keylen);
+        pagenum = lt->findPage(xid, currkey,keylen);
         oldpagenum = pagenum;
         printf("pagenum:%lld\n", (long long)pagenum);
         assert(pagenum == i + OFFSET);
@@ -216,7 +191,6 @@ void insertProbeIter_int(int  NUM_ENTRIES)
 
     printf("Writes complete.");
   
-    tree = lt->get_root_rec();
     Tcommit(xid);
     xid = Tbegin();
 
@@ -229,7 +203,7 @@ void insertProbeIter_int(int  NUM_ENTRIES)
         memcpy(currkey, (byte*)(&i), keylen);
 
         printf("\n#########\ni=%d\nkey:\t%d\nkeylen:%d\n",i,*((int32_t*)currkey),keylen);
-        pageid_t pagenum = diskTreeComponent::internalNodes::findPage(xid, tree, currkey, keylen);
+        pageid_t pagenum = lt->findPage(xid, currkey, keylen);
         printf("pagenum:%lld\n", (long long) pagenum);
         assert(pagenum == i + OFFSET);
         free(currkey);

@@ -89,10 +89,10 @@ void logtable::openTable(int xid, recordid rid) {
 void logtable::update_persistent_header(int xid) {
 
 	tbl_header.c2_root = tree_c2->get_root_rec();
-    tbl_header.c2_dp_state = tree_c2->get_alloc()->header_rid();
+    tbl_header.c2_dp_state = tree_c2->get_datapage_alloc()->header_rid();
     tbl_header.c2_state = tree_c2->get_tree_state();
     tbl_header.c1_root = tree_c1->get_root_rec();
-    tbl_header.c1_dp_state = tree_c1->get_alloc()->header_rid();
+    tbl_header.c1_dp_state = tree_c1->get_datapage_alloc()->header_rid();
     tbl_header.c1_state = tree_c1->get_tree_state();
     
     Tset(xid, table_rec, &tbl_header);    
@@ -453,7 +453,7 @@ DataPage<datatuple>* logtable::insertTuple(int xid, datatuple *tuple, diskTreeCo
     int count = 0;
     while(dp==0)
     {
-      dp = new DataPage<datatuple>(xid, fixed_page_count, ltree->get_alloc());
+      dp = new DataPage<datatuple>(xid, fixed_page_count, ltree->get_datapage_alloc());
 
         //insert the record into the data page
         if(!dp->append(tuple))
@@ -467,17 +467,11 @@ DataPage<datatuple>* logtable::insertTuple(int xid, datatuple *tuple, diskTreeCo
     }
     
 
-    diskTreeComponent::internalNodes::RegionAllocConf_t alloc_conf;
-    //insert the record key and id of the first page of the datapage to the diskTreeComponent
-    Tread(xid,ltree->get_tree_state(), &alloc_conf);
-    diskTreeComponent::internalNodes::appendPage(xid, ltree->get_root_rec(), ltree->lastLeaf,
+    ltree->appendPage(xid,
                         tuple->key(),
                         tuple->keylen(),
-                        ltree->alloc_region,
-                        &alloc_conf,
                         dp->get_start_pid()
                         );
-    Tset(xid,ltree->get_tree_state(),&alloc_conf);
                         
 
     //return the datapage
@@ -489,7 +483,7 @@ datatuple * logtable::findTuple(int xid, datatuple::key_t key, size_t keySize,  
     datatuple * tup=0;
 
     //find the datapage
-    pageid_t pid = ltree->findPage(xid, ltree->get_root_rec(), (byte*)key, keySize);
+    pageid_t pid = ltree->findPage(xid, (byte*)key, keySize);
 
     if(pid!=-1)
     {
