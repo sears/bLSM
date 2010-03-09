@@ -17,7 +17,7 @@
 #include <stasis/page.h>
 #include <stasis/truncation.h>
 
-
+#include "regionAllocator.h"
 #include "datapage.h"
 #include "tuplemerger.h"
 #include "datatuple.h"
@@ -44,11 +44,11 @@ public:
     typedef void(*diskTreeComponent_page_deallocator_t)(int, void *);
 
 
-    internalNodes(int xid): region_alloc(new DataPage<datatuple>::RegionAllocator(xid, 10000)) {create(xid);}  // XXX shouldn't hardcode region size.
+    internalNodes(int xid): region_alloc(new RegionAllocator(xid, 10000)) {create(xid);}  // XXX shouldn't hardcode region size.
     internalNodes(int xid, recordid root, recordid state, recordid dp_state)
     : tree_state(state),
       root_rec(root),
-      region_alloc(new DataPage<datatuple>::RegionAllocator(xid, dp_state)) { lastLeaf = -1; }
+      region_alloc(new RegionAllocator(xid, dp_state)) { lastLeaf = -1; }
   private:
     recordid create(int xid);
   public:
@@ -107,7 +107,7 @@ public:
                                     diskTreeComponent_page_allocator_t allocator,
                                     void *allocator_state);
 
-    inline DataPage<datatuple>::RegionAllocator* get_alloc() { return region_alloc; }
+    inline RegionAllocator* get_alloc() { return region_alloc; }
 
     /**
        Initialize a page for use as an internal node of the tree.
@@ -135,7 +135,7 @@ public:
     recordid tree_state;
     recordid root_rec;
 
-    DataPage<datatuple>::RegionAllocator* region_alloc;
+    RegionAllocator* region_alloc;
 
   public:
     class iterator {
