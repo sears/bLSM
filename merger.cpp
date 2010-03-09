@@ -64,7 +64,7 @@ double merge_stats_nsec_to_merge_in_bytes(merge_stats_t); // how many nsec did w
 inline DataPage<datatuple>*
 insertTuple(int xid, DataPage<datatuple> *dp, datatuple *t,
             logtable *ltable,
-            diskTreeComponent * ltree, merge_stats_t*);
+            diskTreeComponent::internalNodes * ltree, merge_stats_t*);
 
 int merge_scheduler::addlogtable(logtable *ltable)
 {
@@ -245,7 +245,7 @@ void merge_iterators(int xid,
                     ITA *itrA,
                     ITB *itrB,
                     logtable *ltable,
-                    diskTreeComponent *scratch_tree,
+                    diskTreeComponent::internalNodes *scratch_tree,
                     merge_stats_t *stats,
                     bool dropDeletes);
 
@@ -340,7 +340,7 @@ void* memMergeThread(void*arg)
 
         
         //create a new tree
-        diskTreeComponent * c1_prime = new diskTreeComponent(xid); // XXX should not hardcode region size)
+        diskTreeComponent::internalNodes * c1_prime = new diskTreeComponent::internalNodes(xid); // XXX should not hardcode region size)
 
         //pthread_mutex_unlock(a->block_ready_mut);
         unlock(ltable->header_lock);
@@ -356,7 +356,7 @@ void* memMergeThread(void*arg)
         // 5: force c1'
 
         //force write the new region to disk
-        diskTreeComponent::force_region_rid(xid, c1_prime->get_tree_state());
+        diskTreeComponent::internalNodes::force_region_rid(xid, c1_prime->get_tree_state());
         //force write the new datapages
         c1_prime->get_alloc()->force_regions(xid);
 
@@ -391,7 +391,7 @@ void* memMergeThread(void*arg)
         }
 
         // 12: delete old c1
-        diskTreeComponent::dealloc_region_rid(xid, ltable->get_tree_c1()->get_tree_state());
+        diskTreeComponent::internalNodes::dealloc_region_rid(xid, ltable->get_tree_c1()->get_tree_state());
         ltable->get_tree_c1()->get_alloc()->dealloc_regions(xid);
         delete ltable->get_tree_c1();
 
@@ -406,7 +406,7 @@ void* memMergeThread(void*arg)
 			ltable->set_tree_c1_mergeable(c1_prime);
 
 			// 8: c1 = new empty.
-            ltable->set_tree_c1(new diskTreeComponent(xid));
+            ltable->set_tree_c1(new diskTreeComponent::internalNodes(xid));
 
             pthread_cond_signal(a->out_block_ready_cond);
 
@@ -497,7 +497,7 @@ void *diskMergeThread(void*arg)
 
         //create a new tree
         //TODO: maybe you want larger regions for the second tree?
-        diskTreeComponent * c2_prime = new diskTreeComponent(xid);
+        diskTreeComponent::internalNodes * c2_prime = new diskTreeComponent::internalNodes(xid);
 
         unlock(ltable->header_lock);
         
@@ -510,18 +510,18 @@ void *diskMergeThread(void*arg)
         delete itrB;        
 
         //5: force write the new region to disk
-        diskTreeComponent::force_region_rid(xid, c2_prime->get_tree_state());
+        diskTreeComponent::internalNodes::force_region_rid(xid, c2_prime->get_tree_state());
         c2_prime->get_alloc()->force_regions(xid);
 
         // (skip 6, 7, 8, 8.5, 9))
 
         writelock(ltable->header_lock,0);
         //12
-        diskTreeComponent::dealloc_region_rid(xid, ltable->get_tree_c2()->get_tree_state());
+        diskTreeComponent::internalNodes::dealloc_region_rid(xid, ltable->get_tree_c2()->get_tree_state());
         ltable->get_tree_c2()->get_alloc()->dealloc_regions(xid);
         delete ltable->get_tree_c2();
         //11.5
-        diskTreeComponent::dealloc_region_rid(xid, ltable->get_tree_c1_mergeable()->get_tree_state());
+        diskTreeComponent::internalNodes::dealloc_region_rid(xid, ltable->get_tree_c1_mergeable()->get_tree_state());
         ltable->get_tree_c1_mergeable()->get_alloc()->dealloc_regions(xid);
         //11
         delete ltable->get_tree_c1_mergeable();
@@ -560,7 +560,7 @@ void merge_iterators(int xid,
                         ITA *itrA, //iterator on c1 or c2
                         ITB *itrB, //iterator on c0 or c1, respectively
                         logtable *ltable,
-                        diskTreeComponent *scratch_tree, merge_stats_t *stats,
+                        diskTreeComponent::internalNodes *scratch_tree, merge_stats_t *stats,
                         bool dropDeletes  // should be true iff this is biggest component
                         )
 {
@@ -654,7 +654,7 @@ void merge_iterators(int xid,
 inline DataPage<datatuple>*
 insertTuple(int xid, DataPage<datatuple> *dp, datatuple *t,
             logtable *ltable,
-            diskTreeComponent * ltree, merge_stats_t * stats)
+            diskTreeComponent::internalNodes * ltree, merge_stats_t * stats)
 {
     if(dp==0)
     {

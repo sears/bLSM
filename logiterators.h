@@ -15,9 +15,9 @@ public:
 
     explicit diskTreeIterator(recordid tree,TUPLE &key);
 
-    explicit diskTreeIterator(diskTreeComponent *tree);
+    explicit diskTreeIterator(diskTreeComponent::internalNodes *tree);
 
-    explicit diskTreeIterator(diskTreeComponent *tree,TUPLE &key);
+    explicit diskTreeIterator(diskTreeComponent::internalNodes *tree,TUPLE &key);
 
     ~diskTreeIterator();
     
@@ -34,7 +34,7 @@ private:
 private:
     recordid tree_; //root of the tree
     
-    diskTreeComponent::iterator* lsmIterator_;
+    diskTreeComponent::internalNodes::iterator* lsmIterator_;
     
     pageid_t curr_pageid; //current page id
     DataPage<TUPLE>    *curr_page;   //current page

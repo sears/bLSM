@@ -26,7 +26,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     sync();
 
-    diskTreeComponent::init_stasis();
+    diskTreeComponent::internalNodes::init_stasis();
 
     //data generation
 //    std::vector<std::string> * data_arr = new std::vector<std::string>;
@@ -102,7 +102,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     //Tcommit(xid);
     
-    diskTreeComponent::deinit_stasis();
+    diskTreeComponent::internalNodes::deinit_stasis();
     
     
 }

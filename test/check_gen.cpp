@@ -9,7 +9,7 @@ int main(int argc, char **argv)
 
     sync();
 
-    diskTreeComponent::init_stasis();
+    diskTreeComponent::internalNodes::init_stasis();
 
     int xid = Tbegin();
 
@@ -24,12 +24,12 @@ int main(int argc, char **argv)
 //    lsmTableHandle<PAGELAYOUT>* h = TlsmTableStart<PAGELAYOUT>(lsmTable, INVALID_COL);
 
     xid = Tbegin();
-    diskTreeComponent::iterator * it = new diskTreeComponent::iterator(xid,ltable.get_tree_c2()->get_root_rec() );
+    diskTreeComponent::internalNodes::iterator * it = new diskTreeComponent::internalNodes::iterator(xid,ltable.get_tree_c2()->get_root_rec() );
     it->close();
     delete it;
     Tcommit(xid);
 
-    diskTreeComponent::deinit_stasis();
+    diskTreeComponent::internalNodes::deinit_stasis();
 
 
 

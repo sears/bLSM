@@ -37,7 +37,7 @@ void terminate (int param)
 
 	  printf("Deinitializing stasis...\n");
 	  fflush(stdout);
-	  diskTreeComponent::deinit_stasis();
+	  diskTreeComponent::internalNodes::deinit_stasis();
 
 	  exit(0);
 }
@@ -50,7 +50,7 @@ void initialize_server()
 
     prev_fn = signal (SIGINT,terminate);
 
-    diskTreeComponent::init_stasis();
+    diskTreeComponent::internalNodes::init_stasis();
 
     int xid = Tbegin();
 

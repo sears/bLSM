@@ -28,7 +28,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     sync();
 
-    diskTreeComponent::init_stasis();
+    diskTreeComponent::internalNodes::init_stasis();
 
     int xid = Tbegin();
 
@@ -53,7 +53,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     recordid alloc_state = Talloc(xid,sizeof(RegionAllocConf_t));
     
-    Tset(xid,alloc_state, &diskTreeComponent::REGION_ALLOC_STATIC_INITIALIZER);
+    Tset(xid,alloc_state, &diskTreeComponent::internalNodes::REGION_ALLOC_STATIC_INITIALIZER);
 
     printf("Stage 1: Writing %d keys\n", NUM_ENTRIES);
       
@@ -119,7 +119,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
   
 	Tcommit(xid);
 
-	diskTreeComponent::deinit_stasis();
+	diskTreeComponent::internalNodes::deinit_stasis();
 }
 
 

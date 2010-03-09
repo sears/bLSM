@@ -71,10 +71,10 @@ recordid logtable::allocTable(int xid)
     table_rec = Talloc(xid, sizeof(tbl_header));
     
     //create the big tree
-    tree_c2 = new diskTreeComponent(xid);
+    tree_c2 = new diskTreeComponent::internalNodes(xid);
 
     //create the small tree
-    tree_c1 = new diskTreeComponent(xid);
+    tree_c1 = new diskTreeComponent::internalNodes(xid);
 
     update_persistent_header(xid);
 
@@ -83,8 +83,8 @@ recordid logtable::allocTable(int xid)
 void logtable::openTable(int xid, recordid rid) {
 	table_rec = rid;
 	Tread(xid, table_rec, &tbl_header);
-	tree_c2 = new diskTreeComponent(xid, tbl_header.c2_root, tbl_header.c2_state, tbl_header.c2_dp_state);
-	tree_c1 = new diskTreeComponent(xid, tbl_header.c1_root, tbl_header.c1_state, tbl_header.c1_dp_state);
+	tree_c2 = new diskTreeComponent::internalNodes(xid, tbl_header.c2_root, tbl_header.c2_state, tbl_header.c2_dp_state);
+	tree_c1 = new diskTreeComponent::internalNodes(xid, tbl_header.c1_root, tbl_header.c1_state, tbl_header.c1_dp_state);
 }
 void logtable::update_persistent_header(int xid) {
 
@@ -445,7 +445,7 @@ void logtable::insertTuple(datatuple *tuple)
 }
 
 
-DataPage<datatuple>* logtable::insertTuple(int xid, datatuple *tuple, diskTreeComponent *ltree)
+DataPage<datatuple>* logtable::insertTuple(int xid, datatuple *tuple, diskTreeComponent::internalNodes *ltree)
 {
     //create a new data page -- either the last region is full, or the last data page doesn't want our tuple.  (or both)
     
@@ -470,7 +470,7 @@ DataPage<datatuple>* logtable::insertTuple(int xid, datatuple *tuple, diskTreeCo
     RegionAllocConf_t alloc_conf;
     //insert the record key and id of the first page of the datapage to the diskTreeComponent
     Tread(xid,ltree->get_tree_state(), &alloc_conf);
-    diskTreeComponent::appendPage(xid, ltree->get_root_rec(), ltree->lastLeaf,
+    diskTreeComponent::internalNodes::appendPage(xid, ltree->get_root_rec(), ltree->lastLeaf,
                         tuple->key(),
                         tuple->keylen(),
                         ltree->alloc_region,
@@ -484,7 +484,7 @@ DataPage<datatuple>* logtable::insertTuple(int xid, datatuple *tuple, diskTreeCo
     return dp;
 }
 
-datatuple * logtable::findTuple(int xid, datatuple::key_t key, size_t keySize,  diskTreeComponent *ltree)
+datatuple * logtable::findTuple(int xid, datatuple::key_t key, size_t keySize,  diskTreeComponent::internalNodes *ltree)
 {
     datatuple * tup=0;
 

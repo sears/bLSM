@@ -61,9 +61,9 @@ public:
     void openTable(int xid, recordid rid);
     void flushTable();    
     
-    DataPage<datatuple>* insertTuple(int xid, datatuple *tuple,diskTreeComponent *ltree);
+    DataPage<datatuple>* insertTuple(int xid, datatuple *tuple,diskTreeComponent::internalNodes *ltree);
 
-    datatuple * findTuple(int xid, const datatuple::key_t key, size_t keySize,  diskTreeComponent *ltree);
+    datatuple * findTuple(int xid, const datatuple::key_t key, size_t keySize,  diskTreeComponent::internalNodes *ltree);
 
     inline recordid & get_table_rec(){return table_rec;}  // TODO This is called by merger.cpp for no good reason.  (remove the calls)
     
@@ -73,13 +73,13 @@ public:
     void forgetIterator(logtableIterator<datatuple> * it);
     void bump_epoch() ;
 
-    inline diskTreeComponent * get_tree_c2(){return tree_c2;}
-    inline diskTreeComponent * get_tree_c1(){return tree_c1;}
-    inline diskTreeComponent * get_tree_c1_mergeable(){return tree_c1_mergeable;}
+    inline diskTreeComponent::internalNodes * get_tree_c2(){return tree_c2;}
+    inline diskTreeComponent::internalNodes * get_tree_c1(){return tree_c1;}
+    inline diskTreeComponent::internalNodes * get_tree_c1_mergeable(){return tree_c1_mergeable;}
 
-    inline void set_tree_c1(diskTreeComponent *t){tree_c1=t;                      bump_epoch(); }
-    inline void set_tree_c1_mergeable(diskTreeComponent *t){tree_c1_mergeable=t;  bump_epoch(); }
-    inline void set_tree_c2(diskTreeComponent *t){tree_c2=t;                      bump_epoch(); }
+    inline void set_tree_c1(diskTreeComponent::internalNodes *t){tree_c1=t;                      bump_epoch(); }
+    inline void set_tree_c1_mergeable(diskTreeComponent::internalNodes *t){tree_c1_mergeable=t;  bump_epoch(); }
+    inline void set_tree_c2(diskTreeComponent::internalNodes *t){tree_c2=t;                      bump_epoch(); }
     
     inline memTreeComponent<datatuple>::rbtree_ptr_t get_tree_c0(){return tree_c0;}
     inline memTreeComponent<datatuple>::rbtree_ptr_t get_tree_c0_mergeable(){return tree_c0_mergeable;}
@@ -124,9 +124,9 @@ private:
     recordid table_rec;
     struct table_header tbl_header;
     uint64_t epoch;
-    diskTreeComponent *tree_c2; //big tree
-    diskTreeComponent *tree_c1; //small tree
-    diskTreeComponent *tree_c1_mergeable; //small tree: ready to be merged with c2
+    diskTreeComponent::internalNodes *tree_c2; //big tree
+    diskTreeComponent::internalNodes *tree_c1; //small tree
+    diskTreeComponent::internalNodes *tree_c1_mergeable; //small tree: ready to be merged with c2
     memTreeComponent<datatuple>::rbtree_ptr_t tree_c0; // in-mem red black tree
     memTreeComponent<datatuple>::rbtree_ptr_t tree_c0_mergeable; // in-mem red black tree: ready to be merged with c1.
 

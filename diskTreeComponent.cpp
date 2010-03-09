@@ -23,16 +23,16 @@
 // LOGTREE implementation
 /////////////////////////////////////////////////////////////////
 
-const RegionAllocConf_t diskTreeComponent::REGION_ALLOC_STATIC_INITIALIZER = { {0,0,-1}, 0, -1, -1, 1000 };
+const RegionAllocConf_t diskTreeComponent::internalNodes::REGION_ALLOC_STATIC_INITIALIZER = { {0,0,-1}, 0, -1, -1, 1000 };
 
 //LSM_ROOT_PAGE
 
-const int64_t diskTreeComponent::DEPTH = 0;      //in root this is the slot num where the DEPTH (of tree) is stored
-const int64_t diskTreeComponent::COMPARATOR = 1; //in root this is the slot num where the COMPARATOR id is stored
-const int64_t diskTreeComponent::FIRST_SLOT = 2; //this is the first unused slot in all index pages
-const size_t diskTreeComponent::root_rec_size = sizeof(int64_t);
-const int64_t diskTreeComponent::PREV_LEAF = 0; //pointer to prev leaf page
-const int64_t diskTreeComponent::NEXT_LEAF = 1; //pointer to next leaf page
+const int64_t diskTreeComponent::internalNodes::DEPTH = 0;      //in root this is the slot num where the DEPTH (of tree) is stored
+const int64_t diskTreeComponent::internalNodes::COMPARATOR = 1; //in root this is the slot num where the COMPARATOR id is stored
+const int64_t diskTreeComponent::internalNodes::FIRST_SLOT = 2; //this is the first unused slot in all index pages
+const size_t diskTreeComponent::internalNodes::root_rec_size = sizeof(int64_t);
+const int64_t diskTreeComponent::internalNodes::PREV_LEAF = 0; //pointer to prev leaf page
+const int64_t diskTreeComponent::internalNodes::NEXT_LEAF = 1; //pointer to next leaf page
 
 // XXX hack, and cut and pasted from datapage.cpp.
 static lsn_t get_lsn(int xid) {
@@ -45,7 +45,7 @@ static lsn_t get_lsn(int xid) {
 
 // TODO move init_stasis to a more appropriate module
 
-void diskTreeComponent::init_stasis() {
+void diskTreeComponent::internalNodes::init_stasis() {
 
   bufferManagerFileHandleType = BUFFER_MANAGER_FILE_HANDLE_PFILE;
 
@@ -57,16 +57,16 @@ void diskTreeComponent::init_stasis() {
 
 }
 
-void diskTreeComponent::deinit_stasis() { Tdeinit(); }
+void diskTreeComponent::internalNodes::deinit_stasis() { Tdeinit(); }
 
-void diskTreeComponent::free_region_rid(int xid, recordid tree,
+void diskTreeComponent::internalNodes::free_region_rid(int xid, recordid tree,
           diskTreeComponent_page_deallocator_t dealloc, void *allocator_state) {
   dealloc(xid,allocator_state);
   // XXX fishy shouldn't caller do this?
   Tdealloc(xid, *(recordid*)allocator_state);
 }
 
-void diskTreeComponent::dealloc_region_rid(int xid, recordid rid) {
+void diskTreeComponent::internalNodes::dealloc_region_rid(int xid, recordid rid) {
   RegionAllocConf_t a;
   Tread(xid,rid,&a);
   DEBUG("{%lld <- dealloc region arraylist}\n", a.regionList.page);
@@ -82,7 +82,7 @@ void diskTreeComponent::dealloc_region_rid(int xid, recordid rid) {
 }
 
 
-void diskTreeComponent::force_region_rid(int xid, recordid rid) {
+void diskTreeComponent::internalNodes::force_region_rid(int xid, recordid rid) {
   RegionAllocConf_t a;
   Tread(xid,rid,&a);
 
@@ -100,7 +100,7 @@ void diskTreeComponent::force_region_rid(int xid, recordid rid) {
   }
 }
 
-pageid_t diskTreeComponent::alloc_region(int xid, void *conf) {
+pageid_t diskTreeComponent::internalNodes::alloc_region(int xid, void *conf) {
   RegionAllocConf_t* a = (RegionAllocConf_t*)conf;
 
   if(a->nextPage == a->endOfRegion) {
@@ -133,7 +133,7 @@ pageid_t diskTreeComponent::alloc_region(int xid, void *conf) {
   return ret;
 }
 
-pageid_t diskTreeComponent::alloc_region_rid(int xid, void * ridp) {
+pageid_t diskTreeComponent::internalNodes::alloc_region_rid(int xid, void * ridp) {
   recordid rid = *(recordid*)ridp;
   RegionAllocConf_t conf;
   Tread(xid,rid,&conf);
@@ -144,7 +144,7 @@ pageid_t diskTreeComponent::alloc_region_rid(int xid, void * ridp) {
   return ret;
 }
 
-pageid_t * diskTreeComponent::list_region_rid(int xid, void *ridp, pageid_t * region_len, pageid_t * region_count) {
+pageid_t * diskTreeComponent::internalNodes::list_region_rid(int xid, void *ridp, pageid_t * region_len, pageid_t * region_count) {
   recordid header = *(recordid*)ridp;
   RegionAllocConf_t conf;
   Tread(xid,header,&conf);
@@ -159,7 +159,7 @@ pageid_t * diskTreeComponent::list_region_rid(int xid, void *ridp, pageid_t * re
   return ret;
 }
 
-recordid diskTreeComponent::create(int xid) {
+recordid diskTreeComponent::internalNodes::create(int xid) {
 
   tree_state = Talloc(xid,sizeof(RegionAllocConf_t));
 
@@ -206,7 +206,7 @@ recordid diskTreeComponent::create(int xid) {
   return ret;
 }
 
-void diskTreeComponent::writeNodeRecord(int xid, Page * p, recordid & rid,
+void diskTreeComponent::internalNodes::writeNodeRecord(int xid, Page * p, recordid & rid,
                               const byte *key, size_t keylen, pageid_t ptr) {
   DEBUG("writenoderecord:\tp->id\t%lld\tkey:\t%s\tkeylen: %d\tval_page\t%lld\n",
         p->id, datatuple::key_to_str(key).c_str(), keylen, ptr);
@@ -217,7 +217,7 @@ void diskTreeComponent::writeNodeRecord(int xid, Page * p, recordid & rid,
   stasis_page_lsn_write(xid, p, get_lsn(xid));
 }
 
-void diskTreeComponent::initializeNodePage(int xid, Page *p) {
+void diskTreeComponent::internalNodes::initializeNodePage(int xid, Page *p) {
   stasis_page_slotted_initialize_page(p);
   recordid reserved1 = stasis_record_alloc_begin(xid, p, sizeof(indexnode_rec));
   stasis_record_alloc_done(xid, p, reserved1);
@@ -226,7 +226,7 @@ void diskTreeComponent::initializeNodePage(int xid, Page *p) {
 }
 
 
-recordid diskTreeComponent::appendPage(int xid, recordid tree, pageid_t & rmLeafID,
+recordid diskTreeComponent::internalNodes::appendPage(int xid, recordid tree, pageid_t & rmLeafID,
                              const byte *key, size_t keySize,
                              lsm_page_allocator_t allocator, void *allocator_state,
                              long val_page) {
@@ -367,7 +367,7 @@ recordid diskTreeComponent::appendPage(int xid, recordid tree, pageid_t & rmLeaf
 
     stasis_record_alloc_done(xid, lastLeaf, ret);
 
-    diskTreeComponent::writeNodeRecord(xid, lastLeaf, ret, key, keySize, val_page);
+    writeNodeRecord(xid, lastLeaf, ret, key, keySize, val_page);
 
     if(lastLeaf->id != p->id) {
       assert(rmLeafID != tree.page);
@@ -398,7 +398,7 @@ recordid diskTreeComponent::appendPage(int xid, recordid tree, pageid_t & rmLeaf
 
 */
 
-recordid diskTreeComponent::appendInternalNode(int xid, Page *p,
+recordid diskTreeComponent::internalNodes::appendInternalNode(int xid, Page *p,
                                      int64_t depth,
                                      const byte *key, size_t key_len,
                                      pageid_t val_page, pageid_t lastLeaf,
@@ -463,7 +463,7 @@ recordid diskTreeComponent::appendInternalNode(int xid, Page *p,
   return ret;
 }
 
-recordid diskTreeComponent::buildPathToLeaf(int xid, recordid root, Page *root_p,
+recordid diskTreeComponent::internalNodes::buildPathToLeaf(int xid, recordid root, Page *root_p,
                                   int64_t depth, const byte *key, size_t key_len,
                                   pageid_t val_page, pageid_t lastLeaf,
                                   diskTreeComponent_page_allocator_t allocator,
@@ -544,7 +544,7 @@ recordid diskTreeComponent::buildPathToLeaf(int xid, recordid root, Page *root_p
  * Traverse from the root of the page to the right most leaf (the one
  * with the higest base key value).
  **/
-pageid_t diskTreeComponent::findLastLeaf(int xid, Page *root, int64_t depth) {
+pageid_t diskTreeComponent::internalNodes::findLastLeaf(int xid, Page *root, int64_t depth) {
   if(!depth) {
     DEBUG("Found last leaf = %lld\n", root->id);
     return root->id;
@@ -568,7 +568,7 @@ pageid_t diskTreeComponent::findLastLeaf(int xid, Page *root, int64_t depth) {
  *  Traverse from the root of the tree to the left most (lowest valued
  *  key) leaf.
  */
-pageid_t diskTreeComponent::findFirstLeaf(int xid, Page *root, int64_t depth) {
+pageid_t diskTreeComponent::internalNodes::findFirstLeaf(int xid, Page *root, int64_t depth) {
 
   if(!depth) { //if depth is 0, then returns the id of the page
     return root->id;
@@ -586,7 +586,7 @@ pageid_t diskTreeComponent::findFirstLeaf(int xid, Page *root, int64_t depth) {
 }
 
 
-pageid_t diskTreeComponent::findPage(int xid, recordid tree, const byte *key, size_t keySize) {
+pageid_t diskTreeComponent::internalNodes::findPage(int xid, recordid tree, const byte *key, size_t keySize) {
 
   Page *p = loadPage(xid, tree.page);
   readlock(p->rwlatch,0);
@@ -605,7 +605,7 @@ pageid_t diskTreeComponent::findPage(int xid, recordid tree, const byte *key, si
 
 }
 
-pageid_t diskTreeComponent::lookupLeafPageFromRid(int xid, recordid rid) {
+pageid_t diskTreeComponent::internalNodes::lookupLeafPageFromRid(int xid, recordid rid) {
 
   pageid_t pid = -1;
   if(rid.page != NULLRID.page || rid.slot != NULLRID.slot) {
@@ -620,7 +620,7 @@ pageid_t diskTreeComponent::lookupLeafPageFromRid(int xid, recordid rid) {
   return pid;
 }
 
-recordid diskTreeComponent::lookup(int xid,
+recordid diskTreeComponent::internalNodes::lookup(int xid,
                             Page *node,
                             int64_t depth,
                             const byte *key, size_t keySize ) {
@@ -672,7 +672,7 @@ recordid diskTreeComponent::lookup(int xid,
   }
 }
 
-void diskTreeComponent::print_tree(int xid) {
+void diskTreeComponent::internalNodes::print_tree(int xid) {
   Page *p = loadPage(xid, root_rec.page);
   readlock(p->rwlatch,0);
   recordid depth_rid = {p->id, DEPTH, 0};
@@ -688,7 +688,7 @@ void diskTreeComponent::print_tree(int xid) {
 
 }
 
-void diskTreeComponent::print_tree(int xid, pageid_t pid, int64_t depth) {
+void diskTreeComponent::internalNodes::print_tree(int xid, pageid_t pid, int64_t depth) {
 
   Page *node = loadPage(xid, pid);
   readlock(node->rwlatch,0);
@@ -748,20 +748,20 @@ void diskTreeComponent::print_tree(int xid, pageid_t pid, int64_t depth) {
 //diskTreeComponentIterator implementation
 /////////////////////////////////////////////////
 
-diskTreeComponent::iterator::iterator(int xid, recordid root) {
+diskTreeComponent::internalNodes::iterator::iterator(int xid, recordid root) {
   if(root.page == 0 && root.slot == 0 && root.size == -1) abort();
   p = loadPage(xid,root.page);
   readlock(p->rwlatch,0);
 
-  DEBUG("ROOT_REC_SIZE %d\n", diskTreeComponent::root_rec_size);
-  recordid rid = {p->id, diskTreeComponent::DEPTH, diskTreeComponent::root_rec_size};
+  DEBUG("ROOT_REC_SIZE %d\n", diskTreeComponent::internalNodes::root_rec_size);
+  recordid rid = {p->id, diskTreeComponent::internalNodes::DEPTH, diskTreeComponent::internalNodes::root_rec_size};
   const indexnode_rec* nr = (const indexnode_rec*)stasis_record_read_begin(xid,p, rid);
 
   int64_t depth = nr->ptr;
   DEBUG("DEPTH = %lld\n", depth);
   stasis_record_read_done(xid,p,rid,(const byte*)nr);
 
-  pageid_t leafid = diskTreeComponent::findFirstLeaf(xid, p, depth);
+  pageid_t leafid = diskTreeComponent::internalNodes::findFirstLeaf(xid, p, depth);
   if(leafid != root.page) {
 
     unlock(p->rwlatch);
@@ -776,7 +776,7 @@ diskTreeComponent::iterator::iterator(int xid, recordid root) {
   {
     // Position just before the first slot.
     // The first call to next() will increment us to the first slot, or return NULL.
-    recordid rid = { p->id, diskTreeComponent::FIRST_SLOT-1, 0};
+    recordid rid = { p->id, diskTreeComponent::internalNodes::FIRST_SLOT-1, 0};
     current = rid;
   }
 
@@ -787,18 +787,18 @@ diskTreeComponent::iterator::iterator(int xid, recordid root) {
   justOnePage = (depth == 0);
 }
 
-diskTreeComponent::iterator::iterator(int xid, recordid root, const byte* key, len_t keylen) {
+diskTreeComponent::internalNodes::iterator::iterator(int xid, recordid root, const byte* key, len_t keylen) {
   if(root.page == NULLRID.page && root.slot == NULLRID.slot) abort();
 
   p = loadPage(xid,root.page);
   readlock(p->rwlatch,0);
-  recordid rid = {p->id, diskTreeComponent::DEPTH, diskTreeComponent::root_rec_size};
+  recordid rid = {p->id, diskTreeComponent::internalNodes::DEPTH, diskTreeComponent::internalNodes::root_rec_size};
 
   const indexnode_rec *nr = (const indexnode_rec*)stasis_record_read_begin(xid,p,rid);
   int64_t depth = nr->ptr;
   stasis_record_read_done(xid,p,rid,(const byte*)nr);
 
-  recordid lsm_entry_rid = diskTreeComponent::lookup(xid,p,depth,key,keylen);
+  recordid lsm_entry_rid = diskTreeComponent::internalNodes::lookup(xid,p,depth,key,keylen);
 
   if(lsm_entry_rid.page == NULLRID.page && lsm_entry_rid.slot == NULLRID.slot) {
     unlock(p->rwlatch);
@@ -833,7 +833,7 @@ diskTreeComponent::iterator::iterator(int xid, recordid root, const byte* key, l
 /**
  * move to the next page
  **/
-int diskTreeComponent::iterator::next()
+int diskTreeComponent::internalNodes::iterator::next()
 {
   if(done) return 0;
 
@@ -841,7 +841,7 @@ int diskTreeComponent::iterator::next()
 
   if(current.size == INVALID_SLOT) {
 
-    recordid next_leaf_rid = {p->id, diskTreeComponent::NEXT_LEAF,0};
+    recordid next_leaf_rid = {p->id, diskTreeComponent::internalNodes::NEXT_LEAF,0};
     const indexnode_rec *nr = (const indexnode_rec*)stasis_record_read_begin(xid_, p, next_leaf_rid);
     pageid_t next_rec = nr->ptr;
     stasis_record_read_done(xid_,p,next_leaf_rid,(const byte*)nr);
@@ -881,7 +881,7 @@ int diskTreeComponent::iterator::next()
   }
 }
 
-void diskTreeComponent::iterator::close() {
+void diskTreeComponent::internalNodes::iterator::close() {
 
   if(p) {
     unlock(p->rwlatch);

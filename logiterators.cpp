@@ -12,9 +12,9 @@ void diskTreeIterator<TUPLE>::init_iterators(TUPLE * key1, TUPLE * key2) {
   		lsmIterator_ = NULL;
   	} else {
   		if(key1) {
-  			lsmIterator_ = new diskTreeComponent::iterator(-1, tree_, key1->key(), key1->keylen());
+  			lsmIterator_ = new diskTreeComponent::internalNodes::iterator(-1, tree_, key1->key(), key1->keylen());
   		} else {
-  			lsmIterator_ = new diskTreeComponent::iterator(-1, tree_);
+  			lsmIterator_ = new diskTreeComponent::internalNodes::iterator(-1, tree_);
   		}
   	}
   }
@@ -37,7 +37,7 @@ diskTreeIterator<TUPLE>::diskTreeIterator(recordid tree, TUPLE& key) :
 
 }
 template <class TUPLE>
-diskTreeIterator<TUPLE>::diskTreeIterator(diskTreeComponent *tree) :
+diskTreeIterator<TUPLE>::diskTreeIterator(diskTreeComponent::internalNodes *tree) :
     tree_(tree ? tree->get_root_rec() : NULLRID)
 {
 	init_iterators(NULL, NULL);
@@ -45,7 +45,7 @@ diskTreeIterator<TUPLE>::diskTreeIterator(diskTreeComponent *tree) :
 }
 
 template <class TUPLE>
-diskTreeIterator<TUPLE>::diskTreeIterator(diskTreeComponent *tree, TUPLE& key) :
+diskTreeIterator<TUPLE>::diskTreeIterator(diskTreeComponent::internalNodes *tree, TUPLE& key) :
     tree_(tree ? tree->get_root_rec() : NULLRID)
 {
     init_iterators(&key,NULL);

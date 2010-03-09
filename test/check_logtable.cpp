@@ -28,7 +28,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     sync();
 
-    diskTreeComponent::init_stasis();
+    diskTreeComponent::internalNodes::init_stasis();
 
     int xid = Tbegin();
 
@@ -41,7 +41,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     Tcommit(xid);
     
     xid = Tbegin();
-    diskTreeComponent *ltable_c1 = ltable.get_tree_c1();
+    diskTreeComponent::internalNodes *ltable_c1 = ltable.get_tree_c1();
     
     recordid tree_root = ltable_c1->get_root_rec();
 
@@ -153,7 +153,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     printf("Random Reads completed.\n");
     Tcommit(xid);
-    diskTreeComponent::deinit_stasis();
+    diskTreeComponent::internalNodes::deinit_stasis();
 }
 
 /** @test
