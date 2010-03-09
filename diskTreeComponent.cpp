@@ -23,8 +23,6 @@
 // LOGTREE implementation
 /////////////////////////////////////////////////////////////////
 
-const diskTreeComponent::internalNodes::RegionAllocConf_t diskTreeComponent::internalNodes::REGION_ALLOC_STATIC_INITIALIZER = { {0,0,-1}, 0, -1, -1, 1000 };
-
 //LSM_ROOT_PAGE
 
 const int64_t diskTreeComponent::internalNodes::DEPTH = 0;      //in root this is the slot num where the DEPTH (of tree) is stored
@@ -58,121 +56,14 @@ void diskTreeComponent::internalNodes::init_stasis() {
 }
 
 void diskTreeComponent::internalNodes::deinit_stasis() { Tdeinit(); }
-
-void diskTreeComponent::internalNodes::free_region_rid(int xid, recordid tree,
-          diskTreeComponent_page_deallocator_t dealloc, void *allocator_state) {
-  dealloc(xid,allocator_state);
-  // XXX fishy shouldn't caller do this?
-  Tdealloc(xid, *(recordid*)allocator_state);
-}
-
-void diskTreeComponent::internalNodes::dealloc_region_rid(int xid, recordid rid) {
-  RegionAllocConf_t a;
-  Tread(xid,rid,&a);
-  DEBUG("{%lld <- dealloc region arraylist}\n", a.regionList.page);
-
-  for(int i = 0; i < a.regionCount; i++) {
-     a.regionList.slot = i;
-     pageid_t pid;
-     Tread(xid,a.regionList,&pid);
-     TregionDealloc(xid,pid);
-  }
-  a.regionList.slot = 0;
-  TarrayListDealloc(xid, a.regionList);
-}
-
-
-void diskTreeComponent::internalNodes::force_region_rid(int xid, recordid rid) {
-  RegionAllocConf_t a;
-  Tread(xid,rid,&a);
-
-  for(int i = 0; i < a.regionCount; i++)
-  {
-    a.regionList.slot = i;
-    pageid_t pid;
-    Tread(xid,a.regionList,&pid);
-    stasis_dirty_page_table_flush_range(
-        (stasis_dirty_page_table_t*)stasis_runtime_dirty_page_table(),
-         pid, pid+a.regionSize);
-    stasis_buffer_manager_t *bm =
-         (stasis_buffer_manager_t*)stasis_runtime_buffer_manager();
-    bm->forcePageRange(bm, pid, pid+a.regionSize);
-  }
-}
-
-pageid_t diskTreeComponent::internalNodes::alloc_region(int xid, void *conf) {
-  RegionAllocConf_t* a = (RegionAllocConf_t*)conf;
-
-  if(a->nextPage == a->endOfRegion) {
-    if(a->regionList.size == -1) {
-      //DEBUG("nextPage: %lld\n", a->nextPage);
-      a->regionList = TarrayListAlloc(xid, 1, 4, sizeof(pageid_t));
-      DEBUG("regionList.page: %lld\n", a->regionList.page);
-      DEBUG("regionList.slot: %d\n", a->regionList.slot);
-      DEBUG("regionList.size: %lld\n", a->regionList.size);
-
-      a->regionCount = 0;
-    }
-    DEBUG("{%lld <- alloc region arraylist}\n", a->regionList.page);
-    TarrayListExtend(xid,a->regionList,1);
-    a->regionList.slot = a->regionCount;
-    DEBUG("region lst slot %d\n",a->regionList.slot);
-    a->regionCount++;
-    DEBUG("region count %lld\n",a->regionCount);
-    a->nextPage = TregionAlloc(xid, a->regionSize,12);
-    DEBUG("next page %lld\n",a->nextPage);
-    a->endOfRegion = a->nextPage + a->regionSize;
-    Tset(xid,a->regionList,&a->nextPage);
-    DEBUG("next page %lld\n",a->nextPage);
-  }
-
-  DEBUG("%lld ?= %lld\n", a->nextPage,a->endOfRegion);
-  pageid_t ret = a->nextPage;
-  (a->nextPage)++;
-  DEBUG("tree %lld-%lld\n", (long long)ret, a->endOfRegion);
-  return ret;
-}
-
-pageid_t diskTreeComponent::internalNodes::alloc_region_rid(int xid, void * ridp) {
-  recordid rid = *(recordid*)ridp;
-  RegionAllocConf_t conf;
-  Tread(xid,rid,&conf);
-  pageid_t ret = alloc_region(xid,&conf);
-  // XXX get rid of Tset by storing next page in memory, and losing it
-  //     on crash.
-  Tset(xid,rid,&conf);
-  return ret;
-}
-
-pageid_t * diskTreeComponent::internalNodes::list_region_rid(int xid, void *ridp, pageid_t * region_len, pageid_t * region_count) {
-  recordid header = *(recordid*)ridp;
-  RegionAllocConf_t conf;
-  Tread(xid,header,&conf);
-  recordid header_list = conf.regionList;
-  *region_len = conf.regionSize;
-  *region_count = conf.regionCount;
-  pageid_t * ret = (pageid_t*) malloc(sizeof(pageid_t) * *region_count);
-  for(pageid_t i = 0; i < *region_count; i++) {
-    header_list.slot = i;
-    Tread(xid,header_list,&ret[i]);
-  }
-  return ret;
-}
-
 recordid diskTreeComponent::internalNodes::create(int xid) {
 
-  internal_node_alloc = Talloc(xid,sizeof(RegionAllocConf_t));
-
-  Tset(xid,internal_node_alloc, &REGION_ALLOC_STATIC_INITIALIZER);
-
-  pageid_t root = alloc_region_rid(xid, &internal_node_alloc);
+  pageid_t root = internal_node_alloc->alloc_extent(xid, 1);
   DEBUG("Root = %lld\n", root);
   recordid ret = { root, 0, 0 };
 
   Page *p = loadPage(xid, ret.page);
   writelock(p->rwlatch,0);
-
-  lastLeaf = -1;
 
   //initialize root node
   stasis_page_slotted_initialize_page(p);
@@ -229,11 +120,6 @@ void diskTreeComponent::internalNodes::initializeNodePage(int xid, Page *p) {
 recordid diskTreeComponent::internalNodes::appendPage(int xid,
                              const byte *key, size_t keySize, pageid_t val_page) {
   recordid tree = root_rec;
-  lsm_page_allocator_t allocator = alloc_region;
-  diskTreeComponent::internalNodes::RegionAllocConf_t allocator_state;
-  //insert the record key and id of the first page of the datapage to the diskTreeComponent
-  Tread(xid,get_tree_state(), &allocator_state);
-
 
   Page *p = loadPage(xid, tree.page);
   writelock(p->rwlatch, 0);
@@ -275,13 +161,12 @@ recordid diskTreeComponent::internalNodes::appendPage(int xid,
     assert(tree.page == p->id);
 
     ret = appendInternalNode(xid, p, depth, key, keySize, val_page,
-                             lastLeaf == tree.page ? -1 : lastLeaf,
-                             allocator, &allocator_state);
+                             lastLeaf == tree.page ? -1 : lastLeaf);
 
     if(ret.size == INVALID_SLOT) {
       DEBUG("Need to split root; depth = %d\n", depth);
 
-      pageid_t child = allocator(xid, &allocator_state);
+      pageid_t child = internal_node_alloc->alloc_extent(xid, 1);
       Page *lc = loadPage(xid, child);
       writelock(lc->rwlatch,0);
 
@@ -352,8 +237,7 @@ recordid diskTreeComponent::internalNodes::appendPage(int xid,
 
       assert(tree.page == p->id);
       ret = appendInternalNode(xid, p, depth, key, keySize, val_page,
-                               lastLeaf == tree.page ? -1 : lastLeaf,
-                               allocator, &allocator_state);
+                               lastLeaf == tree.page ? -1 : lastLeaf);
 
       assert(ret.size != INVALID_SLOT);
 
@@ -386,9 +270,6 @@ recordid diskTreeComponent::internalNodes::appendPage(int xid,
   unlock(p->rwlatch);
   releasePage(p);
 
-  // XXX don't call tset on each page append!
-  Tset(xid,get_tree_state(),&allocator_state);
-
   return ret;
 }
 
@@ -409,9 +290,7 @@ recordid diskTreeComponent::internalNodes::appendPage(int xid,
 recordid diskTreeComponent::internalNodes::appendInternalNode(int xid, Page *p,
                                      int64_t depth,
                                      const byte *key, size_t key_len,
-                                     pageid_t val_page, pageid_t lastLeaf,
-                                     diskTreeComponent_page_allocator_t allocator,
-                                     void *allocator_state) {
+                                     pageid_t val_page, pageid_t lastLeaf) {
 
   assert(p->pageType == SLOTTED_PAGE);
 
@@ -439,7 +318,7 @@ recordid diskTreeComponent::internalNodes::appendInternalNode(int xid, Page *p,
       Page *child_page = loadPage(xid, child_id);
       writelock(child_page->rwlatch,0);
       ret = appendInternalNode(xid, child_page, depth-1, key, key_len,
-                               val_page, lastLeaf, allocator, allocator_state);
+                               val_page, lastLeaf);
 
       unlock(child_page->rwlatch);
       releasePage(child_page);
@@ -456,7 +335,7 @@ recordid diskTreeComponent::internalNodes::appendInternalNode(int xid, Page *p,
       if(ret.size != INVALID_SLOT) {
         stasis_record_alloc_done(xid, p, ret);
         ret = buildPathToLeaf(xid, ret, p, depth, key, key_len, val_page,
-                              lastLeaf, allocator, allocator_state);
+                              lastLeaf);
 
         DEBUG("split tree rooted at %lld, wrote value to {%d %d %lld}\n",
               p->id, ret.page, ret.slot, ret.size);
@@ -473,16 +352,14 @@ recordid diskTreeComponent::internalNodes::appendInternalNode(int xid, Page *p,
 
 recordid diskTreeComponent::internalNodes::buildPathToLeaf(int xid, recordid root, Page *root_p,
                                   int64_t depth, const byte *key, size_t key_len,
-                                  pageid_t val_page, pageid_t lastLeaf,
-                                  diskTreeComponent_page_allocator_t allocator,
-                                  void *allocator_state) {
+                                  pageid_t val_page, pageid_t lastLeaf) {
 
   // root is the recordid on the root page that should point to the
   // new subtree.
   assert(depth);
   DEBUG("buildPathToLeaf(depth=%lld) (lastleaf=%lld) called\n",depth, lastLeaf);
 
-  pageid_t child = allocator(xid,allocator_state);
+  pageid_t child = internal_node_alloc->alloc_extent(xid, 1);
   DEBUG("new child = %lld internal? %lld\n", child, depth-1);
 
   Page *child_p = loadPage(xid, child);
@@ -498,7 +375,7 @@ recordid diskTreeComponent::internalNodes::buildPathToLeaf(int xid, recordid roo
     stasis_record_alloc_done(xid, child_p, child_rec);
 
     ret = buildPathToLeaf(xid, child_rec, child_p, depth-1, key, key_len,
-                          val_page,lastLeaf, allocator, allocator_state);
+                          val_page,lastLeaf);
 
     unlock(child_p->rwlatch);
     releasePage(child_p);

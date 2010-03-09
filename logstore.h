@@ -107,8 +107,6 @@ public:
         recordid c1_dp_state;
     };
 
-    const static diskTreeComponent::internalNodes::RegionAllocConf_t DATAPAGE_REGION_ALLOC_STATIC_INITIALIZER;
-
     logtable_mergedata * mergedata;
     rwl * header_lock;
     

@@ -50,10 +50,6 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     RegionAllocator * alloc = new RegionAllocator(xid, 10000); // ~ 10 datapages per region.
 
-    recordid alloc_state = Talloc(xid,sizeof(diskTreeComponent::internalNodes::RegionAllocConf_t));
-    
-    Tset(xid,alloc_state, &diskTreeComponent::internalNodes::REGION_ALLOC_STATIC_INITIALIZER);
-
     printf("Stage 1: Writing %d keys\n", NUM_ENTRIES);
       
     int pcount = 1000;

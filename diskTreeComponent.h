@@ -31,24 +31,18 @@ public:
       pageid_t ptr;
     };
 
-    typedef struct RegionAllocConf_t
-    {
-      recordid regionList;
-      pageid_t regionCount;
-      pageid_t nextPage;
-      pageid_t endOfRegion;
-      pageid_t regionSize;
-    } RegionAllocConf_t;
+    internalNodes(int xid)
+    : lastLeaf(-1),
+      internal_node_alloc(new RegionAllocator(xid, 1000)),
+      datapage_alloc(new RegionAllocator(xid, 10000))
+    { create(xid); }  // XXX shouldn't hardcode region size.
 
-    typedef pageid_t(*diskTreeComponent_page_allocator_t)(int, void *);
-    typedef void(*diskTreeComponent_page_deallocator_t)(int, void *);
-
-
-    internalNodes(int xid): datapage_alloc(new RegionAllocator(xid, 10000)) {create(xid);}  // XXX shouldn't hardcode region size.
     internalNodes(int xid, recordid root, recordid internal_node_state, recordid datapage_state)
-    : internal_node_alloc(internal_node_state),
+    : lastLeaf(-1),
       root_rec(root),
-      datapage_alloc(new RegionAllocator(xid, datapage_state)) { lastLeaf = -1; }
+      internal_node_alloc(new RegionAllocator(xid, internal_node_state)),
+      datapage_alloc(new RegionAllocator(xid, datapage_state))
+      { }
   private:
     recordid create(int xid);
   public:
@@ -57,26 +51,20 @@ public:
     static void init_stasis();
     static void deinit_stasis();
   private:
-    static pageid_t alloc_region(int xid, void *conf);
 
     static void writeNodeRecord(int xid, Page *p, recordid &rid,
                                 const byte *key, size_t keylen, pageid_t ptr);
     //reads the given record and returns the page id stored in it
     static pageid_t lookupLeafPageFromRid(int xid, recordid rid);
 
-    static recordid appendInternalNode(int xid, Page *p,
+    recordid appendInternalNode(int xid, Page *p,
                                        int64_t depth,
                                        const byte *key, size_t key_len,
-                                       pageid_t val_page, pageid_t lastLeaf,
-                                       diskTreeComponent_page_allocator_t allocator,
-                                       void *allocator_state);
+                                       pageid_t val_page, pageid_t lastLeaf);
 
-    static recordid buildPathToLeaf(int xid, recordid root, Page *root_p,
+    recordid buildPathToLeaf(int xid, recordid root, Page *root_p,
                                     int64_t depth, const byte *key, size_t key_len,
-                                    pageid_t val_page, pageid_t lastLeaf,
-                                    diskTreeComponent_page_allocator_t allocator,
-                                    void *allocator_state);
-
+                                    pageid_t val_page, pageid_t lastLeaf);
 
     /**
        Initialize a page for use as an internal node of the tree.
@@ -95,28 +83,17 @@ public:
                            size_t keySize);
 
   public:
-    static pageid_t alloc_region_rid(int xid, void * ridp);
-    static void force_region_rid(int xid, recordid rid);
-    static pageid_t*list_region_rid(int xid, void * ridp,
-                                    pageid_t * region_len, pageid_t * region_count);
-    static void dealloc_region_rid(int xid, recordid rid);
-    static void free_region_rid(int xid, recordid tree,
-                                diskTreeComponent_page_deallocator_t dealloc,
-                                void *allocator_state);
 
     //returns the id of the data page that could contain the given key
     pageid_t findPage(int xid, const byte *key, size_t keySize);
 
 
     //appends a leaf page, val_page is the id of the leaf page
-    //rmLeafID --> rightmost leaf id
-    recordid appendPage(int xid,// recordid tree,
-                               const byte *key,size_t keySize, pageid_t val_page);
+    recordid appendPage(int xid, const byte *key,size_t keySize, pageid_t val_page);
 
     inline RegionAllocator* get_datapage_alloc() { return datapage_alloc; }
-
-    recordid &get_tree_state(){return internal_node_alloc;}
-    recordid &get_root_rec(){return root_rec;}
+    inline RegionAllocator* get_internal_node_alloc() { return internal_node_alloc; }
+    const recordid &get_root_rec(){return root_rec;}
 
   private:
     const static int64_t DEPTH;
@@ -125,16 +102,12 @@ public:
     const static size_t root_rec_size;
     const static int64_t PREV_LEAF;
     const static int64_t NEXT_LEAF;
-  public:
-    const static RegionAllocConf_t REGION_ALLOC_STATIC_INITIALIZER;
-  private:
     pageid_t lastLeaf;
 
     void print_tree(int xid, pageid_t pid, int64_t depth);
 
-    recordid internal_node_alloc;
     recordid root_rec;
-
+    RegionAllocator* internal_node_alloc;
     RegionAllocator* datapage_alloc;
 
   public:
@@ -144,7 +117,6 @@ public:
       iterator(int xid, recordid root, const byte* key, len_t keylen);
       int next();
       void close();
-
 
       inline size_t key (byte **key) {
         *key = (byte*)(t+1);

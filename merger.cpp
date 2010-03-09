@@ -356,7 +356,7 @@ void* memMergeThread(void*arg)
         // 5: force c1'
 
         //force write the new region to disk
-        diskTreeComponent::internalNodes::force_region_rid(xid, c1_prime->get_tree_state());
+        c1_prime->get_internal_node_alloc()->force_regions(xid);
         //force write the new datapages
         c1_prime->get_datapage_alloc()->force_regions(xid);
 
@@ -391,7 +391,7 @@ void* memMergeThread(void*arg)
         }
 
         // 12: delete old c1
-        diskTreeComponent::internalNodes::dealloc_region_rid(xid, ltable->get_tree_c1()->get_tree_state());
+        ltable->get_tree_c1()->get_internal_node_alloc()->dealloc_regions(xid);
         ltable->get_tree_c1()->get_datapage_alloc()->dealloc_regions(xid);
         delete ltable->get_tree_c1();
 
@@ -510,18 +510,18 @@ void *diskMergeThread(void*arg)
         delete itrB;        
 
         //5: force write the new region to disk
-        diskTreeComponent::internalNodes::force_region_rid(xid, c2_prime->get_tree_state());
+        c2_prime->get_internal_node_alloc()->force_regions(xid);
         c2_prime->get_datapage_alloc()->force_regions(xid);
 
         // (skip 6, 7, 8, 8.5, 9))
 
         writelock(ltable->header_lock,0);
         //12
-        diskTreeComponent::internalNodes::dealloc_region_rid(xid, ltable->get_tree_c2()->get_tree_state());
+        ltable->get_tree_c2()->get_internal_node_alloc()->dealloc_regions(xid);
         ltable->get_tree_c2()->get_datapage_alloc()->dealloc_regions(xid);
         delete ltable->get_tree_c2();
         //11.5
-        diskTreeComponent::internalNodes::dealloc_region_rid(xid, ltable->get_tree_c1_mergeable()->get_tree_state());
+        ltable->get_tree_c1_mergeable()->get_internal_node_alloc()->dealloc_regions(xid);
         ltable->get_tree_c1_mergeable()->get_datapage_alloc()->dealloc_regions(xid);
         //11
         delete ltable->get_tree_c1_mergeable();
