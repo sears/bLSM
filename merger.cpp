@@ -187,7 +187,7 @@ void merge_scheduler::startlogtable(int index, int64_t MAX_C0_SIZE)
     *block1_size = FUDGE * ((int)R) * (*(mdata->input_size));
 
     //initialize rb-tree
-    ltable->set_tree_c0(new rbtree_t);
+    ltable->set_tree_c0(new memTreeComponent<datatuple>::rbtree_t);
 
     //disk merger args
 
@@ -335,8 +335,8 @@ void* memMergeThread(void*arg)
 
         //create the iterators
         diskTreeIterator<datatuple> *itrA = new diskTreeIterator<datatuple>(ltable->get_tree_c1()->get_root_rec()); // XXX don't want get_root_rec() to be here.
-        memTreeIterator<rbtree_t, datatuple> *itrB =
-        		new memTreeIterator<rbtree_t, datatuple>(ltable->get_tree_c0_mergeable());
+        memTreeComponent<datatuple>::memTreeIterator *itrB =
+	  new memTreeComponent<datatuple>::memTreeIterator(ltable->get_tree_c0_mergeable());
 
         
         //create a new tree
@@ -396,7 +396,7 @@ void* memMergeThread(void*arg)
         delete ltable->get_tree_c1();
 
         // 11.5: delete old c0_mergeable
-        logtable::tearDownTree(ltable->get_tree_c0_mergeable());
+        memTreeComponent<datatuple>::tearDownTree(ltable->get_tree_c0_mergeable());
         // 11: c0_mergeable = NULL
         ltable->set_tree_c0_mergeable(NULL);
 

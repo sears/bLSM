@@ -48,26 +48,6 @@ logtable::logtable()
     epoch = 0;
     
 }
-void logtable::tearDownTree(rbtree_ptr_t tree) {
-    datatuple * t = 0;
-    rbtree_t::iterator old;
-    for(rbtree_t::iterator delitr  = tree->begin();
-                           delitr != tree->end();
-                           delitr++) {
-    	if(t) {
-    		tree->erase(old);
-    		datatuple::freetuple(t);
-    		t = 0;
-    	}
-    	t = *delitr;
-    	old = delitr;
-    }
-	if(t) {
-		tree->erase(old);
-		datatuple::freetuple(t);
-	}
-    delete tree;
-}
 
 logtable::~logtable()
 {
@@ -78,7 +58,7 @@ logtable::~logtable()
 
     if(tree_c0 != NULL)
     {
-    	tearDownTree(tree_c0);
+      memTreeComponent<datatuple>::tearDownTree(tree_c0);
     }
 
     deletelock(header_lock);
@@ -173,7 +153,7 @@ void logtable::flushTable()
     pthread_cond_signal(mergedata->input_ready_cond);
 
     merge_count ++;
-    set_tree_c0(new rbtree_t);
+    set_tree_c0(new memTreeComponent<datatuple>::rbtree_t);
 
     tsize = 0;
     tree_bytes = 0;
@@ -205,7 +185,7 @@ datatuple * logtable::findTuple(int xid, const datatuple::key_t key, size_t keyS
     datatuple *ret_tuple=0; 
 
     //step 1: look in tree_c0
-    rbtree_t::iterator rbitr = get_tree_c0()->find(search_tuple);
+    memTreeComponent<datatuple>::rbtree_t::iterator rbitr = get_tree_c0()->find(search_tuple);
     if(rbitr != get_tree_c0()->end())
     {
         DEBUG("tree_c0 size %d\n", get_tree_c0()->size());
@@ -350,7 +330,7 @@ datatuple * logtable::findTuple_first(int xid, datatuple::key_t key, size_t keyS
     datatuple *ret_tuple=0; 
     //step 1: look in tree_c0
 
-    rbtree_t::iterator rbitr = get_tree_c0()->find(search_tuple);
+    memTreeComponent<datatuple>::rbtree_t::iterator rbitr = get_tree_c0()->find(search_tuple);
     if(rbitr != get_tree_c0()->end())
     {
         DEBUG("tree_c0 size %d\n", tree_c0->size());
@@ -417,7 +397,7 @@ void logtable::insertTuple(datatuple *tuple)
     readlock(header_lock,0);
     pthread_mutex_lock(mergedata->rbtree_mut);
     //find the previous tuple with same key in the memtree if exists
-    rbtree_t::iterator rbitr = tree_c0->find(tuple);
+    memTreeComponent<datatuple>::rbtree_t::iterator rbitr = tree_c0->find(tuple);
     if(rbitr != tree_c0->end())
     {        
         datatuple *pre_t = *rbitr;

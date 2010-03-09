@@ -1,6 +1,6 @@
 #include "logstore.h"
 #include "logiterators.h"
-
+#include "memTreeComponent.h"
 /////////////////////////////////////////////////////////////////////
 // tree iterator implementation
 /////////////////////////////////////////////////////////////////////
@@ -144,4 +144,4 @@ TUPLE * diskTreeIterator<TUPLE>::getnext()
 }
 
 template class diskTreeIterator<datatuple>;
-template class changingMemTreeIterator<rbtree_t, datatuple>;
+template class changingMemTreeIterator<memTreeComponent<datatuple>::rbtree_t, datatuple>;

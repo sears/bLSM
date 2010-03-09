@@ -39,7 +39,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     if(data_arr.size() > NUM_ENTRIES)
         data_arr.erase(data_arr.begin()+NUM_ENTRIES, data_arr.end());
     
-    rbtree_t rbtree;
+    memTreeComponent<datatuple>::rbtree_t rbtree;
 
     int64_t datasize = 0;
     std::vector<pageid_t> dsp;
@@ -70,7 +70,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         
         //step 1: look in tree_c0
 
-        rbtree_t::iterator rbitr = rbtree.find(search_tuple);
+	memTreeComponent<datatuple>::rbtree_t::iterator rbitr = rbtree.find(search_tuple);
         if(rbitr != rbtree.end())
         {
             datatuple *tuple = *rbitr;
