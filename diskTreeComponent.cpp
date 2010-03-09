@@ -802,6 +802,8 @@ diskTreeComponent::iterator::iterator(int xid, recordid root, const byte* key, l
 
   if(lsm_entry_rid.page == NULLRID.page && lsm_entry_rid.slot == NULLRID.slot) {
     unlock(p->rwlatch);
+    releasePage(p);
+    p = NULL;
     done = true;
   } else {
     assert(lsm_entry_rid.size != INVALID_SLOT);
