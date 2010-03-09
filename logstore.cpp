@@ -467,7 +467,7 @@ DataPage<datatuple>* logtable::insertTuple(int xid, datatuple *tuple, diskTreeCo
     }
     
 
-    RegionAllocConf_t alloc_conf;
+    diskTreeComponent::internalNodes::RegionAllocConf_t alloc_conf;
     //insert the record key and id of the first page of the datapage to the diskTreeComponent
     Tread(xid,ltree->get_tree_state(), &alloc_conf);
     diskTreeComponent::internalNodes::appendPage(xid, ltree->get_root_rec(), ltree->lastLeaf,

@@ -23,7 +23,7 @@
 // LOGTREE implementation
 /////////////////////////////////////////////////////////////////
 
-const RegionAllocConf_t diskTreeComponent::internalNodes::REGION_ALLOC_STATIC_INITIALIZER = { {0,0,-1}, 0, -1, -1, 1000 };
+const diskTreeComponent::internalNodes::RegionAllocConf_t diskTreeComponent::internalNodes::REGION_ALLOC_STATIC_INITIALIZER = { {0,0,-1}, 0, -1, -1, 1000 };
 
 //LSM_ROOT_PAGE
 

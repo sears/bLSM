@@ -50,8 +50,6 @@ void insertProbeIter(size_t NUM_ENTRIES)
         printf("size partition %d is %d\n", i+1, key_arr->size());
     }
 
-
-    
     key_v_t * key_arr = new key_v_t;
     
     std::vector<key_v_t::iterator*> iters;

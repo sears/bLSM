@@ -79,7 +79,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
         //printf("TlsmAppendPage %d\n",i);
 
         recordid rid = lt->get_tree_state();
-        RegionAllocConf_t alloc_conf;
+        diskTreeComponent::internalNodes::RegionAllocConf_t alloc_conf;
         Tread(xid,rid,&alloc_conf);
       
         diskTreeComponent::internalNodes::appendPage(xid, tree, lt->lastLeaf, currkey, keylen, lt->alloc_region, &alloc_conf, i + OFFSET);
@@ -196,7 +196,7 @@ void insertProbeIter_int(int  NUM_ENTRIES)
         printf("TlsmAppendPage %d\n",i);
 
         recordid rid = lt->get_tree_state();
-        RegionAllocConf_t alloc_conf;
+        diskTreeComponent::internalNodes::RegionAllocConf_t alloc_conf;
         Tread(xid,rid,&alloc_conf);
       
         diskTreeComponent::internalNodes::appendPage(xid, tree, lt->lastLeaf, currkey, keylen, lt->alloc_region, &alloc_conf, i + OFFSET);

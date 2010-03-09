@@ -51,7 +51,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     DataPage<datatuple>::RegionAllocator * alloc
       = new DataPage<datatuple>::RegionAllocator(xid, 10000); // ~ 10 datapages per region.
 
-    recordid alloc_state = Talloc(xid,sizeof(RegionAllocConf_t));
+    recordid alloc_state = Talloc(xid,sizeof(diskTreeComponent::internalNodes::RegionAllocConf_t));
     
     Tset(xid,alloc_state, &diskTreeComponent::internalNodes::REGION_ALLOC_STATIC_INITIALIZER);
 

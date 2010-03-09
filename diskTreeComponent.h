@@ -22,27 +22,28 @@
 #include "tuplemerger.h"
 #include "datatuple.h"
 
-
-typedef struct RegionAllocConf_t
-{
-  recordid regionList;
-  pageid_t regionCount;
-  pageid_t nextPage;
-  pageid_t endOfRegion;
-  pageid_t regionSize;
-} RegionAllocConf_t;
-
-struct indexnode_rec {
-  pageid_t ptr;
-};
-
-typedef pageid_t(*diskTreeComponent_page_allocator_t)(int, void *);
-typedef void(*diskTreeComponent_page_deallocator_t)(int, void *);
-
 class diskTreeComponent {
+
 public:
   class internalNodes{
   public:
+    struct indexnode_rec {
+      pageid_t ptr;
+    };
+
+    typedef struct RegionAllocConf_t
+    {
+      recordid regionList;
+      pageid_t regionCount;
+      pageid_t nextPage;
+      pageid_t endOfRegion;
+      pageid_t regionSize;
+    } RegionAllocConf_t;
+
+    typedef pageid_t(*diskTreeComponent_page_allocator_t)(int, void *);
+    typedef void(*diskTreeComponent_page_deallocator_t)(int, void *);
+
+
     internalNodes(int xid): region_alloc(new DataPage<datatuple>::RegionAllocator(xid, 10000)) {create(xid);}  // XXX shouldn't hardcode region size.
     internalNodes(int xid, recordid root, recordid state, recordid dp_state)
     : tree_state(state),
