@@ -20,5 +20,4 @@ void memTreeComponent<TUPLE>::tearDownTree(rbtree_ptr_t tree) {
 	}
     delete tree;
 }
-
 template class memTreeComponent<datatuple>;

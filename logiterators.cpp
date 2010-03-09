@@ -139,9 +139,7 @@ TUPLE * diskTreeIterator<TUPLE>::getnext()
         }
       // else readTuple is null.  We're done.
     }
-    
     return readTuple;
 }
 
 template class diskTreeIterator<datatuple>;
-template class changingMemTreeIterator<memTreeComponent<datatuple>::rbtree_t, datatuple>;
