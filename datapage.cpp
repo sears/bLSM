@@ -265,7 +265,7 @@ bool DataPage<TUPLE>::append(TUPLE const * dat)
 template <class TUPLE>
 bool DataPage<TUPLE>::recordRead(typename TUPLE::key_t key, size_t keySize,  TUPLE ** buf)
 {
-  RecordIterator itr(this, NULL);
+  iterator itr(this, NULL);
 
     int match = -1;
     while((*buf=itr.getnext()) != 0)
@@ -298,7 +298,7 @@ bool DataPage<TUPLE>::recordRead(typename TUPLE::key_t key, size_t keySize,  TUP
 
 
 template <class TUPLE>
-TUPLE* DataPage<TUPLE>::RecordIterator::getnext()
+TUPLE* DataPage<TUPLE>::iterator::getnext()
 {
 	len_t len;
 	bool succ;

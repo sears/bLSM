@@ -14,7 +14,7 @@ class DataPage
 {
 public:
     
-    class RecordIterator
+    class iterator
     {
     private:
       void scan_to_key(TUPLE * key) {
@@ -37,11 +37,11 @@ public:
 	}
       }
     public:
-      RecordIterator(DataPage *dp, TUPLE * key=NULL) : read_offset_(0), dp(dp) {
+      iterator(DataPage *dp, TUPLE * key=NULL) : read_offset_(0), dp(dp) {
     	  scan_to_key(key);
       }
 
-        void operator=(const RecordIterator &rhs)
+        void operator=(const iterator &rhs)
             {
                 this->read_offset_ = rhs.read_offset_;
                 this->dp = rhs.dp;
@@ -188,7 +188,7 @@ public:
     inline uint16_t recordCount();
 
 
-    RecordIterator begin(){return RecordIterator(this);}
+    iterator begin(){return iterator(this);}
 
     pageid_t get_start_pid(){return first_page_;}
     int get_page_count(){return page_count_;}

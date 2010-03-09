@@ -170,7 +170,7 @@ private:
     
     pageid_t curr_pageid; //current page id
     DataPage<TUPLE>    *curr_page;   //current page
-    typedef typename DataPage<TUPLE>::RecordIterator DPITR_T;
+    typedef typename DataPage<TUPLE>::iterator DPITR_T;
     DPITR_T *dp_itr;
 };
 
