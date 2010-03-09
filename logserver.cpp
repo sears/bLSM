@@ -607,6 +607,7 @@ int op_stat_histogram(pthread_data* data, size_t limit) {
 
 	if(count > limit) {
 		stride = count / (limit-1);
+		stride++;  // this way, we truncate the last bucket instead of occasionally creating a tiny last bucket.
 	} else {
 		stride = 1;
 	}
