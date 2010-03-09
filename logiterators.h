@@ -21,7 +21,7 @@ public:
 
     ~diskTreeIterator();
     
-    TUPLE * getnext();
+    TUPLE * next_callerFrees();
     
 private:
     void init_iterators(TUPLE * key1, TUPLE * key2);

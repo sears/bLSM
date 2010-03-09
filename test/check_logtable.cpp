@@ -121,7 +121,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
 
     datatuple *dt=0;
-    while( (dt=tree_itr.getnext()) != NULL)
+    while( (dt=tree_itr.next_callerFrees()) != NULL)
     {
         assert(dt->keylen() == key_arr[tuplenum].length()+1);
         assert(dt->datalen() == data_arr[tuplenum].length()+1);

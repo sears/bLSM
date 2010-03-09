@@ -104,7 +104,7 @@ void diskTreeIterator<TUPLE>::init_helper(TUPLE* key1)
 }
 
 template <class TUPLE>
-TUPLE * diskTreeIterator<TUPLE>::getnext()
+TUPLE * diskTreeIterator<TUPLE>::next_callerFrees()
 {
 	if(!this->lsmIterator_) { return NULL; }
 

@@ -335,8 +335,8 @@ void* memMergeThread(void*arg)
 
         //create the iterators
         diskTreeIterator<datatuple> *itrA = new diskTreeIterator<datatuple>(ltable->get_tree_c1()->get_root_rec()); // XXX don't want get_root_rec() to be here.
-        memTreeComponent<datatuple>::memTreeIterator *itrB =
-	  new memTreeComponent<datatuple>::memTreeIterator(ltable->get_tree_c0_mergeable());
+        memTreeComponent<datatuple>::iterator *itrB =
+            new memTreeComponent<datatuple>::iterator(ltable->get_tree_c0_mergeable());
 
         
         //create a new tree
@@ -573,14 +573,14 @@ void merge_iterators(int xid,
 
     DataPage<datatuple> *dp = 0;
 
-    datatuple *t1 = itrA->getnext();
+    datatuple *t1 = itrA->next_callerFrees();
     if(t1) {
 		stats->num_tuples_in_large++;
 		stats->bytes_in_large += t1->byte_length();
     }
     datatuple *t2 = 0;
     
-    while( (t2=itrB->getnext()) != 0)
+    while( (t2=itrB->next_callerFrees()) != 0)
     {        
         stats->num_tuples_in_small++;
         stats->bytes_in_small += t2->byte_length();
@@ -596,7 +596,7 @@ void merge_iterators(int xid,
             datatuple::freetuple(t1);
             stats->num_tuples_out++;
             //advance itrA
-            t1 = itrA->getnext();
+            t1 = itrA->next_callerFrees();
             if(t1) {
             	stats->num_tuples_in_large++;
             	stats->bytes_in_large += t1->byte_length();
@@ -612,7 +612,7 @@ void merge_iterators(int xid,
                 dp = insertTuple(xid, dp, mtuple, ltable, scratch_tree, stats);
             
             datatuple::freetuple(t1);
-            t1 = itrA->getnext();  //advance itrA
+            t1 = itrA->next_callerFrees();  //advance itrA
             if(t1) {
             	stats->num_tuples_in_large++;
             	stats->bytes_in_large += t1->byte_length();
@@ -637,7 +637,7 @@ void merge_iterators(int xid,
             datatuple::freetuple(t1);
             stats->num_tuples_out++;
             //advance itrA
-            t1 = itrA->getnext();
+            t1 = itrA->next_callerFrees();
             if(t1) {
             	stats->num_tuples_in_large++;
             	stats->bytes_in_large += t1->byte_length();
@@ -671,7 +671,4 @@ insertTuple(int xid, DataPage<datatuple> *dp, datatuple *t,
 
     return dp;    
 }
-
-
-
 

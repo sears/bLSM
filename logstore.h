@@ -160,7 +160,7 @@ public:
     current_[0] = first_iter_->getnext();
     for(int i = 1; i < num_iters_; i++) {
       iters_[i-1] = iters[i-1];
-      current_[i] = iters_[i-1]->getnext();
+      current_[i] = iters_[i-1]->next_callerFrees();
     }
   }
   ~mergeManyIterator() {
@@ -190,7 +190,7 @@ public:
       if(last_iter_ == 0) {
 		  current_[last_iter_] = first_iter_->getnext();
       } else if(last_iter_ != -1){
-    	  current_[last_iter_] = iters_[last_iter_-1]->getnext();
+    	  current_[last_iter_] = iters_[last_iter_-1]->next_callerFrees();
       } else {
     	  // last call was 'peek'
       }
@@ -224,7 +224,7 @@ public:
     // advance the iterators that match the tuple we're returning.
     for(int i = 0; i < num_dups; i++) {
     	TUPLE::freetuple(current_[dups[i]]); // should never be null
-    	current_[dups[i]] = iters_[dups[i]-1]->getnext();
+    	current_[dups[i]] = iters_[dups[i]-1]->next_callerFrees();
     }
     last_iter_ = min; // mark the min iter to be advance at the next invocation of next().  This saves us a copy in the non-merging case.
     return ret;
@@ -330,10 +330,13 @@ private:
     logtable * ltable;
     uint64_t epoch;
     typedef mergeManyIterator<
-      typename memTreeComponent<TUPLE>::changingMemTreeIterator,
-      typename memTreeComponent<TUPLE>::memTreeIterator, TUPLE> inner_merge_it_t;
-//    typedef mergeManyIterator<memTreeIterator<memTreeComponent::rbtree_t, TUPLE>, diskTreeIterator<TUPLE>, TUPLE> merge_it_t;
-    typedef mergeManyIterator<inner_merge_it_t, diskTreeIterator<TUPLE>, TUPLE> merge_it_t;
+      typename memTreeComponent<TUPLE>::revalidatingIterator,
+      typename memTreeComponent<TUPLE>::iterator,
+      TUPLE> inner_merge_it_t;
+    typedef mergeManyIterator<
+      inner_merge_it_t,
+      diskTreeIterator<TUPLE>,
+      TUPLE> merge_it_t;
 
     merge_it_t* merge_it_;
 
@@ -342,50 +345,50 @@ private:
     bool valid;
     void revalidate() {
       if(!valid) {
-	validate();
+        validate();
       } else {
-	assert(epoch == ltable->get_epoch());
+        assert(epoch == ltable->get_epoch());
       }
     }
 
 
-	void validate() {
-	  typename memTreeComponent<TUPLE>::changingMemTreeIterator * c0_it;
-	  typename memTreeComponent<TUPLE>::memTreeIterator *c0_mergeable_it[1];
-		diskTreeIterator<TUPLE> * disk_it[3];
-		epoch = ltable->get_epoch();
-		if(last_returned) {
-		        c0_it              = new typename memTreeComponent<TUPLE>::changingMemTreeIterator(ltable->get_tree_c0(), ltable->getMergeData()->rbtree_mut,  last_returned);
-			c0_mergeable_it[0] = new typename memTreeComponent<TUPLE>::memTreeIterator        (ltable->get_tree_c0_mergeable(),                            last_returned);
-			disk_it[0]         = new diskTreeIterator<TUPLE>                 (ltable->get_tree_c1(),                                     *last_returned);
-			disk_it[1]         = new diskTreeIterator<TUPLE>                 (ltable->get_tree_c1_mergeable(),                           *last_returned);
-			disk_it[2]         = new diskTreeIterator<TUPLE>                 (ltable->get_tree_c2(),                                     *last_returned);
-		} else if(key) {
-		        c0_it              = new typename memTreeComponent<TUPLE>::changingMemTreeIterator(ltable->get_tree_c0(), ltable->getMergeData()->rbtree_mut,  key);
-			c0_mergeable_it[0] = new typename memTreeComponent<TUPLE>::memTreeIterator        (ltable->get_tree_c0_mergeable(),                            key);
-			disk_it[0]         = new diskTreeIterator<TUPLE>                 (ltable->get_tree_c1(),                                     *key);
-			disk_it[1]         = new diskTreeIterator<TUPLE>                 (ltable->get_tree_c1_mergeable(),                           *key);
-			disk_it[2]         = new diskTreeIterator<TUPLE>                 (ltable->get_tree_c2(),                                     *key);
-		} else {
-		        c0_it              = new typename memTreeComponent<TUPLE>::changingMemTreeIterator(ltable->get_tree_c0(), ltable->getMergeData()->rbtree_mut  );
-			c0_mergeable_it[0] = new typename memTreeComponent<TUPLE>::memTreeIterator    (ltable->get_tree_c0_mergeable()                            );
-			disk_it[0]         = new diskTreeIterator<TUPLE>                 (ltable->get_tree_c1()                                      );
-			disk_it[1]         = new diskTreeIterator<TUPLE>                 (ltable->get_tree_c1_mergeable()                            );
-			disk_it[2]         = new diskTreeIterator<TUPLE>                 (ltable->get_tree_c2()                                      );
-		}
+    void validate() {
+      typename memTreeComponent<TUPLE>::revalidatingIterator * c0_it;
+      typename memTreeComponent<TUPLE>::iterator *c0_mergeable_it[1];
+      diskTreeIterator<TUPLE> * disk_it[3];
+      epoch = ltable->get_epoch();
+      if(last_returned) {
+        c0_it              = new typename memTreeComponent<TUPLE>::revalidatingIterator(ltable->get_tree_c0(), ltable->getMergeData()->rbtree_mut,  last_returned);
+        c0_mergeable_it[0] = new typename memTreeComponent<TUPLE>::iterator        (ltable->get_tree_c0_mergeable(),                            last_returned);
+        disk_it[0]         = new diskTreeIterator<TUPLE>                 (ltable->get_tree_c1(),                                     *last_returned);
+        disk_it[1]         = new diskTreeIterator<TUPLE>                 (ltable->get_tree_c1_mergeable(),                           *last_returned);
+        disk_it[2]         = new diskTreeIterator<TUPLE>                 (ltable->get_tree_c2(),                                     *last_returned);
+      } else if(key) {
+        c0_it              = new typename memTreeComponent<TUPLE>::revalidatingIterator(ltable->get_tree_c0(), ltable->getMergeData()->rbtree_mut,  key);
+        c0_mergeable_it[0] = new typename memTreeComponent<TUPLE>::iterator        (ltable->get_tree_c0_mergeable(),                            key);
+        disk_it[0]         = new diskTreeIterator<TUPLE>                 (ltable->get_tree_c1(),                                     *key);
+        disk_it[1]         = new diskTreeIterator<TUPLE>                 (ltable->get_tree_c1_mergeable(),                           *key);
+        disk_it[2]         = new diskTreeIterator<TUPLE>                 (ltable->get_tree_c2(),                                     *key);
+      } else {
+        c0_it              = new typename memTreeComponent<TUPLE>::revalidatingIterator(ltable->get_tree_c0(), ltable->getMergeData()->rbtree_mut  );
+        c0_mergeable_it[0] = new typename memTreeComponent<TUPLE>::iterator    (ltable->get_tree_c0_mergeable()                            );
+        disk_it[0]         = new diskTreeIterator<TUPLE>                 (ltable->get_tree_c1()                                      );
+        disk_it[1]         = new diskTreeIterator<TUPLE>                 (ltable->get_tree_c1_mergeable()                            );
+        disk_it[2]         = new diskTreeIterator<TUPLE>                 (ltable->get_tree_c2()                                      );
+      }
 
-		inner_merge_it_t * inner_merge_it =
-			   new inner_merge_it_t(c0_it, c0_mergeable_it, 1, NULL, TUPLE::compare_obj);
-		merge_it_ = new merge_it_t(inner_merge_it, disk_it, 3, NULL, TUPLE::compare_obj); // XXX Hardcodes comparator, and does not handle merges
-		if(last_returned) {
-			TUPLE * junk = merge_it_->peek();
-			if(junk && !TUPLE::compare(junk->key(), junk->keylen(), last_returned->key(), last_returned->keylen())) {
-				// we already returned junk
-				TUPLE::freetuple(merge_it_->getnext());
-			}
-		}
-		valid = true;
-	}
+      inner_merge_it_t * inner_merge_it =
+             new inner_merge_it_t(c0_it, c0_mergeable_it, 1, NULL, TUPLE::compare_obj);
+      merge_it_ = new merge_it_t(inner_merge_it, disk_it, 3, NULL, TUPLE::compare_obj); // XXX Hardcodes comparator, and does not handle merges
+      if(last_returned) {
+        TUPLE * junk = merge_it_->peek();
+        if(junk && !TUPLE::compare(junk->key(), junk->keylen(), last_returned->key(), last_returned->keylen())) {
+          // we already returned junk
+          TUPLE::freetuple(merge_it_->getnext());
+        }
+      }
+      valid = true;
+    }
 
 };
 
