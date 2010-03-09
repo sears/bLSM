@@ -24,7 +24,7 @@ int main(int argc, char **argv)
 //    lsmTableHandle<PAGELAYOUT>* h = TlsmTableStart<PAGELAYOUT>(lsmTable, INVALID_COL);
 
     xid = Tbegin();
-    diskTreeComponentIterator * it = new diskTreeComponentIterator(xid,ltable.get_tree_c2()->get_root_rec() );
+    diskTreeComponent::iterator * it = new diskTreeComponent::iterator(xid,ltable.get_tree_c2()->get_root_rec() );
     it->close();
     delete it;
     Tcommit(xid);

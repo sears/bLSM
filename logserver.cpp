@@ -595,12 +595,13 @@ int op_stat_histogram(pthread_data* data, size_t limit) {
 	}
 
 	int xid = Tbegin();
-	diskTreeComponentIterator * it = new diskTreeComponentIterator(xid, data->ltable->get_tree_c2()->get_root_rec());
+	diskTreeComponent::iterator * it = new diskTreeComponent::iterator(xid, data->ltable->get_tree_c2()->get_root_rec());
 	size_t count = 0;
 	int err = 0;
 
 	while(it->next()) { count++; }
 	it->close();
+	delete(it);
 
 	uint64_t stride;
 
@@ -619,7 +620,7 @@ int op_stat_histogram(pthread_data* data, size_t limit) {
 
 	size_t cur_stride = 0;
 	size_t i = 0;
-	it = new diskTreeComponentIterator(xid, data->ltable->get_tree_c2()->get_root_rec());
+	it = new diskTreeComponent::iterator(xid, data->ltable->get_tree_c2()->get_root_rec());
 	while(it->next()) {
 		i++;
 		if(i == count || !cur_stride) {  // do we want to send this key? (this matches the first, last and interior keys)

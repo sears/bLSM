@@ -12,9 +12,9 @@ void diskTreeIterator<TUPLE>::init_iterators(TUPLE * key1, TUPLE * key2) {
   		lsmIterator_ = NULL;
   	} else {
   		if(key1) {
-  			lsmIterator_ = new diskTreeComponentIterator(-1, tree_, key1->key(), key1->keylen());
+  			lsmIterator_ = new diskTreeComponent::iterator(-1, tree_, key1->key(), key1->keylen());
   		} else {
-  			lsmIterator_ = new diskTreeComponentIterator(-1, tree_);
+  			lsmIterator_ = new diskTreeComponent::iterator(-1, tree_);
   		}
   	}
   }

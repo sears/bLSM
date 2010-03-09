@@ -748,7 +748,7 @@ void diskTreeComponent::print_tree(int xid, pageid_t pid, int64_t depth) {
 //diskTreeComponentIterator implementation
 /////////////////////////////////////////////////
 
-diskTreeComponentIterator::diskTreeComponentIterator(int xid, recordid root) {
+diskTreeComponent::iterator::iterator(int xid, recordid root) {
   if(root.page == 0 && root.slot == 0 && root.size == -1) abort();
   p = loadPage(xid,root.page);
   readlock(p->rwlatch,0);
@@ -787,7 +787,7 @@ diskTreeComponentIterator::diskTreeComponentIterator(int xid, recordid root) {
   justOnePage = (depth == 0);
 }
 
-diskTreeComponentIterator::diskTreeComponentIterator(int xid, recordid root, const byte* key, len_t keylen) {
+diskTreeComponent::iterator::iterator(int xid, recordid root, const byte* key, len_t keylen) {
   if(root.page == NULLRID.page && root.slot == NULLRID.slot) abort();
 
   p = loadPage(xid,root.page);
@@ -831,7 +831,7 @@ diskTreeComponentIterator::diskTreeComponentIterator(int xid, recordid root, con
 /**
  * move to the next page
  **/
-int diskTreeComponentIterator::next()
+int diskTreeComponent::iterator::next()
 {
   if(done) return 0;
 
@@ -879,7 +879,7 @@ int diskTreeComponentIterator::next()
   }
 }
 
-void diskTreeComponentIterator::close() {
+void diskTreeComponent::iterator::close() {
 
   if(p) {
     unlock(p->rwlatch);

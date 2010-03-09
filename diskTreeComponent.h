@@ -134,37 +134,36 @@ private:
 
   DataPage<datatuple>::RegionAllocator* region_alloc;
 
-};
-
-class diskTreeComponentIterator {
-
 public:
-  diskTreeComponentIterator(int xid, recordid root);
-  diskTreeComponentIterator(int xid, recordid root, const byte* key, len_t keylen);
-  int next();
-  void close();
+  class iterator {
+  public:
+    iterator(int xid, recordid root);
+    iterator(int xid, recordid root, const byte* key, len_t keylen);
+    int next();
+    void close();
 
 
-  inline size_t key (byte **key) {
-    *key = (byte*)(t+1);
-    return current.size - sizeof(indexnode_rec);
-  }
+    inline size_t key (byte **key) {
+      *key = (byte*)(t+1);
+      return current.size - sizeof(indexnode_rec);
+    }
 
-  inline size_t value(byte **value) {
-    *value = (byte*)&(t->ptr);
-    return sizeof(t->ptr);
-  }
+    inline size_t value(byte **value) {
+      *value = (byte*)&(t->ptr);
+      return sizeof(t->ptr);
+    }
 
-  inline void tupleDone() { }
-  inline void releaseLock() { }
+    inline void tupleDone() { }
+    inline void releaseLock() { }
 
-private:
-  Page * p;
-  int xid_;
-  bool done;
-  recordid current;
-  indexnode_rec *t;
-  int justOnePage;
+  private:
+    Page * p;
+    int xid_;
+    bool done;
+    recordid current;
+    indexnode_rec *t;
+    int justOnePage;
+
+  };
 };
-
 #endif /* DISKTREECOMPONENT_H_ */

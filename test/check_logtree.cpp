@@ -129,7 +129,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
 
     
     int64_t count = 0;
-    diskTreeComponentIterator * it = new diskTreeComponentIterator(xid, tree);
+    diskTreeComponent::iterator * it = new diskTreeComponent::iterator(xid, tree);
 
     while(it->next()) {
         byte * key;

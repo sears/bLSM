@@ -166,7 +166,7 @@ private:
 private:
     recordid tree_; //root of the tree
     
-    diskTreeComponentIterator* lsmIterator_;
+    diskTreeComponent::iterator* lsmIterator_;
     
     pageid_t curr_pageid; //current page id
     DataPage<TUPLE>    *curr_page;   //current page
