@@ -1,7 +1,6 @@
 
 #include <math.h>
 #include "merger.h"
-#include "logiterators.cpp"
 
 void merge_stats_pp(FILE* fd, merge_stats_t &stats) {
 	long long sleep_time = stats.start.tv_sec - stats.sleep.tv_sec;

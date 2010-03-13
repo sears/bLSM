@@ -5,8 +5,7 @@
 
 #include "merger.h"
 #include "logstore.h"
-#include "logiterators.h"
-#include "datapage.cpp"
+#include "datapage.h"
 
 #include <stasis/transactional.h>
 #include <stasis/page.h>
@@ -23,8 +22,6 @@ static inline double tv_to_double(struct timeval tv)
 /////////////////////////////////////////////////////////////////
 // LOG TABLE IMPLEMENTATION
 /////////////////////////////////////////////////////////////////
-
-template class DataPage<datatuple>;
 
 logtable::logtable(pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size)
 {

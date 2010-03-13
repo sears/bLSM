@@ -23,8 +23,6 @@
 #include "tuplemerger.h"
 #include "datatuple.h"
 
-#include "logiterators.h"
-
 class diskTreeComponent {
  public:
   class internalNodes;

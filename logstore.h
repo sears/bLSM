@@ -36,8 +36,6 @@
 #include "tuplemerger.h"
 #include "datatuple.h"
 
-#include "logiterators.h"
-
 #include "merger.h"
 
 template<class TUPLE>

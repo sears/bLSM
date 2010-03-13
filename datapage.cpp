@@ -326,3 +326,7 @@ void DataPage<TUPLE>::RecordIterator::advance(int xid, int count)
 	  read_offset_ += len;
 	}
 }*/
+
+
+template class DataPage<datatuple>;
+

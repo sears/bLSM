@@ -4,7 +4,6 @@
 #include <sstream>
 #include "logstore.h"
 #include "datapage.h"
-#include "logiterators.h"
 #include "merger.h"
 #include <assert.h>
 #include <limits.h>
