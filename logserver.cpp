@@ -513,7 +513,7 @@ int op_stat_space_usage(pthread_data* data) {
 
 	readlock(data->ltable->header_lock, 0);
 
-	pageid_t datapage_c1_region_length, datapage_c1_mergeable_region_length = 0, datapage_c2_region_length;
+	/*	pageid_t datapage_c1_region_length, datapage_c1_mergeable_region_length = 0, datapage_c2_region_length;
 	pageid_t datapage_c1_region_count,  datapage_c1_mergeable_region_count = 0, datapage_c2_region_count;
 	pageid_t tree_c1_region_length, tree_c1_mergeable_region_length = 0, tree_c2_region_length;
 	pageid_t tree_c1_region_count,  tree_c1_mergeable_region_count = 0, tree_c2_region_count;
@@ -534,23 +534,46 @@ int op_stat_space_usage(pthread_data* data) {
 	}
 
 	pageid_t * tree_c2_regions = data->ltable->get_tree_c2()->get_internal_node_alloc()->list_regions(xid, &tree_c2_region_length, &tree_c2_region_count);
+	*/
+
+	pageid_t internal_c1_region_length, internal_c1_mergeable_region_length = 0, internal_c2_region_length;
+	pageid_t internal_c1_region_count,  internal_c1_mergeable_region_count = 0, internal_c2_region_count;
+	pageid_t *internal_c1_regions, *internal_c1_mergeable_regions = NULL, *internal_c2_regions;
+
+	pageid_t datapage_c1_region_length, datapage_c1_mergeable_region_length = 0, datapage_c2_region_length;
+	pageid_t datapage_c1_region_count,  datapage_c1_mergeable_region_count = 0, datapage_c2_region_count;
+	pageid_t *datapage_c1_regions, *datapage_c1_mergeable_regions = NULL, *datapage_c2_regions;
+
+	data->ltable->get_tree_c1()->list_regions(xid,
+						  &internal_c1_region_length, &internal_c1_region_count, &internal_c1_regions,
+						  &datapage_c1_region_length, &datapage_c1_region_count, &datapage_c1_regions);
+	if(data->ltable->get_tree_c1_mergeable()) {
+	  data->ltable->get_tree_c1_mergeable()->list_regions(xid,
+						    &internal_c1_mergeable_region_length, &internal_c1_mergeable_region_count, &internal_c1_mergeable_regions,
+						    &datapage_c1_mergeable_region_length, &datapage_c1_mergeable_region_count, &datapage_c1_mergeable_regions);
+
+	}
+	data->ltable->get_tree_c2()->list_regions(xid,
+						  &internal_c2_region_length, &internal_c2_region_count, &internal_c2_regions,
+						  &datapage_c2_region_length, &datapage_c2_region_count, &datapage_c2_regions);
+
 
 	free(datapage_c1_regions);
 	free(datapage_c1_mergeable_regions);
 	free(datapage_c2_regions);
 
-	free(tree_c1_regions);
-	free(tree_c1_mergeable_regions);
-	free(tree_c2_regions);
+	free(internal_c1_regions);
+	free(internal_c1_mergeable_regions);
+	free(internal_c2_regions);
 
 
 	uint64_t treesize = PAGE_SIZE *
 				( ( datapage_c1_region_count           * datapage_c1_region_length )
 				+ ( datapage_c1_mergeable_region_count * datapage_c1_mergeable_region_length )
 				+ ( datapage_c2_region_count           * datapage_c2_region_length)
-				+ ( tree_c1_region_count           * tree_c1_region_length )
-				+ ( tree_c1_mergeable_region_count * tree_c1_mergeable_region_length )
-				+ ( tree_c2_region_count           * tree_c2_region_length) );
+				+ ( internal_c1_region_count           * internal_c1_region_length )
+				+ ( internal_c1_mergeable_region_count * internal_c1_mergeable_region_length )
+				+ ( internal_c2_region_count           * internal_c2_region_length) );
 
 	boundary_tag tag;
 	pageid_t pid = ROOT_RECORD.page;
@@ -592,7 +615,7 @@ int op_stat_histogram(pthread_data* data, size_t limit) {
 	}
 
 	int xid = Tbegin();
-	diskTreeComponent::internalNodes::iterator * it = new diskTreeComponent::internalNodes::iterator(xid, data->ltable->get_tree_c2()->get_root_rec());
+	diskTreeComponent::internalNodes::iterator * it = new diskTreeComponent::internalNodes::iterator(xid, data->ltable->get_tree_c2()->get_root_rid());
 	size_t count = 0;
 	int err = 0;
 
@@ -618,7 +641,7 @@ int op_stat_histogram(pthread_data* data, size_t limit) {
 
 	size_t cur_stride = 0;
 	size_t i = 0;
-	it = new diskTreeComponent::internalNodes::iterator(xid, data->ltable->get_tree_c2()->get_root_rec());
+	it = new diskTreeComponent::internalNodes::iterator(xid, data->ltable->get_tree_c2()->get_root_rid()); // TODO make this method private?
 	while(it->next()) {
 		i++;
 		if(i == count || !cur_stride) {  // do we want to send this key? (this matches the first, last and interior keys)
@@ -647,25 +670,45 @@ int op_dbg_blockmap(pthread_data* data) {
 	readlock(data->ltable->header_lock, 0);
 
 	// produce a list of regions used by current tree components
-	pageid_t datapage_c1_region_length, datapage_c1_mergeable_region_length = 0, datapage_c2_region_length;
+	/*	pageid_t datapage_c1_region_length, datapage_c1_mergeable_region_length = 0, datapage_c2_region_length;
 	pageid_t datapage_c1_region_count,  datapage_c1_mergeable_region_count = 0, datapage_c2_region_count;
 	pageid_t * datapage_c1_regions = data->ltable->get_tree_c1()->get_datapage_alloc()->list_regions(xid, &datapage_c1_region_length, &datapage_c1_region_count);
 	pageid_t * datapage_c1_mergeable_regions = NULL;
 	if(data->ltable->get_tree_c1_mergeable()) {
 	  datapage_c1_mergeable_regions = data->ltable->get_tree_c1_mergeable()->get_datapage_alloc()->list_regions(xid, &datapage_c1_mergeable_region_length, &datapage_c1_mergeable_region_count);
 	}
-	pageid_t * datapage_c2_regions = data->ltable->get_tree_c2()->get_datapage_alloc()->list_regions(xid, &datapage_c2_region_length, &datapage_c2_region_count);
+	pageid_t * datapage_c2_regions = data->ltable->get_tree_c2()->get_datapage_alloc()->list_regions(xid, &datapage_c2_region_length, &datapage_c2_region_count); */
 
-	pageid_t tree_c1_region_length, tree_c1_mergeable_region_length = 0, tree_c2_region_length;
-	pageid_t tree_c1_region_count,  tree_c1_mergeable_region_count = 0, tree_c2_region_count;
 
-	pageid_t * tree_c1_regions = data->ltable->get_tree_c1()->get_internal_node_alloc()->list_regions(xid, &tree_c1_region_length, &tree_c1_region_count);
+	/*	pageid_t * tree_c1_regions = data->ltable->get_tree_c1()->get_internal_node_alloc()->list_regions(xid, &tree_c1_region_length, &tree_c1_region_count);
 
 	pageid_t * tree_c1_mergeable_regions = NULL;
 	if(data->ltable->get_tree_c1_mergeable()) {
 	  tree_c1_mergeable_regions = data->ltable->get_tree_c1_mergeable()->get_internal_node_alloc()->list_regions(xid, &tree_c1_mergeable_region_length, &tree_c1_mergeable_region_count);
 	}
-	pageid_t * tree_c2_regions = data->ltable->get_tree_c2()->get_internal_node_alloc()->list_regions(xid, &tree_c2_region_length, &tree_c2_region_count);
+	pageid_t * tree_c2_regions = data->ltable->get_tree_c2()->get_internal_node_alloc()->list_regions(xid, &tree_c2_region_length, &tree_c2_region_count); */
+
+	pageid_t internal_c1_region_length, internal_c1_mergeable_region_length = 0, internal_c2_region_length;
+	pageid_t internal_c1_region_count,  internal_c1_mergeable_region_count = 0, internal_c2_region_count;
+	pageid_t *internal_c1_regions, *internal_c1_mergeable_regions = NULL, *internal_c2_regions;
+
+	pageid_t datapage_c1_region_length, datapage_c1_mergeable_region_length = 0, datapage_c2_region_length;
+	pageid_t datapage_c1_region_count,  datapage_c1_mergeable_region_count = 0, datapage_c2_region_count;
+	pageid_t *datapage_c1_regions, *datapage_c1_mergeable_regions = NULL, *datapage_c2_regions;
+
+	data->ltable->get_tree_c1()->list_regions(xid,
+						  &internal_c1_region_length, &internal_c1_region_count, &internal_c1_regions,
+						  &datapage_c1_region_length, &datapage_c1_region_count, &datapage_c1_regions);
+	if(data->ltable->get_tree_c1_mergeable()) {
+	  data->ltable->get_tree_c1_mergeable()->list_regions(xid,
+						    &internal_c1_mergeable_region_length, &internal_c1_mergeable_region_count, &internal_c1_mergeable_regions,
+						    &datapage_c1_mergeable_region_length, &datapage_c1_mergeable_region_count, &datapage_c1_mergeable_regions);
+
+	}
+	data->ltable->get_tree_c2()->list_regions(xid,
+						  &internal_c2_region_length, &internal_c2_region_count, &internal_c2_regions,
+						  &datapage_c2_region_length, &datapage_c2_region_count, &datapage_c2_regions);
+
 	unlock(data->ltable->header_lock);
 
 	Tcommit(xid);
@@ -675,9 +718,9 @@ int op_dbg_blockmap(pthread_data* data) {
 		printf("%lld ", datapage_c1_regions[i]);
 	}
 
-	printf("\nC1 Internal Node Regions (each is %lld pages long):\n", tree_c1_region_length);
-	for(pageid_t i = 0; i < tree_c1_region_count; i++) {
-		printf("%lld ", tree_c1_regions[i]);
+	printf("\nC1 Internal Node Regions (each is %lld pages long):\n", internal_c1_region_length);
+	for(pageid_t i = 0; i < internal_c1_region_count; i++) {
+		printf("%lld ", internal_c1_regions[i]);
 	}
 
 	printf("\nC2 Datapage Regions (each is %lld pages long):\n", datapage_c2_region_length);
@@ -685,9 +728,9 @@ int op_dbg_blockmap(pthread_data* data) {
 		printf("%lld ", datapage_c2_regions[i]);
 	}
 
-	printf("\nC2 Internal Node Regions (each is %lld pages long):\n", tree_c2_region_length);
-	for(pageid_t i = 0; i < tree_c2_region_count; i++) {
-		printf("%lld ", tree_c2_regions[i]);
+	printf("\nC2 Internal Node Regions (each is %lld pages long):\n", internal_c2_region_length);
+	for(pageid_t i = 0; i < internal_c2_region_count; i++) {
+		printf("%lld ", internal_c2_regions[i]);
 	}
 	printf("\nStasis Region Map\n");
 
@@ -706,9 +749,9 @@ int op_dbg_blockmap(pthread_data* data) {
 	printf("\n");
 
     printf("Tree components are using %lld megabytes.  File is using %lld megabytes.\n",
-       PAGE_SIZE * (tree_c1_region_length * tree_c1_region_count
-		    + tree_c1_mergeable_region_length * tree_c1_mergeable_region_count
-		    + tree_c2_region_length * tree_c2_region_count
+       PAGE_SIZE * (internal_c1_region_length * internal_c1_region_count
+		    + internal_c1_mergeable_region_length * internal_c1_mergeable_region_count
+		    + internal_c2_region_length * internal_c2_region_count
 		    + datapage_c1_region_length * datapage_c1_region_count
 		    + datapage_c1_mergeable_region_length * datapage_c1_mergeable_region_count
 		    + datapage_c2_region_length * datapage_c2_region_count) / (1024 * 1024),
@@ -717,9 +760,9 @@ int op_dbg_blockmap(pthread_data* data) {
 	free(datapage_c1_regions);
 	if(datapage_c1_mergeable_regions) free(datapage_c1_mergeable_regions);
 	free(datapage_c2_regions);
-	free(tree_c1_regions);
-	if(tree_c1_mergeable_regions) free(tree_c1_mergeable_regions);
-	free(tree_c2_regions);
+	free(internal_c1_regions);
+	if(internal_c1_mergeable_regions) free(internal_c1_mergeable_regions);
+	free(internal_c2_regions);
     return writeoptosocket(*(data->workitem), LOGSTORE_RESPONSE_SUCCESS);
 }
 

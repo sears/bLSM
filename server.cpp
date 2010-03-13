@@ -55,10 +55,9 @@ void initialize_server()
     int xid = Tbegin();
 
     mscheduler = new merge_scheduler;
+
     logtable ltable;
 
-    int pcount = 40;
-    ltable.set_fixed_page_count(pcount);
     recordid table_root = ROOT_RECORD;
     if(TrecordType(xid, ROOT_RECORD) == INVALID_SLOT) {
     	printf("Creating empty logstore\n");

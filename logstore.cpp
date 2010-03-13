@@ -26,7 +26,7 @@ static inline double tv_to_double(struct timeval tv)
 
 template class DataPage<datatuple>;
 
-logtable::logtable()
+logtable::logtable(pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size)
 {
 
     tree_c0 = NULL;
@@ -36,7 +36,6 @@ logtable::logtable()
     tree_c2 = NULL;
     this->still_running_ = true;
     this->mergedata = 0;
-    fixed_page_count = -1;
     //tmerger = new tuplemerger(&append_merger);
     tmerger = new tuplemerger(&replace_merger);
 
@@ -46,7 +45,10 @@ logtable::logtable()
     tree_bytes = 0;
         
     epoch = 0;
-    
+
+    this->internal_region_size = internal_region_size;
+    this->datapage_region_size = datapage_region_size;
+    this->datapage_size = datapage_size;
 }
 
 logtable::~logtable()
@@ -71,29 +73,29 @@ recordid logtable::allocTable(int xid)
     table_rec = Talloc(xid, sizeof(tbl_header));
     
     //create the big tree
-    tree_c2 = new diskTreeComponent::internalNodes(xid);
+    tree_c2 = new diskTreeComponent(xid, internal_region_size, datapage_region_size, datapage_size);
 
     //create the small tree
-    tree_c1 = new diskTreeComponent::internalNodes(xid);
+    tree_c1 = new diskTreeComponent(xid, internal_region_size, datapage_region_size, datapage_size);
 
     update_persistent_header(xid);
 
     return table_rec;
 }
 void logtable::openTable(int xid, recordid rid) {
-	table_rec = rid;
-	Tread(xid, table_rec, &tbl_header);
-	tree_c2 = new diskTreeComponent::internalNodes(xid, tbl_header.c2_root, tbl_header.c2_state, tbl_header.c2_dp_state);
-	tree_c1 = new diskTreeComponent::internalNodes(xid, tbl_header.c1_root, tbl_header.c1_state, tbl_header.c1_dp_state);
+  table_rec = rid;
+  Tread(xid, table_rec, &tbl_header);
+  tree_c2 = new diskTreeComponent(xid, tbl_header.c2_root, tbl_header.c2_state, tbl_header.c2_dp_state);
+  tree_c1 = new diskTreeComponent(xid, tbl_header.c1_root, tbl_header.c1_state, tbl_header.c1_dp_state);
 }
 void logtable::update_persistent_header(int xid) {
 
-	tbl_header.c2_root = tree_c2->get_root_rec();
-    tbl_header.c2_dp_state = tree_c2->get_datapage_alloc()->header_rid();
-    tbl_header.c2_state = tree_c2->get_internal_node_alloc()->header_rid();
-    tbl_header.c1_root = tree_c1->get_root_rec();
-    tbl_header.c1_dp_state = tree_c1->get_datapage_alloc()->header_rid();
-    tbl_header.c1_state = tree_c1->get_internal_node_alloc()->header_rid();
+	tbl_header.c2_root = tree_c2->get_root_rid();
+    tbl_header.c2_dp_state = tree_c2->get_datapage_allocator_rid();
+    tbl_header.c2_state = tree_c2->get_internal_node_allocator_rid();
+    tbl_header.c1_root = tree_c1->get_root_rid();
+    tbl_header.c1_dp_state = tree_c1->get_datapage_allocator_rid();
+    tbl_header.c1_state = tree_c1->get_internal_node_allocator_rid();
     
     Tset(xid, table_rec, &tbl_header);    
 }
@@ -224,7 +226,7 @@ datatuple * logtable::findTuple(int xid, const datatuple::key_t key, size_t keyS
     //step 3: check c1    
     if(!done)
     {
-        datatuple *tuple_c1 = findTuple(xid, key, keySize, get_tree_c1());
+        datatuple *tuple_c1 = get_tree_c1()->findTuple(xid, key, keySize);
         if(tuple_c1 != NULL)
         {
             bool use_copy = false;
@@ -253,7 +255,7 @@ datatuple * logtable::findTuple(int xid, const datatuple::key_t key, size_t keyS
     if(!done && get_tree_c1_mergeable() != 0)
     {
         DEBUG("old c1 tree not null\n");
-        datatuple *tuple_oc1 = findTuple(xid, key, keySize, get_tree_c1_mergeable());
+        datatuple *tuple_oc1 = get_tree_c1_mergeable()->findTuple(xid, key, keySize);
         
         if(tuple_oc1 != NULL)
         {
@@ -283,7 +285,7 @@ datatuple * logtable::findTuple(int xid, const datatuple::key_t key, size_t keyS
     if(!done)
     {
         DEBUG("Not in old first disk tree\n");        
-        datatuple *tuple_c2 = findTuple(xid, key, keySize, get_tree_c2());
+        datatuple *tuple_c2 = get_tree_c2()->findTuple(xid, key, keySize);
 
         if(tuple_c2 != NULL)
         {
@@ -356,7 +358,7 @@ datatuple * logtable::findTuple_first(int xid, datatuple::key_t key, size_t keyS
             DEBUG("Not in old mem tree\n");
 
             //step 3: check c1
-            ret_tuple = findTuple(xid, key, keySize, get_tree_c1());
+            ret_tuple = get_tree_c1()->findTuple(xid, key, keySize);
         }
 
         if(ret_tuple == 0)
@@ -366,8 +368,8 @@ datatuple * logtable::findTuple_first(int xid, datatuple::key_t key, size_t keyS
             //step 4: check old c1 if exists
             if( get_tree_c1_mergeable() != 0)
             {
-                DEBUG("old c1 tree not null\n");
-                ret_tuple = findTuple(xid, key, keySize, get_tree_c1_mergeable());
+              DEBUG("old c1 tree not null\n");
+              ret_tuple = get_tree_c1_mergeable()->findTuple(xid, key, keySize);
             }
                 
         }
@@ -377,12 +379,9 @@ datatuple * logtable::findTuple_first(int xid, datatuple::key_t key, size_t keyS
             DEBUG("Not in old first disk tree\n");
 
             //step 5: check c2
-            ret_tuple = findTuple(xid, key, keySize, tree_c2);            
-        }        
+            ret_tuple = get_tree_c2()->findTuple(xid, key, keySize);
+        }
     }
-
-
-     
 
     pthread_mutex_unlock(mergedata->rbtree_mut);
     datatuple::freetuple(search_tuple);
@@ -442,56 +441,6 @@ void logtable::insertTuple(datatuple *tuple)
 
 
     DEBUG("tree size %d tuples %lld bytes.\n", tsize, tree_bytes);
-}
-
-
-DataPage<datatuple>* logtable::insertTuple(int xid, datatuple *tuple, diskTreeComponent::internalNodes *ltree)
-{
-    //create a new data page -- either the last region is full, or the last data page doesn't want our tuple.  (or both)
-    
-    DataPage<datatuple> * dp = 0;
-    int count = 0;
-    while(dp==0)
-    {
-      dp = new DataPage<datatuple>(xid, fixed_page_count, ltree->get_datapage_alloc());
-
-        //insert the record into the data page
-        if(!dp->append(tuple))
-        {
-        	// the last datapage must have not wanted the tuple, and then this datapage figured out the region is full.
-        	delete dp;
-            dp = 0;
-		    assert(count == 0); // only retry once.
-            count ++;
-        }
-    }
-    
-
-    ltree->appendPage(xid,
-                        tuple->key(),
-                        tuple->keylen(),
-                        dp->get_start_pid()
-                        );
-                        
-
-    //return the datapage
-    return dp;
-}
-
-datatuple * logtable::findTuple(int xid, datatuple::key_t key, size_t keySize,  diskTreeComponent::internalNodes *ltree)
-{
-    datatuple * tup=0;
-
-    //find the datapage
-    pageid_t pid = ltree->findPage(xid, (byte*)key, keySize);
-
-    if(pid!=-1)
-    {
-        DataPage<datatuple> * dp = new DataPage<datatuple>(xid, pid);
-        dp->recordRead(key, keySize, &tup);
-        delete dp;           
-    }
-    return tup;
 }
 
 void logtable::registerIterator(logtableIterator<datatuple> * it) {

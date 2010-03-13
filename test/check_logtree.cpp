@@ -4,6 +4,7 @@
 #include <iostream>
 #include <sstream>
 #include "logstore.h"
+#include "diskTreeComponent.h"
 
 #include <assert.h>
 #include <limits.h>
@@ -36,14 +37,10 @@ void insertProbeIter_str(int  NUM_ENTRIES)
 
     int xid = Tbegin();
 
-    logtable ltable;
-
-    recordid table_root = ltable.allocTable(xid);
-
     Tcommit(xid);
     
     xid = Tbegin();
-    diskTreeComponent::internalNodes *lt = ltable.get_tree_c1();
+    diskTreeComponent::internalNodes *lt = new diskTreeComponent::internalNodes(xid, 1000, 10000, 40);
   
     long oldpagenum = -1;
 
@@ -157,14 +154,10 @@ void insertProbeIter_int(int  NUM_ENTRIES)
 
     int xid = Tbegin();
 
-    logtable ltable;
-
-    recordid table_root = ltable.allocTable(xid);
-
     Tcommit(xid);
     
     xid = Tbegin();
-    diskTreeComponent::internalNodes *lt = ltable.get_tree_c1();
+    diskTreeComponent::internalNodes *lt = new diskTreeComponent::internalNodes(xid, 1000, 10000, 40);
   
     long oldpagenum = -1;
     

@@ -46,10 +46,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     int xid = Tbegin();
 
     merge_scheduler mscheduler;    
-    logtable ltable;
-
-    int pcount = 100;
-    ltable.set_fixed_page_count(pcount);
+    logtable ltable(1000, 10000, 100);
 
     recordid table_root = ltable.allocTable(xid);
 

@@ -67,6 +67,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         {
             dpages++;
             if(dp)
+                dp->writes_done();
                 delete dp;
 
             dp = new DataPage<datatuple>(xid, pcount, alloc);
@@ -78,6 +79,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         }
     }
     if(dp) {
+      dp->writes_done();
       delete dp;
     }
 

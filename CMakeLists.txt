@@ -76,7 +76,7 @@ ENDIF ( "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" )
 #CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 
 IF ( HAVE_STASIS )
-  ADD_LIBRARY(logstore logserver.cpp logstore.cpp diskTreeComponent.cpp memTreeComponent.cpp logiterators.cpp datapage.cpp merger.cpp tuplemerger.cpp)
+  ADD_LIBRARY(logstore logserver.cpp logstore.cpp diskTreeComponent.cpp memTreeComponent.cpp datapage.cpp merger.cpp tuplemerger.cpp)
   CREATE_EXECUTABLE(server)
 ENDIF ( HAVE_STASIS )
 ADD_LIBRARY(logstore_client tcpclient.cpp)

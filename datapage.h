@@ -67,14 +67,19 @@ public:
     DataPage( int xid, pageid_t page_count, RegionAllocator* alloc);
 
     ~DataPage() {
-    	if(write_offset_ != -1) {
-    	  len_t dat_len = 0; // write terminating zero.
+      assert(write_offset_ == -1);
+    }
 
-    	  write_data((const byte*)&dat_len, sizeof(dat_len), false);
+    void writes_done() {
+      if(write_offset_ != -1) {
+        len_t dat_len = 0; // write terminating zero.
 
-    	  // if writing the zero fails, later reads will fail as well, and assume EOF.
+        write_data((const byte*)&dat_len, sizeof(dat_len), false);
 
-    	}
+        // if writing the zero fails, later reads will fail as well, and assume EOF.
+
+        write_offset_ = -1;
+      }
 
     }
 

@@ -2,22 +2,6 @@
 #include <math.h>
 #include "merger.h"
 #include "logiterators.cpp"
-#include "datapage.h"
-
-typedef struct merge_stats_t {
-	int merge_level;               // 1 => C0->C1, 2 => C1->C2
-	pageid_t merge_count;          // This is the merge_count'th merge
-	struct timeval sleep;          // When did we go to sleep waiting for input?
-	struct timeval start;          // When did we wake up and start merging?  (at steady state with max throughput, this should be equal to sleep)
-	struct timeval done;           // When did we finish merging?
-	pageid_t bytes_out;            // How many bytes did we write (including internal tree nodes)?
-	pageid_t num_tuples_out;       // How many tuples did we write?
-	pageid_t num_datapages_out;    // How many datapages?
-	pageid_t bytes_in_small;       // How many bytes from the small input tree (for C0, we ignore tree overheads)?
-	pageid_t num_tuples_in_small;  // Tuples from the small input?
-	pageid_t bytes_in_large;       // Bytes from the large input?
-	pageid_t num_tuples_in_large;  // Tuples from large input?
-} merge_stats_t;
 
 void merge_stats_pp(FILE* fd, merge_stats_t &stats) {
 	long long sleep_time = stats.start.tv_sec - stats.sleep.tv_sec;
@@ -60,11 +44,6 @@ void merge_stats_pp(FILE* fd, merge_stats_t &stats) {
 }
 
 double merge_stats_nsec_to_merge_in_bytes(merge_stats_t); // how many nsec did we burn on each byte from the small tree (want this to be equal for the two mergers)
-
-inline DataPage<datatuple>*
-insertTuple(int xid, DataPage<datatuple> *dp, datatuple *t,
-            logtable *ltable,
-            diskTreeComponent::internalNodes * ltree, merge_stats_t*);
 
 int merge_scheduler::addlogtable(logtable *ltable)
 {
@@ -209,6 +188,9 @@ void merge_scheduler::startlogtable(int index, int64_t MAX_C0_SIZE)
             block2_needed,      //out_block_needed
             block1_ready_cond,  //in_block_ready_cond
             block2_ready_cond,  //out_block_ready_cond
+            mdata->internal_region_size,
+            mdata->datapage_region_size,
+            mdata->datapage_size,
         0, //max_tree_size No max size for biggest component
         &R, //r_i
                 };
@@ -226,6 +208,9 @@ void merge_scheduler::startlogtable(int index, int64_t MAX_C0_SIZE)
             block1_needed,
             mdata->input_ready_cond,
             block1_ready_cond,
+            mdata->internal_region_size,  // TODO different region / datapage sizes for C1?
+            mdata->datapage_region_size,
+            mdata->datapage_size,
             (int64_t)(R * R * MAX_C0_SIZE),
             &R,
         };
@@ -245,7 +230,7 @@ void merge_iterators(int xid,
                     ITA *itrA,
                     ITB *itrB,
                     logtable *ltable,
-                    diskTreeComponent::internalNodes *scratch_tree,
+                    diskTreeComponent *scratch_tree,
                     merge_stats_t *stats,
                     bool dropDeletes);
 
@@ -334,13 +319,13 @@ void* memMergeThread(void*arg)
         // 4: Merge
 
         //create the iterators
-        diskTreeIterator<datatuple> *itrA = new diskTreeIterator<datatuple>(ltable->get_tree_c1()->get_root_rec()); // XXX don't want get_root_rec() to be here.
+        diskTreeComponent::diskTreeIterator *itrA = ltable->get_tree_c1()->iterator();
         memTreeComponent<datatuple>::iterator *itrB =
             new memTreeComponent<datatuple>::iterator(ltable->get_tree_c0_mergeable());
 
         
         //create a new tree
-        diskTreeComponent::internalNodes * c1_prime = new diskTreeComponent::internalNodes(xid); // XXX should not hardcode region size)
+        diskTreeComponent * c1_prime = new diskTreeComponent(xid,  a->internal_region_size, a->datapage_region_size, a->datapage_size);
 
         //pthread_mutex_unlock(a->block_ready_mut);
         unlock(ltable->header_lock);
@@ -355,10 +340,8 @@ void* memMergeThread(void*arg)
 
         // 5: force c1'
 
-        //force write the new region to disk
-        c1_prime->get_internal_node_alloc()->force_regions(xid);
-        //force write the new datapages
-        c1_prime->get_datapage_alloc()->force_regions(xid);
+        //force write the new tree to disk
+        c1_prime->force(xid);
 
         merge_count++;        
         DEBUG("mmt:\tmerge_count %lld #bytes written %lld\n", stats.merge_count, stats.bytes_out);
@@ -391,8 +374,7 @@ void* memMergeThread(void*arg)
         }
 
         // 12: delete old c1
-        ltable->get_tree_c1()->get_internal_node_alloc()->dealloc_regions(xid);
-        ltable->get_tree_c1()->get_datapage_alloc()->dealloc_regions(xid);
+        ltable->get_tree_c1()->dealloc(xid);
         delete ltable->get_tree_c1();
 
         // 11.5: delete old c0_mergeable
@@ -406,7 +388,7 @@ void* memMergeThread(void*arg)
 			ltable->set_tree_c1_mergeable(c1_prime);
 
 			// 8: c1 = new empty.
-            ltable->set_tree_c1(new diskTreeComponent::internalNodes(xid));
+            ltable->set_tree_c1(new diskTreeComponent(xid, a->internal_region_size, a->datapage_region_size, a->datapage_size));
 
             pthread_cond_signal(a->out_block_ready_cond);
 
@@ -491,13 +473,11 @@ void *diskMergeThread(void*arg)
 
         // 4: do the merge.
         //create the iterators
-        diskTreeIterator<datatuple> *itrA = new diskTreeIterator<datatuple>(ltable->get_tree_c2()->get_root_rec());
-        diskTreeIterator<datatuple> *itrB =
-            new diskTreeIterator<datatuple>(ltable->get_tree_c1_mergeable()->get_root_rec());
+        diskTreeComponent::diskTreeIterator *itrA = ltable->get_tree_c2()->iterator(); //new diskTreeIterator<datatuple>(ltable->get_tree_c2()->get_root_rec());
+        diskTreeComponent::diskTreeIterator *itrB = ltable->get_tree_c1_mergeable()->iterator();
 
         //create a new tree
-        //TODO: maybe you want larger regions for the second tree?
-        diskTreeComponent::internalNodes * c2_prime = new diskTreeComponent::internalNodes(xid);
+        diskTreeComponent * c2_prime = new diskTreeComponent(xid, a->internal_region_size, a->datapage_region_size, a->datapage_size);
 
         unlock(ltable->header_lock);
         
@@ -510,19 +490,16 @@ void *diskMergeThread(void*arg)
         delete itrB;        
 
         //5: force write the new region to disk
-        c2_prime->get_internal_node_alloc()->force_regions(xid);
-        c2_prime->get_datapage_alloc()->force_regions(xid);
+        c2_prime->force(xid);
 
         // (skip 6, 7, 8, 8.5, 9))
 
         writelock(ltable->header_lock,0);
         //12
-        ltable->get_tree_c2()->get_internal_node_alloc()->dealloc_regions(xid);
-        ltable->get_tree_c2()->get_datapage_alloc()->dealloc_regions(xid);
+        ltable->get_tree_c2()->dealloc(xid);
         delete ltable->get_tree_c2();
         //11.5
-        ltable->get_tree_c1_mergeable()->get_internal_node_alloc()->dealloc_regions(xid);
-        ltable->get_tree_c1_mergeable()->get_datapage_alloc()->dealloc_regions(xid);
+        ltable->get_tree_c1_mergeable()->dealloc(xid);
         //11
         delete ltable->get_tree_c1_mergeable();
         ltable->set_tree_c1_mergeable(0);
@@ -560,7 +537,7 @@ void merge_iterators(int xid,
                         ITA *itrA, //iterator on c1 or c2
                         ITB *itrB, //iterator on c0 or c1, respectively
                         logtable *ltable,
-                        diskTreeComponent::internalNodes *scratch_tree, merge_stats_t *stats,
+                        diskTreeComponent *scratch_tree, merge_stats_t *stats,
                         bool dropDeletes  // should be true iff this is biggest component
                         )
 {
@@ -570,8 +547,6 @@ void merge_iterators(int xid,
 	stats->num_tuples_in_small = 0;
 	stats->bytes_in_large = 0;
 	stats->num_tuples_in_large = 0;
-
-    DataPage<datatuple> *dp = 0;
 
     datatuple *t1 = itrA->next_callerFrees();
     if(t1) {
@@ -591,8 +566,7 @@ void merge_iterators(int xid,
         while(t1 != 0 && datatuple::compare(t1->key(), t1->keylen(), t2->key(), t2->keylen()) < 0) // t1 is less than t2
         {
             //insert t1
-            dp = insertTuple(xid, dp, t1, ltable, scratch_tree, stats);
-
+            scratch_tree->insertTuple(xid, t1, stats);
             datatuple::freetuple(t1);
             stats->num_tuples_out++;
             //advance itrA
@@ -608,9 +582,9 @@ void merge_iterators(int xid,
             datatuple *mtuple = ltable->gettuplemerger()->merge(t1,t2);
             
             //insert merged tuple, drop deletes
-            if(dropDeletes && !mtuple->isDelete())
-                dp = insertTuple(xid, dp, mtuple, ltable, scratch_tree, stats);
-            
+            if(dropDeletes && !mtuple->isDelete()) {
+              scratch_tree->insertTuple(xid, mtuple, stats);
+            }
             datatuple::freetuple(t1);
             t1 = itrA->next_callerFrees();  //advance itrA
             if(t1) {
@@ -622,7 +596,7 @@ void merge_iterators(int xid,
         else
         {        
             //insert t2
-            dp = insertTuple(xid, dp, t2, ltable, scratch_tree, stats);
+            scratch_tree->insertTuple(xid, t2, stats);
             // cannot free any tuples here; they may still be read through a lookup
         }
 
@@ -630,9 +604,8 @@ void merge_iterators(int xid,
         stats->num_tuples_out++;
     }
 
-    while(t1 != 0) // t1 is less than t2
-        {
-            dp = insertTuple(xid, dp, t1, ltable, scratch_tree, stats);
+    while(t1 != 0) {// t1 is less than t2
+      scratch_tree->insertTuple(xid, t1, stats);
 
             datatuple::freetuple(t1);
             stats->num_tuples_out++;
@@ -642,33 +615,9 @@ void merge_iterators(int xid,
             	stats->num_tuples_in_large++;
             	stats->bytes_in_large += t1->byte_length();
             }
-        }
-
-    if(dp!=NULL)
-        delete dp;
+    }
     DEBUG("dpages: %d\tnpages: %d\tntuples: %d\n", dpages, npages, ntuples);
 
+    scratch_tree->writes_done();
+
 }
-
-
-inline DataPage<datatuple>*
-insertTuple(int xid, DataPage<datatuple> *dp, datatuple *t,
-            logtable *ltable,
-            diskTreeComponent::internalNodes * ltree, merge_stats_t * stats)
-{
-    if(dp==0)
-    {
-        dp = ltable->insertTuple(xid, t, ltree);
-        stats->num_datapages_out++;
-    }
-    else if(!dp->append(t))
-    {
-    	stats->bytes_out += (PAGE_SIZE * dp->get_page_count());
-        delete dp;
-        dp = ltable->insertTuple(xid, t, ltree);
-        stats->num_datapages_out++;
-    }
-
-    return dp;    
-}
-

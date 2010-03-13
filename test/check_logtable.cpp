@@ -18,8 +18,6 @@
 
 #include "check_util.h"
 
-template class diskTreeIterator<datatuple>;
-
 void insertProbeIter(size_t NUM_ENTRIES)
 {
     srand(1000);
@@ -32,19 +30,13 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     int xid = Tbegin();
 
-    logtable ltable;
-
-    int pcount = 5;
-    ltable.set_fixed_page_count(pcount);
+    logtable ltable(1000, 10000, 5);
     recordid table_root = ltable.allocTable(xid);
 
     Tcommit(xid);
     
     xid = Tbegin();
-    diskTreeComponent::internalNodes *ltable_c1 = ltable.get_tree_c1();
-    
-    recordid tree_root = ltable_c1->get_root_rec();
-
+    diskTreeComponent *ltable_c1 = ltable.get_tree_c1();
 
     std::vector<std::string> data_arr;
     std::vector<std::string> key_arr;
@@ -62,54 +54,30 @@ void insertProbeIter(size_t NUM_ENTRIES)
     if(data_arr.size() > NUM_ENTRIES)
         data_arr.erase(data_arr.begin()+NUM_ENTRIES, data_arr.end());  
     
-    
-    
-    
     printf("Stage 1: Writing %d keys\n", NUM_ENTRIES);
 
-    
-    int dpages = 0;
-    int npages = 0;
-    DataPage<datatuple> *dp=0;
-    int64_t datasize = 0;
-    std::vector<pageid_t> dsp;
+    merge_stats_t *stats = (merge_stats_t*)calloc(sizeof(stats), 1);
+
     for(size_t i = 0; i < NUM_ENTRIES; i++)
     {
         //prepare the tuple
         datatuple* newtuple = datatuple::create(key_arr[i].c_str(), key_arr[i].length()+1, data_arr[i].c_str(), data_arr[i].length()+1);
 
-        datasize += newtuple->byte_length();
+        stats->bytes_in_small += newtuple->byte_length();
 
-        if(dp == NULL)
-        {
-            dp = ltable.insertTuple(xid, newtuple, ltable_c1);
-            dpages++;
-            dsp.push_back(dp->get_start_pid());
-        }
-        else
-        {
-            if(!dp->append(newtuple))
-            {
-                npages += dp->get_page_count();
-                delete dp;
-                dp = ltable.insertTuple(xid, newtuple, ltable_c1);
-                dpages++;
-                dsp.push_back(dp->get_start_pid());            
-            }
-        }
+        ltable_c1->insertTuple(xid, newtuple, stats);
 
         datatuple::freetuple(newtuple);
     }
-
     printf("\nTREE STRUCTURE\n");
     ltable_c1->print_tree(xid);
-    
-    printf("Total data set length: %lld\n", datasize);
-    printf("Storage utilization: %.2f\n", (datasize+.0) / (PAGE_SIZE * npages));
-    printf("Number of datapages: %d\n", dpages);
+
+    printf("Total data set length: %lld\n", stats->bytes_in_small);
+    printf("Storage utilization: %.2f\n", (stats->bytes_in_small+.0) / (1.0* stats->bytes_out));
+    printf("Number of datapages: %lld\n", (long long)stats->num_datapages_out);
     printf("Writes complete.\n");
-    if(dp)
-    	delete dp;
+
+    ltable_c1->writes_done();
 
     Tcommit(xid);
     xid = Tbegin();
@@ -117,11 +85,11 @@ void insertProbeIter(size_t NUM_ENTRIES)
     printf("Stage 2: Sequentially reading %d tuples\n", NUM_ENTRIES);
     
     size_t tuplenum = 0;
-    diskTreeIterator<datatuple> tree_itr(tree_root);
+    diskTreeComponent::diskTreeIterator * tree_itr = ltable_c1->iterator();
 
 
     datatuple *dt=0;
-    while( (dt=tree_itr.next_callerFrees()) != NULL)
+    while( (dt=tree_itr->next_callerFrees()) != NULL)
     {
         assert(dt->keylen() == key_arr[tuplenum].length()+1);
         assert(dt->datalen() == data_arr[tuplenum].length()+1);
@@ -129,7 +97,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         datatuple::freetuple(dt);
         dt = 0;
     }
-
+    delete(tree_itr);
     assert(tuplenum == key_arr.size());
     
     printf("Sequential Reads completed.\n");
@@ -142,7 +110,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         //randomly pick a key
         int ri = rand()%key_arr.size();
 
-		datatuple *dt = ltable.findTuple(xid, (const datatuple::key_t) key_arr[ri].c_str(), (size_t)key_arr[ri].length()+1, ltable_c1);
+		datatuple *dt = ltable_c1->findTuple(xid, (const datatuple::key_t) key_arr[ri].c_str(), (size_t)key_arr[ri].length()+1);
 
         assert(dt!=0);
         assert(dt->keylen() == key_arr[ri].length()+1);

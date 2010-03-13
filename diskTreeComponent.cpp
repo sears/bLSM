@@ -46,6 +46,79 @@ void diskTreeComponent::internalNodes::init_stasis() {
 
 }
 
+void diskTreeComponent::writes_done() {
+  if(dp) {
+    dp->writes_done();
+    delete dp;
+    dp = 0;
+  }
+}
+
+int diskTreeComponent::insertTuple(int xid, datatuple *t, merge_stats_t *stats)
+{
+  int ret = 0; // no error.
+  if(dp==0) {
+    dp = insertDataPage(xid, t);
+    stats->num_datapages_out++;
+  } else if(!dp->append(t)) {
+    stats->bytes_out += (PAGE_SIZE * dp->get_page_count());
+    dp->writes_done();
+    delete dp;
+    dp = insertDataPage(xid, t);
+    stats->num_datapages_out++;
+  }
+  return ret;
+}
+
+DataPage<datatuple>* diskTreeComponent::insertDataPage(int xid, datatuple *tuple) {
+    //create a new data page -- either the last region is full, or the last data page doesn't want our tuple.  (or both)
+
+    DataPage<datatuple> * dp = 0;
+    int count = 0;
+    while(dp==0)
+    {
+      dp = new DataPage<datatuple>(xid, datapage_size, ltree->get_datapage_alloc());
+
+        //insert the record into the data page
+        if(!dp->append(tuple))
+        {
+            // the last datapage must have not wanted the tuple, and then this datapage figured out the region is full.
+            dp->writes_done();
+            delete dp;
+            dp = 0;
+            assert(count == 0); // only retry once.
+            count ++;
+        }
+    }
+
+
+    ltree->appendPage(xid,
+                        tuple->key(),
+                        tuple->keylen(),
+                        dp->get_start_pid()
+                        );
+
+
+    //return the datapage
+    return dp;
+}
+
+datatuple * diskTreeComponent::findTuple(int xid, datatuple::key_t key, size_t keySize)
+{
+    datatuple * tup=0;
+
+    //find the datapage
+    pageid_t pid = ltree->findPage(xid, (byte*)key, keySize);
+
+    if(pid!=-1)
+    {
+        DataPage<datatuple> * dp = new DataPage<datatuple>(xid, pid);
+        dp->recordRead(key, keySize, &tup);
+        delete dp;
+    }
+    return tup;
+}
+
 void diskTreeComponent::internalNodes::deinit_stasis() { Tdeinit(); }
 recordid diskTreeComponent::internalNodes::create(int xid) {
 
@@ -763,3 +836,123 @@ void diskTreeComponent::internalNodes::iterator::close() {
   }
   if(t) free(t);
 }
+
+
+/////////////////////////////////////////////////////////////////////
+// tree iterator implementation
+/////////////////////////////////////////////////////////////////////
+
+void diskTreeComponent::diskTreeIterator::init_iterators(datatuple * key1, datatuple * key2) {
+    assert(!key2); // unimplemented
+    if(tree_.size == INVALID_SIZE) {
+        lsmIterator_ = NULL;
+    } else {
+        if(key1) {
+            lsmIterator_ = new diskTreeComponent::internalNodes::iterator(-1, tree_, key1->key(), key1->keylen());
+        } else {
+            lsmIterator_ = new diskTreeComponent::internalNodes::iterator(-1, tree_);
+        }
+    }
+  }
+
+diskTreeComponent::diskTreeIterator::diskTreeIterator(diskTreeComponent::internalNodes *tree) :
+    tree_(tree ? tree->get_root_rec() : NULLRID)
+{
+    init_iterators(NULL, NULL);
+    init_helper(NULL);
+}
+
+diskTreeComponent::diskTreeIterator::diskTreeIterator(diskTreeComponent::internalNodes *tree, datatuple* key) :
+    tree_(tree ? tree->get_root_rec() : NULLRID)
+{
+    init_iterators(key,NULL);
+    init_helper(key);
+
+}
+
+diskTreeComponent::diskTreeIterator::~diskTreeIterator()
+{
+    if(lsmIterator_) {
+        lsmIterator_->close();
+        delete lsmIterator_;
+    }
+
+    if(curr_page!=NULL)
+    {
+        delete curr_page;
+        curr_page = 0;
+    }
+
+
+}
+
+void diskTreeComponent::diskTreeIterator::init_helper(datatuple* key1)
+{
+    if(!lsmIterator_)
+    {
+        DEBUG("treeIterator:\t__error__ init_helper():\tnull lsmIterator_");
+        curr_page = 0;
+        dp_itr = 0;
+    }
+    else
+    {
+        if(lsmIterator_->next() == 0)
+        {
+            DEBUG("diskTreeIterator:\t__error__ init_helper():\tlogtreeIteratr::next returned 0." );
+            curr_page = 0;
+            dp_itr = 0;
+        }
+        else
+        {
+            pageid_t * pid_tmp;
+            pageid_t ** hack = &pid_tmp;
+            lsmIterator_->value((byte**)hack);
+
+            curr_pageid = *pid_tmp;
+            curr_page = new DataPage<datatuple>(-1, curr_pageid);
+
+            DEBUG("opening datapage iterator %lld at key %s\n.", curr_pageid, key1 ? (char*)key1->key() : "NULL");
+            dp_itr = new DPITR_T(curr_page, key1);
+        }
+
+    }
+}
+
+datatuple * diskTreeComponent::diskTreeIterator::next_callerFrees()
+{
+    if(!this->lsmIterator_) { return NULL; }
+
+    if(dp_itr == 0)
+        return 0;
+
+    datatuple* readTuple = dp_itr->getnext();
+
+
+    if(!readTuple)
+    {
+        delete dp_itr;
+        dp_itr = 0;
+        delete curr_page;
+        curr_page = 0;
+
+        if(lsmIterator_->next())
+        {
+            pageid_t *pid_tmp;
+
+            pageid_t **hack = &pid_tmp;
+            size_t ret = lsmIterator_->value((byte**)hack);
+            assert(ret == sizeof(pageid_t));
+            curr_pageid = *pid_tmp;
+            curr_page = new DataPage<datatuple>(-1, curr_pageid);
+            DEBUG("opening datapage iterator %lld at beginning\n.", curr_pageid);
+            dp_itr = new DPITR_T(curr_page->begin());
+
+
+            readTuple = dp_itr->getnext();
+            assert(readTuple);
+        }
+      // else readTuple is null.  We're done.
+    }
+    return readTuple;
+}
+
