@@ -361,7 +361,7 @@ void* memMergeThread(void*arg)
             DEBUG("mmt:\tnew_c1_size %.2f\tMAX_C0_SIZE %lld\ta->max_size %lld\t targetr %.2f \n", new_c1_size,
                    ltable->max_c0_size, a->max_size, target_R);
 
-            // XXX need to report backpressure here!  Also, shouldn't be inside a transaction while waiting on backpressure.
+            // XXX need to report backpressure here!  Also, shouldn't be inside a transaction while waiting on backpressure.  We could break this into two transactions; replace c1 with the new c1, then wait for backpressure, then move c1 into c1_mergeable, and zerou out c1
             while(ltable->get_tree_c1_mergeable()) {
                 pthread_mutex_lock(a->block_ready_mut);
                 unlock(ltable->header_lock);
