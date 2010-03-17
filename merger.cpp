@@ -2,6 +2,11 @@
 #include <math.h>
 #include "merger.h"
 
+
+#include <stasis/transactional.h>
+#undef try
+#undef end
+
 void merge_stats_pp(FILE* fd, merge_stats_t &stats) {
 	long long sleep_time = stats.start.tv_sec - stats.sleep.tv_sec;
 	long long work_time =  stats.done.tv_sec - stats.start.tv_sec;
@@ -44,7 +49,7 @@ void merge_stats_pp(FILE* fd, merge_stats_t &stats) {
 
 double merge_stats_nsec_to_merge_in_bytes(merge_stats_t); // how many nsec did we burn on each byte from the small tree (want this to be equal for the two mergers)
 
-int merge_scheduler::addlogtable(logtable *ltable)
+int merge_scheduler::addlogtable(logtable<datatuple> *ltable)
 {
 
     struct logtable_mergedata * mdata = new logtable_mergedata;
@@ -76,7 +81,7 @@ merge_scheduler::~merge_scheduler()
 {
     for(size_t i=0; i<mergedata.size(); i++)
     {
-        logtable *ltable = mergedata[i].first;
+        logtable<datatuple> *ltable = mergedata[i].first;
         logtable_mergedata *mdata = mergedata[i].second;
 
         //delete the mergedata fields
@@ -112,7 +117,7 @@ void merge_scheduler::shutdown()
     //signal shutdown
     for(size_t i=0; i<mergedata.size(); i++)
     {
-        logtable *ltable = mergedata[i].first;
+        logtable<datatuple> *ltable = mergedata[i].first;
         logtable_mergedata *mdata = mergedata[i].second;
 
         //flush the in memory table to write any tuples still in memory
@@ -142,7 +147,7 @@ void merge_scheduler::shutdown()
 void merge_scheduler::startlogtable(int index, int64_t MAX_C0_SIZE)
 {
 
-    logtable * ltable = mergedata[index].first;
+    logtable<datatuple> * ltable = mergedata[index].first;
     struct logtable_mergedata *mdata = mergedata[index].second;
 
     pthread_cond_t * block1_needed_cond = new pthread_cond_t;
@@ -228,7 +233,7 @@ template <class ITA, class ITB>
 void merge_iterators(int xid,
                     ITA *itrA,
                     ITB *itrB,
-                    logtable *ltable,
+                    logtable<datatuple> *ltable,
                     diskTreeComponent *scratch_tree,
                     merge_stats_t *stats,
                     bool dropDeletes);
@@ -262,7 +267,7 @@ void* memMergeThread(void*arg)
 
     merger_args * a = (merger_args*)(arg);
 
-    logtable * ltable = a->ltable;
+    logtable<datatuple> * ltable = a->ltable;
     assert(ltable->get_tree_c1());
     
     int merge_count =0;
@@ -318,7 +323,7 @@ void* memMergeThread(void*arg)
         // 4: Merge
 
         //create the iterators
-        diskTreeComponent::diskTreeIterator *itrA = ltable->get_tree_c1()->iterator();
+        diskTreeComponent::iterator *itrA = ltable->get_tree_c1()->open_iterator();
         memTreeComponent<datatuple>::iterator *itrB =
             new memTreeComponent<datatuple>::iterator(ltable->get_tree_c0_mergeable());
 
@@ -420,7 +425,7 @@ void *diskMergeThread(void*arg)
 
     merger_args * a = (merger_args*)(arg);
 
-    logtable * ltable = a->ltable;
+    logtable<datatuple> * ltable = a->ltable;
     assert(ltable->get_tree_c2());
 
 
@@ -472,8 +477,8 @@ void *diskMergeThread(void*arg)
 
         // 4: do the merge.
         //create the iterators
-        diskTreeComponent::diskTreeIterator *itrA = ltable->get_tree_c2()->iterator(); //new diskTreeIterator<datatuple>(ltable->get_tree_c2()->get_root_rec());
-        diskTreeComponent::diskTreeIterator *itrB = ltable->get_tree_c1_mergeable()->iterator();
+        diskTreeComponent::iterator *itrA = ltable->get_tree_c2()->open_iterator(); //new iterator<datatuple>(ltable->get_tree_c2()->get_root_rec());
+        diskTreeComponent::iterator *itrB = ltable->get_tree_c1_mergeable()->open_iterator();
 
         //create a new tree
         diskTreeComponent * c2_prime = new diskTreeComponent(xid, a->internal_region_size, a->datapage_region_size, a->datapage_size);
@@ -535,7 +540,7 @@ template <class ITA, class ITB>
 void merge_iterators(int xid,
                         ITA *itrA, //iterator on c1 or c2
                         ITB *itrB, //iterator on c0 or c1, respectively
-                        logtable *ltable,
+                        logtable<datatuple> *ltable,
                         diskTreeComponent *scratch_tree, merge_stats_t *stats,
                         bool dropDeletes  // should be true iff this is biggest component
                         )

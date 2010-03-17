@@ -1,4 +1,6 @@
 #include "memTreeComponent.h"
+#include "datatuple.h"
+
 template<class TUPLE>
 void memTreeComponent<TUPLE>::tearDownTree(rbtree_ptr_t tree) {
     TUPLE * t = 0;

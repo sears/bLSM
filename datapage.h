@@ -5,7 +5,8 @@
 
 #include <stasis/page.h>
 #include <stasis/constants.h>
-#include "regionAllocator.h"
+
+struct RegionAllocator;
 
 //#define CHECK_FOR_SCRIBBLING
 

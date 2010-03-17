@@ -1,7 +1,7 @@
 #ifndef _MEMTREECOMPONENT_H_
 #define _MEMTREECOMPONENT_H_
 #include <set>
-#include "datatuple.h"
+
 template<class TUPLE>
 class memTreeComponent {
 public:
@@ -115,7 +115,7 @@ public:
     }
 
     ~revalidatingIterator() {
-      if(next_ret_) datatuple::freetuple(next_ret_);
+      if(next_ret_) TUPLE::freetuple(next_ret_);
     }
 
     TUPLE* getnext() {

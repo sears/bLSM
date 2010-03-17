@@ -12,6 +12,7 @@
 #include <sys/time.h>
 #include <time.h>
 
+#include <stasis/transactional.h>
 #undef begin
 #undef end
 
@@ -46,7 +47,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     int xid = Tbegin();
 
     merge_scheduler mscheduler;    
-    logtable ltable(1000, 10000, 5);
+    logtable<datatuple> ltable(1000, 10000, 5);
 
     recordid table_root = ltable.allocTable(xid);
 

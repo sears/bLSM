@@ -12,6 +12,7 @@
 
 #include "merger.h"
 #include "diskTreeComponent.h"
+#include "regionAllocator.h"
 
 #include <stasis/transactional.h>
 #include <stasis/page.h>
@@ -45,6 +46,27 @@ void diskTreeComponent::internalNodes::init_stasis() {
   Tinit();
 
 }
+
+recordid diskTreeComponent::get_root_rid() { return ltree->get_root_rec(); }
+recordid diskTreeComponent::get_datapage_allocator_rid() { return ltree->get_datapage_alloc()->header_rid(); }
+recordid diskTreeComponent::get_internal_node_allocator_rid() { return ltree->get_internal_node_alloc()->header_rid(); }
+
+
+
+void diskTreeComponent::force(int xid) {
+  ltree->get_datapage_alloc()->force_regions(xid);
+  ltree->get_internal_node_alloc()->force_regions(xid);
+}
+void diskTreeComponent::dealloc(int xid) {
+  ltree->get_datapage_alloc()->dealloc_regions(xid);
+  ltree->get_internal_node_alloc()->dealloc_regions(xid);
+}
+void diskTreeComponent::list_regions(int xid, pageid_t *internal_node_region_length, pageid_t *internal_node_region_count, pageid_t **internal_node_regions,
+          pageid_t *datapage_region_length, pageid_t *datapage_region_count, pageid_t **datapage_regions) {
+  *internal_node_regions = ltree->get_internal_node_alloc()->list_regions(xid, internal_node_region_length, internal_node_region_count);
+  *datapage_regions      = ltree->get_datapage_alloc()     ->list_regions(xid, datapage_region_length, datapage_region_count);
+}
+
 
 void diskTreeComponent::writes_done() {
   if(dp) {
@@ -334,6 +356,20 @@ recordid diskTreeComponent::internalNodes::appendPage(int xid,
 
   return ret;
 }
+
+diskTreeComponent::internalNodes::internalNodes(int xid, pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size)
+: lastLeaf(-1),
+  internal_node_alloc(new RegionAllocator(xid, internal_region_size)),
+  datapage_alloc(new RegionAllocator(xid, datapage_region_size))
+{ create(xid); }
+
+diskTreeComponent::internalNodes::internalNodes(int xid, recordid root, recordid internal_node_state, recordid datapage_state)
+: lastLeaf(-1),
+  root_rec(root),
+  internal_node_alloc(new RegionAllocator(xid, internal_node_state)),
+  datapage_alloc(new RegionAllocator(xid, datapage_state))
+{ }
+
 
 /* adding pages:
 
@@ -842,7 +878,7 @@ void diskTreeComponent::internalNodes::iterator::close() {
 // tree iterator implementation
 /////////////////////////////////////////////////////////////////////
 
-void diskTreeComponent::diskTreeIterator::init_iterators(datatuple * key1, datatuple * key2) {
+void diskTreeComponent::iterator::init_iterators(datatuple * key1, datatuple * key2) {
     assert(!key2); // unimplemented
     if(tree_.size == INVALID_SIZE) {
         lsmIterator_ = NULL;
@@ -855,14 +891,14 @@ void diskTreeComponent::diskTreeIterator::init_iterators(datatuple * key1, datat
     }
   }
 
-diskTreeComponent::diskTreeIterator::diskTreeIterator(diskTreeComponent::internalNodes *tree) :
+diskTreeComponent::iterator::iterator(diskTreeComponent::internalNodes *tree) :
     tree_(tree ? tree->get_root_rec() : NULLRID)
 {
     init_iterators(NULL, NULL);
     init_helper(NULL);
 }
 
-diskTreeComponent::diskTreeIterator::diskTreeIterator(diskTreeComponent::internalNodes *tree, datatuple* key) :
+diskTreeComponent::iterator::iterator(diskTreeComponent::internalNodes *tree, datatuple* key) :
     tree_(tree ? tree->get_root_rec() : NULLRID)
 {
     init_iterators(key,NULL);
@@ -870,7 +906,7 @@ diskTreeComponent::diskTreeIterator::diskTreeIterator(diskTreeComponent::interna
 
 }
 
-diskTreeComponent::diskTreeIterator::~diskTreeIterator()
+diskTreeComponent::iterator::~iterator()
 {
     if(lsmIterator_) {
         lsmIterator_->close();
@@ -886,7 +922,7 @@ diskTreeComponent::diskTreeIterator::~diskTreeIterator()
 
 }
 
-void diskTreeComponent::diskTreeIterator::init_helper(datatuple* key1)
+void diskTreeComponent::iterator::init_helper(datatuple* key1)
 {
     if(!lsmIterator_)
     {
@@ -918,7 +954,7 @@ void diskTreeComponent::diskTreeIterator::init_helper(datatuple* key1)
     }
 }
 
-datatuple * diskTreeComponent::diskTreeIterator::next_callerFrees()
+datatuple * diskTreeComponent::iterator::next_callerFrees()
 {
     if(!this->lsmIterator_) { return NULL; }
 

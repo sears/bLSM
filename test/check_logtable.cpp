@@ -12,6 +12,7 @@
 #include <sys/time.h>
 #include <time.h>
 
+#include <stasis/transactional.h>
 #undef begin
 #undef end
 
@@ -29,7 +30,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     int xid = Tbegin();
 
-    logtable ltable(1000, 10000, 5);
+    logtable<datatuple> ltable(1000, 10000, 5);
     recordid table_root = ltable.allocTable(xid);
 
     Tcommit(xid);
@@ -84,7 +85,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     printf("Stage 2: Sequentially reading %d tuples\n", NUM_ENTRIES);
     
     size_t tuplenum = 0;
-    diskTreeComponent::diskTreeIterator * tree_itr = ltable_c1->iterator();
+    diskTreeComponent::iterator * tree_itr = ltable_c1->open_iterator();
 
 
     datatuple *dt=0;

@@ -8,6 +8,11 @@
 #ifndef REGIONALLOCATOR_H_
 #define REGIONALLOCATOR_H_
 
+#include <stasis/transactional.h>
+#undef try
+#undef end
+
+
 class RegionAllocator
 {
 public:

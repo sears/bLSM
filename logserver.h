@@ -9,6 +9,8 @@
 #include <stasis/transactional.h>
 #include <pthread.h>
 
+#include "logstore.h"
+
 #undef begin
 #undef try
 #undef end
@@ -20,8 +22,6 @@
 #include <time.h>
 #include <map>
 #endif
-
-class logtable;
 
 struct pthread_item;
 
@@ -39,7 +39,7 @@ struct pthread_data {
     
     int *workitem; //id of the socket to work
 
-    logtable *ltable;
+    logtable<datatuple> *ltable;
     bool *sys_alive;
 
     #ifdef STATS_ENABLED
@@ -97,7 +97,7 @@ public:
             delete qlock;
         }
     
-    void startserver(logtable *ltable);
+    void startserver(logtable<datatuple> *ltable);
 
     void stopserver();
     
@@ -126,7 +126,7 @@ private:
     int * self_pipe; // write a byte to self_pipe[1] to wake up select().
     std::vector<pthread_item *> th_list; // list of threads
 
-    logtable *ltable;
+    logtable<datatuple> *ltable;
 
     #ifdef STATS_ENABLED
     int num_reqs;

@@ -3,6 +3,7 @@
 #include <iostream>
 #include <sstream>
 #include "logstore.h"
+#include "logserver.h"
 #include "datapage.h"
 #include "merger.h"
 #include <assert.h>
@@ -55,7 +56,7 @@ void initialize_server()
 
     mscheduler = new merge_scheduler;
 
-    logtable ltable;
+    logtable<datatuple> ltable;
 
     recordid table_root = ROOT_RECORD;
     if(TrecordType(xid, ROOT_RECORD) == INVALID_SLOT) {

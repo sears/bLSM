@@ -20,6 +20,7 @@
 
 #define OFFSET      (NUM_ENTRIES * 10)
 
+#include <stasis/transactional.h>
 #undef begin
 #undef end
 

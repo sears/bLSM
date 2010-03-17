@@ -8,25 +8,13 @@
 #ifndef DISKTREECOMPONENT_H_
 #define DISKTREECOMPONENT_H_
 
-#include <stasis/transactional.h>
-
-#include <stasis/operations.h>
-#include <stasis/bufferManager.h>
-#include <stasis/allocationPolicy.h>
-#include <stasis/blobManager.h>
-#include <stasis/page.h>
-#include <stasis/truncation.h>
-
-#include "merger.h"
-#include "regionAllocator.h"
 #include "datapage.h"
-#include "tuplemerger.h"
 #include "datatuple.h"
 
 class diskTreeComponent {
  public:
   class internalNodes;
-  class diskTreeIterator;
+  class iterator;
 
   diskTreeComponent(int xid, pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size) :
     ltree(new diskTreeComponent::internalNodes(xid, internal_region_size, datapage_region_size, datapage_size)),
@@ -43,35 +31,26 @@ class diskTreeComponent {
     delete ltree;
   }
 
-  recordid get_root_rid() { return ltree->get_root_rec(); }
-  recordid get_datapage_allocator_rid() { return ltree->get_datapage_alloc()->header_rid(); }
-  recordid get_internal_node_allocator_rid() { return ltree->get_internal_node_alloc()->header_rid(); }
+  recordid get_root_rid();
+  recordid get_datapage_allocator_rid();
+  recordid get_internal_node_allocator_rid();
   internalNodes * get_internal_nodes() { return ltree; }
   datatuple* findTuple(int xid, datatuple::key_t key, size_t keySize);
   int insertTuple(int xid, /*DataPage<datatuple> *dp,*/ datatuple *t, merge_stats_t *stats);
   void writes_done();
 
 
-  diskTreeIterator * iterator() {
-    return new diskTreeIterator(ltree);
+  iterator * open_iterator() {
+    return new iterator(ltree);
   }
-  diskTreeIterator * iterator(datatuple * key) {
-    return new diskTreeIterator(ltree, key);
+  iterator * open_iterator(datatuple * key) {
+    return new iterator(ltree, key);
   }
 
-  void force(int xid) {
-    ltree->get_datapage_alloc()->force_regions(xid);
-    ltree->get_internal_node_alloc()->force_regions(xid);
-  }
-  void dealloc(int xid) {
-    ltree->get_datapage_alloc()->dealloc_regions(xid);
-    ltree->get_internal_node_alloc()->dealloc_regions(xid);
-  }
+  void force(int xid);
+  void dealloc(int xid);
   void list_regions(int xid, pageid_t *internal_node_region_length, pageid_t *internal_node_region_count, pageid_t **internal_node_regions,
-		    pageid_t *datapage_region_length, pageid_t *datapage_region_count, pageid_t **datapage_regions) {
-    *internal_node_regions = ltree->get_internal_node_alloc()->list_regions(xid, internal_node_region_length, internal_node_region_count);
-    *datapage_regions      = ltree->get_datapage_alloc()     ->list_regions(xid, datapage_region_length, datapage_region_count);
-  }
+		    pageid_t *datapage_region_length, pageid_t *datapage_region_count, pageid_t **datapage_regions);
 
   void print_tree(int xid) {
     ltree->print_tree(xid);
@@ -93,18 +72,8 @@ class diskTreeComponent {
     static void init_stasis();
     static void deinit_stasis();
 
-    internalNodes(int xid, pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size)
-    : lastLeaf(-1),
-      internal_node_alloc(new RegionAllocator(xid, internal_region_size)),
-      datapage_alloc(new RegionAllocator(xid, datapage_region_size))
-    { create(xid); }
-
-    internalNodes(int xid, recordid root, recordid internal_node_state, recordid datapage_state)
-    : lastLeaf(-1),
-      root_rec(root),
-      internal_node_alloc(new RegionAllocator(xid, internal_node_state)),
-      datapage_alloc(new RegionAllocator(xid, datapage_state))
-    { }
+    internalNodes(int xid, pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size);
+    internalNodes(int xid, recordid root, recordid internal_node_state, recordid datapage_state);
 
     void print_tree(int xid);
 
@@ -199,15 +168,15 @@ class diskTreeComponent {
 
     };
   };
-  class diskTreeIterator
+  class iterator
   {
 
   public:
-      explicit diskTreeIterator(diskTreeComponent::internalNodes *tree);
+      explicit iterator(diskTreeComponent::internalNodes *tree);
 
-      explicit diskTreeIterator(diskTreeComponent::internalNodes *tree,datatuple *key);
+      explicit iterator(diskTreeComponent::internalNodes *tree,datatuple *key);
 
-      ~diskTreeIterator();
+      ~iterator();
 
       datatuple * next_callerFrees();
 
@@ -215,9 +184,9 @@ class diskTreeComponent {
       void init_iterators(datatuple * key1, datatuple * key2);
       inline void init_helper(datatuple * key1);
 
-    explicit diskTreeIterator() { abort(); }
-    void operator=(diskTreeIterator & t) { abort(); }
-    int operator-(diskTreeIterator & t) { abort(); }
+    explicit iterator() { abort(); }
+    void operator=(iterator & t) { abort(); }
+    int operator-(iterator & t) { abort(); }
 
   private:
       recordid tree_; //root of the tree

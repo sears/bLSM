@@ -1,3 +1,5 @@
+#include <sstream>
+
 #include "logserver.h"
 #include "datatuple.h"
 #include "merger.h"
@@ -27,7 +29,7 @@
 
 void *serverLoop(void *args);
 
-void logserver::startserver(logtable *ltable)
+void logserver::startserver(logtable<datatuple> *ltable)
 {
     sys_alive = true;
     this->ltable = ltable;
@@ -479,7 +481,7 @@ int op_scan(pthread_data *data, datatuple * tuple, datatuple * tuple2, size_t li
     int err = writeoptosocket(*(data->workitem), LOGSTORE_RESPONSE_SENDING_TUPLES);
 
     if(!err) {
-		logtableIterator<datatuple> * itr = new logtableIterator<datatuple>(data->ltable, tuple);
+		logtable<datatuple>::iterator * itr = new logtable<datatuple>::iterator(data->ltable, tuple);
 		datatuple * t;
 		while(!err && (t = itr->getnext())) {
 			if(tuple2) {  // are we at the end of range?
@@ -767,7 +769,7 @@ int op_dbg_blockmap(pthread_data* data) {
 }
 
 int op_dbg_drop_database(pthread_data * data) {
-	logtableIterator<datatuple> * itr = new logtableIterator<datatuple>(data->ltable);
+	logtable<datatuple>::iterator * itr = new logtable<datatuple>::iterator(data->ltable);
 	datatuple * del;
 	fprintf(stderr, "DROPPING DATABASE...\n");
 	long long n = 0;

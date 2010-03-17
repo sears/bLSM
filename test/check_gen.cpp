@@ -1,4 +1,8 @@
 
+#include <stasis/transactional.h>
+#undef begin
+#undef end
+
 
 #include "logstore.h"
 
@@ -13,7 +17,7 @@ int main(int argc, char **argv)
 
     int xid = Tbegin();
 
-    logtable ltable(1000, 10000, 5);
+    logtable<datatuple> ltable(1000, 10000, 5);
 
     recordid table_root = ltable.allocTable(xid);
 

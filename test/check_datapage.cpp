@@ -13,7 +13,9 @@
 #include <time.h>
 
 #include "check_util.h"
+#include "regionAllocator.h"
 
+#include <stasis/transactional.h>
 #undef begin
 #undef end
 

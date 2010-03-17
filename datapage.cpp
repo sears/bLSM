@@ -1,5 +1,7 @@
 #include "logstore.h"
 #include "datapage.h"
+#include "regionAllocator.h"
+
 #include <stasis/page.h>
 
 static const int DATA_PAGE = USER_DEFINED_PAGE(1);
