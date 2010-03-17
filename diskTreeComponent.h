@@ -44,7 +44,11 @@ class diskTreeComponent {
     return new iterator(ltree);
   }
   iterator * open_iterator(datatuple * key) {
-    return new iterator(ltree, key);
+    if(key != NULL) {
+      return new iterator(ltree, key);
+    } else {
+      return new iterator(ltree);
+    }
   }
 
   void force(int xid);

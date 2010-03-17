@@ -142,7 +142,7 @@ public:
         current_[0] = first_iter_->getnext();
         for(int i = 1; i < num_iters_; i++) {
           iters_[i-1] = iters[i-1];
-          current_[i] = iters_[i-1]->next_callerFrees();
+          current_[i] = iters_[i-1] ? iters_[i-1]->next_callerFrees() : NULL;
         }
       }
       ~mergeManyIterator() {
@@ -338,25 +338,25 @@ public:
         typename memTreeComponent<TUPLE>::iterator *c0_mergeable_it[1];
         diskTreeComponent::iterator * disk_it[3];
         epoch = ltable->get_epoch();
+
+        datatuple *t;
         if(last_returned) {
-          c0_it              = new typename memTreeComponent<TUPLE>::revalidatingIterator(ltable->get_tree_c0(), ltable->getMergeData()->rbtree_mut,  last_returned);
-          c0_mergeable_it[0] = new typename memTreeComponent<TUPLE>::iterator        (ltable->get_tree_c0_mergeable(),                            last_returned);
-          disk_it[0]         = ltable->get_tree_c1()->open_iterator(last_returned);
-          disk_it[1]         = ltable->get_tree_c1_mergeable()->open_iterator(last_returned);
-          disk_it[2]         = ltable->get_tree_c2()->open_iterator(last_returned);
+          t = last_returned;
         } else if(key) {
-          c0_it              = new typename memTreeComponent<TUPLE>::revalidatingIterator(ltable->get_tree_c0(), ltable->getMergeData()->rbtree_mut,  key);
-          c0_mergeable_it[0] = new typename memTreeComponent<TUPLE>::iterator        (ltable->get_tree_c0_mergeable(),                            key);
-          disk_it[0]         = ltable->get_tree_c1()->open_iterator(key);
-          disk_it[1]         = ltable->get_tree_c1_mergeable()->open_iterator(key);
-          disk_it[2]         = ltable->get_tree_c2()->open_iterator(key);
+          t = key;
         } else {
-          c0_it              = new typename memTreeComponent<TUPLE>::revalidatingIterator(ltable->get_tree_c0(), ltable->getMergeData()->rbtree_mut  );
-          c0_mergeable_it[0] = new typename memTreeComponent<TUPLE>::iterator    (ltable->get_tree_c0_mergeable()                            );
-          disk_it[0]         = ltable->get_tree_c1()->open_iterator();
-          disk_it[1]         = ltable->get_tree_c1_mergeable()->open_iterator();
-          disk_it[2]         = ltable->get_tree_c2()->open_iterator();
+          t = NULL;
         }
+
+        c0_it              = new typename memTreeComponent<TUPLE>::revalidatingIterator(ltable->get_tree_c0(), ltable->getMergeData()->rbtree_mut,  t);
+        c0_mergeable_it[0] = new typename memTreeComponent<TUPLE>::iterator            (ltable->get_tree_c0_mergeable(),                            t);
+        disk_it[0]         = ltable->get_tree_c1()->open_iterator(t);
+        if(ltable->get_tree_c1_mergeable()) {
+          disk_it[1]         = ltable->get_tree_c1_mergeable()->open_iterator(t);
+        } else {
+          disk_it[1] = NULL;
+        }
+        disk_it[2]         = ltable->get_tree_c2()->open_iterator(t);
 
         inner_merge_it_t * inner_merge_it =
                new inner_merge_it_t(c0_it, c0_mergeable_it, 1, NULL, TUPLE::compare_obj);

@@ -42,7 +42,7 @@ void terminate (int param)
 	  exit(0);
 }
 
-void initialize_server()
+int main(int argc, char *argv[])
 {
     //signal handling
     void (*prev_fn)(int);
@@ -77,8 +77,14 @@ void initialize_server()
     int lindex = mscheduler->addlogtable(&ltable);
     ltable.setMergeData(mscheduler->getMergeData(lindex));
 
-    int64_t c0_size = 1024 * 1024 * 10;
-    printf("warning: running w/ tiny c0 for testing"); // XXX build a separate test server and deployment server?
+    int64_t c0_size = 1024 * 1024 * 1024 * 1;
+
+    if(argc == 2 && !strcmp(argv[0], "--test")) {
+
+      c0_size = 1024 * 1024 * 10;
+      printf("warning: running w/ tiny c0 for testing"); // XXX build a separate test server and deployment server?
+    }
+
     mscheduler->startlogtable(lindex, c0_size);
 
     unlock(ltable.header_lock);
@@ -86,15 +92,6 @@ void initialize_server()
     lserver = new logserver(10, 32432);
 
     lserver->startserver(&ltable);
+
+    abort(); // can't get here.
 }
-
-
-
-/** @test
- */
-int main()
-{
-	initialize_server();
-	abort();  // can't get here.
-}
-
