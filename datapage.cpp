@@ -85,7 +85,7 @@ DataPage<TUPLE>::DataPage(int xid, pageid_t page_count, RegionAllocator *alloc) 
 	first_page_(alloc_->alloc_extent(xid_, page_count_)),
 	write_offset_(0)
 {
-	DEBUG("Datapage page count: %lld pid = %lld\n", (long long int)page_count_, (long long int)first_page_);
+	printf("Datapage page count: %lld pid = %lld\n", (long long int)initial_page_count_, (long long int)first_page_);
     assert(page_count_ >= 1);
     initialize();
 }
@@ -241,7 +241,12 @@ template <class TUPLE>
 bool DataPage<TUPLE>::append(TUPLE const * dat)
 {
   // Don't append record to already-full datapage.  The record could push us over the page limit, but that's OK.
-        if(write_offset_ > (initial_page_count_ * PAGE_SIZE)) { return false; }
+  if(write_offset_ > (initial_page_count_ * PAGE_SIZE)) {
+    DEBUG("offset %lld closing datapage\n", write_offset_);
+    return false;
+  }
+
+  DEBUG("offset %lld continuing datapage\n", write_offset_);
 
 	byte * buf = dat->to_bytes(); // TODO could be more efficient; this does a malloc and memcpy.  The alternative couples us more strongly to datapage, but simplifies datapage.
 	len_t dat_len = dat->byte_length();

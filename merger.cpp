@@ -274,10 +274,11 @@ void* memMergeThread(void*arg)
     
     while(true) // 1
     {
-    	merge_stats_t stats;
-    	stats.merge_level = 1;
-    	stats.merge_count = merge_count;
-    	gettimeofday(&stats.sleep,0);
+        merge_stats_t stats;
+        memset((void*)&stats, 0, sizeof(stats));
+        stats.merge_level = 1;
+        stats.merge_count = merge_count;
+        gettimeofday(&stats.sleep,0);
         writelock(ltable->header_lock,0);
         int done = 0;
         // 2: wait for c0_mergable
@@ -433,12 +434,13 @@ void *diskMergeThread(void*arg)
     
     while(true)
     {
-    	merge_stats_t stats;
-    	stats.merge_level = 2;
-    	stats.merge_count = merge_count;
-    	gettimeofday(&stats.sleep,0);
-    	// 2: wait for input
-    	writelock(ltable->header_lock,0);
+        merge_stats_t stats;
+        memset((void*)&stats, 0, sizeof(stats));
+        stats.merge_level = 2;
+        stats.merge_count = merge_count;
+        gettimeofday(&stats.sleep,0);
+        // 2: wait for input
+        writelock(ltable->header_lock,0);
         int done = 0;
         // get a new input for merge
         while(!ltable->get_tree_c1_mergeable())

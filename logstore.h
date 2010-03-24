@@ -36,7 +36,19 @@ class logtable {
 public:
 
   class iterator;
-    logtable(pageid_t internal_region_size = 1000, pageid_t datapage_region_size = 10000, pageid_t datapage_size = 40); // scans 160KB / 2 per lookup on average. at 100MB/s, this is 0.7 ms.  XXX pick datapage_size in principled way.
+
+  // We want datapages to be as small as possible, assuming they don't force an extra seek to traverse the bottom level of internal nodes.
+  // Internal b-tree mem requirements:
+  //  - Assume keys are small (compared to stasis pages) so we can ignore all but the bottom level of the tree.
+  //
+  //  |internal nodes| ~= (|key| * |tree|) / (datapage_size * |stasis PAGE_SIZE|)
+  //
+  // Plugging in the numbers today:
+  //
+  //  6GB ~= 100B * 500 GB / (datapage_size * 4KB)
+  //  (100B * 500GB) / (6GB * 4KB) = 2.035
+  logtable(pageid_t internal_region_size = 1000, pageid_t datapage_region_size = 10000, pageid_t datapage_size = 2);
+
     ~logtable();
 
     //user access functions
@@ -259,9 +271,11 @@ public:
       }
 
       ~iterator() {
-          ltable->forgetIterator(this);
-          invalidate();
-      if(last_returned) TUPLE::freetuple(last_returned);
+        writelock(ltable->header_lock,0);
+        ltable->forgetIterator(this);
+        invalidate();
+        if(last_returned) TUPLE::freetuple(last_returned);
+        unlock(ltable->header_lock);
       }
   private:
       TUPLE * getnextHelper() {
@@ -292,6 +306,7 @@ public:
       }
 
       void invalidate() {
+        assert(!trywritelock(ltable->header_lock,0));
         if(valid) {
           delete merge_it_;
           merge_it_ = NULL;

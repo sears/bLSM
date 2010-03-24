@@ -805,12 +805,12 @@ diskTreeComponent::internalNodes::iterator::iterator(int xid, recordid root, con
     current.size = lsm_entry_rid.size;
 
     xid_ = xid;
-    t = 0; // must be zero so free() doesn't croak.
     justOnePage = (depth==0);
 
     DEBUG("diskTreeComponentIterator: index root %lld index page %lld data page %lld key %s\n", root.page, current.page, rec->ptr, key);
     DEBUG("entry = %s key = %s\n", (char*)(rec+1), (char*)key);
   }
+  t = 0; // must be zero so free() doesn't croak.
 }
 
 /**
@@ -859,7 +859,6 @@ int diskTreeComponent::internalNodes::iterator::next()
   } else {
     assert(!p);
     if(t != NULL) { free(t); t = NULL; }
-    t = 0;
     return 0;
   }
 }
@@ -869,8 +868,12 @@ void diskTreeComponent::internalNodes::iterator::close() {
   if(p) {
     unlock(p->rwlatch);
     releasePage(p);
+    p = NULL;
   }
-  if(t) free(t);
+  if(t) {
+    free(t);
+    t = NULL;
+  }
 }
 
 

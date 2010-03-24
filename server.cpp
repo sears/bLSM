@@ -77,9 +77,9 @@ int main(int argc, char *argv[])
     int lindex = mscheduler->addlogtable(&ltable);
     ltable.setMergeData(mscheduler->getMergeData(lindex));
 
-    int64_t c0_size = 1024 * 1024 * 1024 * 1;
+    int64_t c0_size = 1024 * 1024 * 512 * 1;
 
-    if(argc == 2 && !strcmp(argv[0], "--test")) {
+    if(argc == 2 && !strcmp(argv[1], "--test")) {
 
       c0_size = 1024 * 1024 * 10;
       printf("warning: running w/ tiny c0 for testing"); // XXX build a separate test server and deployment server?
@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
 
     unlock(ltable.header_lock);
 
-    lserver = new logserver(10, 32432);
+    lserver = new logserver(100, 32432);
 
     lserver->startserver(&ltable);
 
