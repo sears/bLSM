@@ -415,7 +415,7 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
         tree_c0->insert(new_t); //insert the new tuple
 
         //update the tree size (+ new_t size - pre_t size)
-        tree_bytes += (new_t->byte_length() - pre_t->byte_length());
+        tree_bytes += ((int64_t)new_t->byte_length() - (int64_t)pre_t->byte_length());
 
         datatuple::freetuple(pre_t); //free the previous tuple
     }
