@@ -85,7 +85,7 @@ DataPage<TUPLE>::DataPage(int xid, pageid_t page_count, RegionAllocator *alloc) 
 	first_page_(alloc_->alloc_extent(xid_, page_count_)),
 	write_offset_(0)
 {
-	printf("Datapage page count: %lld pid = %lld\n", (long long int)initial_page_count_, (long long int)first_page_);
+	DEBUG("Datapage page count: %lld pid = %lld\n", (long long int)initial_page_count_, (long long int)first_page_);
     assert(page_count_ >= 1);
     initialize();
 }
