@@ -134,7 +134,7 @@ datatuple * diskTreeComponent::findTuple(int xid, datatuple::key_t key, size_t k
 
     if(pid!=-1)
     {
-        DataPage<datatuple> * dp = new DataPage<datatuple>(xid, pid);
+        DataPage<datatuple> * dp = new DataPage<datatuple>(xid, 0, pid);
         dp->recordRead(key, keySize, &tup);
         delete dp;
     }
@@ -731,9 +731,10 @@ void diskTreeComponent::internalNodes::print_tree(int xid, pageid_t pid, int64_t
 //diskTreeComponentIterator implementation
 /////////////////////////////////////////////////
 
-diskTreeComponent::internalNodes::iterator::iterator(int xid, recordid root) {
+diskTreeComponent::internalNodes::iterator::iterator(int xid, RegionAllocator* ro_alloc, recordid root) {
+  ro_alloc_ = ro_alloc;
   if(root.page == 0 && root.slot == 0 && root.size == -1) abort();
-  p = loadPage(xid,root.page);
+  p = ro_alloc_->load_page(xid,root.page);
   readlock(p->rwlatch,0);
 
   DEBUG("ROOT_REC_SIZE %d\n", diskTreeComponent::internalNodes::root_rec_size);
@@ -749,7 +750,7 @@ diskTreeComponent::internalNodes::iterator::iterator(int xid, recordid root) {
 
     unlock(p->rwlatch);
     releasePage(p);
-    p = loadPage(xid,leafid);
+    p = ro_alloc_->load_page(xid,leafid);
     readlock(p->rwlatch,0);
     assert(depth != 0);
   } else {
@@ -770,10 +771,10 @@ diskTreeComponent::internalNodes::iterator::iterator(int xid, recordid root) {
   justOnePage = (depth == 0);
 }
 
-diskTreeComponent::internalNodes::iterator::iterator(int xid, recordid root, const byte* key, len_t keylen) {
+diskTreeComponent::internalNodes::iterator::iterator(int xid, RegionAllocator* ro_alloc, recordid root, const byte* key, len_t keylen) {
   if(root.page == NULLRID.page && root.slot == NULLRID.slot) abort();
-
-  p = loadPage(xid,root.page);
+  ro_alloc_ = ro_alloc;
+  p = ro_alloc_->load_page(xid,root.page);
   readlock(p->rwlatch,0);
   recordid rid = {p->id, diskTreeComponent::internalNodes::DEPTH, diskTreeComponent::internalNodes::root_rec_size};
 
@@ -795,7 +796,7 @@ diskTreeComponent::internalNodes::iterator::iterator(int xid, recordid root, con
     {
       unlock(p->rwlatch);
       releasePage(p);
-      p = loadPage(xid,lsm_entry_rid.page);
+      p = ro_alloc->load_page(xid,lsm_entry_rid.page);
       readlock(p->rwlatch,0);
     }
 
@@ -835,7 +836,7 @@ int diskTreeComponent::internalNodes::iterator::next()
     DEBUG("done with page %lld next = %lld\n", p->id, next_rec.ptr);
 
     if(next_rec != -1 && ! justOnePage) {
-      p = loadPage(xid_, next_rec);
+      p = ro_alloc_->load_page(xid_, next_rec);
       readlock(p->rwlatch,0);
       current.page = next_rec;
       current.slot = 2;
@@ -887,14 +888,15 @@ void diskTreeComponent::iterator::init_iterators(datatuple * key1, datatuple * k
         lsmIterator_ = NULL;
     } else {
         if(key1) {
-            lsmIterator_ = new diskTreeComponent::internalNodes::iterator(-1, tree_, key1->key(), key1->keylen());
+            lsmIterator_ = new diskTreeComponent::internalNodes::iterator(-1, ro_alloc_, tree_, key1->key(), key1->keylen());
         } else {
-            lsmIterator_ = new diskTreeComponent::internalNodes::iterator(-1, tree_);
+            lsmIterator_ = new diskTreeComponent::internalNodes::iterator(-1, ro_alloc_, tree_);
         }
     }
   }
 
 diskTreeComponent::iterator::iterator(diskTreeComponent::internalNodes *tree) :
+    ro_alloc_(new RegionAllocator()),
     tree_(tree ? tree->get_root_rec() : NULLRID)
 {
     init_iterators(NULL, NULL);
@@ -902,6 +904,7 @@ diskTreeComponent::iterator::iterator(diskTreeComponent::internalNodes *tree) :
 }
 
 diskTreeComponent::iterator::iterator(diskTreeComponent::internalNodes *tree, datatuple* key) :
+    ro_alloc_(new RegionAllocator()),
     tree_(tree ? tree->get_root_rec() : NULLRID)
 {
     init_iterators(key,NULL);
@@ -909,20 +912,16 @@ diskTreeComponent::iterator::iterator(diskTreeComponent::internalNodes *tree, da
 
 }
 
-diskTreeComponent::iterator::~iterator()
-{
-    if(lsmIterator_) {
-        lsmIterator_->close();
-        delete lsmIterator_;
-    }
+diskTreeComponent::iterator::~iterator() {
+  if(lsmIterator_) {
+      lsmIterator_->close();
+      delete lsmIterator_;
+  }
 
-    if(curr_page!=NULL)
-    {
-        delete curr_page;
-        curr_page = 0;
-    }
+  delete curr_page;
+  curr_page = 0;
 
-
+  delete ro_alloc_;
 }
 
 void diskTreeComponent::iterator::init_helper(datatuple* key1)
@@ -948,7 +947,7 @@ void diskTreeComponent::iterator::init_helper(datatuple* key1)
             lsmIterator_->value((byte**)hack);
 
             curr_pageid = *pid_tmp;
-            curr_page = new DataPage<datatuple>(-1, curr_pageid);
+            curr_page = new DataPage<datatuple>(-1, ro_alloc_, curr_pageid);
 
             DEBUG("opening datapage iterator %lld at key %s\n.", curr_pageid, key1 ? (char*)key1->key() : "NULL");
             dp_itr = new DPITR_T(curr_page, key1);
@@ -982,7 +981,7 @@ datatuple * diskTreeComponent::iterator::next_callerFrees()
             size_t ret = lsmIterator_->value((byte**)hack);
             assert(ret == sizeof(pageid_t));
             curr_pageid = *pid_tmp;
-            curr_page = new DataPage<datatuple>(-1, curr_pageid);
+            curr_page = new DataPage<datatuple>(-1, ro_alloc_, curr_pageid);
             DEBUG("opening datapage iterator %lld at beginning\n.", curr_pageid);
             dp_itr = new DPITR_T(curr_page->begin());
 

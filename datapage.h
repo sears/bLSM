@@ -61,8 +61,10 @@ public:
 
 public:
 
-    //to be used when reading an existing data page from disk
-    DataPage( int xid, pageid_t pid );
+    /**
+     * if alloc is non-null, then reads will be optimized for sequential access
+     */
+    DataPage( int xid, RegionAllocator* alloc, pageid_t pid );
 
     //to be used to create new data pages
     DataPage( int xid, pageid_t page_count, RegionAllocator* alloc);

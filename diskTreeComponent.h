@@ -143,8 +143,8 @@ class diskTreeComponent {
   public:
     class iterator {
     public:
-      iterator(int xid, recordid root);
-      iterator(int xid, recordid root, const byte* key, len_t keylen);
+      iterator(int xid, RegionAllocator *ro_alloc, recordid root);
+      iterator(int xid, RegionAllocator *ro_alloc, recordid root, const byte* key, len_t keylen);
       int next();
       void close();
 
@@ -162,7 +162,7 @@ class diskTreeComponent {
       inline void releaseLock() { }
 
     private:
-
+      RegionAllocator * ro_alloc_;
       Page * p;
       int xid_;
       bool done;
@@ -193,14 +193,15 @@ class diskTreeComponent {
     int operator-(iterator & t) { abort(); }
 
   private:
-      recordid tree_; //root of the tree
+    RegionAllocator * ro_alloc_;  // has a filehandle that we use to optimize sequential scans.
+    recordid tree_; //root of the tree
 
-      diskTreeComponent::internalNodes::iterator* lsmIterator_;
+    diskTreeComponent::internalNodes::iterator* lsmIterator_;
 
-      pageid_t curr_pageid; //current page id
-      DataPage<datatuple>    *curr_page;   //current page
-      typedef DataPage<datatuple>::iterator DPITR_T;
-      DPITR_T *dp_itr;
+    pageid_t curr_pageid; //current page id
+    DataPage<datatuple>    *curr_page;   //current page
+    typedef DataPage<datatuple>::iterator DPITR_T;
+    DPITR_T *dp_itr;
   };
 };
 #endif /* DISKTREECOMPONENT_H_ */

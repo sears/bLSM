@@ -20,22 +20,36 @@ public:
     // Open an existing region allocator.
     RegionAllocator(int xid, recordid rid) :
       nextPage_(INVALID_PAGE),
-      endOfRegion_(INVALID_PAGE) {
+      endOfRegion_(INVALID_PAGE),
+      bm_((stasis_buffer_manager_t*)stasis_runtime_buffer_manager()),
+      bmh_(bm_->openHandleImpl(bm_, 1)) {
         rid_ = rid;
         Tread(xid, rid_, &header_);
         regionCount_ = TarrayListLength(xid, header_.region_list);
     }
   // Create a new region allocator.
-    RegionAllocator(int xid, pageid_t region_length) :
-        nextPage_(0),
-        endOfRegion_(0),
-        regionCount_(0)
-    {
-        rid_ = Talloc(xid, sizeof(header_));
-        header_.region_list = TarrayListAlloc(xid, 1, 2, sizeof(pageid_t));
-        header_.region_length = region_length;
-        Tset(xid, rid_, &header_);
-    }
+  RegionAllocator(int xid, pageid_t region_length) :
+      nextPage_(0),
+      endOfRegion_(0),
+      regionCount_(0),
+      bm_((stasis_buffer_manager_t*)stasis_runtime_buffer_manager()),
+      bmh_(bm_->openHandleImpl(bm_, 1))
+  {
+      rid_ = Talloc(xid, sizeof(header_));
+      header_.region_list = TarrayListAlloc(xid, 1, 2, sizeof(pageid_t));
+      header_.region_length = region_length;
+      Tset(xid, rid_, &header_);
+  }
+  explicit RegionAllocator() :
+    nextPage_(INVALID_PAGE),
+    endOfRegion_(INVALID_PAGE),
+    bm_((stasis_buffer_manager_t*)stasis_runtime_buffer_manager()),
+    bmh_(bm_->openHandleImpl(bm_, 1)){
+    rid_.page = INVALID_PAGE;
+    regionCount_ = -1;
+  }
+  Page * load_page(int xid, pageid_t p) { return bm_->loadPageImpl(bm_, bmh_, xid, p, UNKNOWN_TYPE_PAGE); }
+
   // XXX handle disk full?
   pageid_t alloc_extent(int xid, pageid_t extent_length) {
     assert(nextPage_ != INVALID_PAGE);
@@ -67,8 +81,9 @@ public:
         list_entry.slot < regionCount; list_entry.slot++) {
       pageid_t pid;
       Tread(xid, list_entry, &pid);
-      TregionForce(xid, pid);
+      TregionForce(xid, bm_, bmh_, pid);
     }
+    bm_->closeHandleImpl(bm_, bmh_);
   }
   void dealloc_regions(int xid) {
     pageid_t regionCount = TarrayListLength(xid, header_.region_list);
@@ -121,6 +136,8 @@ private:
     pageid_t nextPage_;
     pageid_t endOfRegion_;
     pageid_t regionCount_;
+    stasis_buffer_manager_t * bm_;
+    stasis_buffer_manager_handle_t *bmh_;
     persistent_state header_;
 public:
     static const size_t header_size = sizeof(persistent_state);

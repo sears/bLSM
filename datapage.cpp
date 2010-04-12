@@ -59,21 +59,22 @@ void DataPage<TUPLE>::register_stasis_page_impl() {
 }
 
 template <class TUPLE>
-DataPage<TUPLE>::DataPage(int xid, pageid_t pid):
+DataPage<TUPLE>::DataPage(int xid, RegionAllocator * alloc, pageid_t pid):  // XXX Hack!! The read-only constructor signature is too close to the other's
     xid_(xid),
     page_count_(1), // will be opportunistically incremented as we scan the datapage.
     initial_page_count_(-1), // used by append.
-    alloc_(0),  // read-only, and we don't free data pages one at a time.
+    alloc_(alloc),  // read-only, and we don't free data pages one at a time.
     first_page_(pid),
-    write_offset_(-1) {
-	assert(pid!=0);
-	Page *p = loadPage(xid_, first_page_);
-	if(!(*is_another_page_ptr(p) == 0 || *is_another_page_ptr(p) == 2)) {
-		printf("Page %lld is not the start of a datapage\n", first_page_);  fflush(stdout);
-		abort();
-	}
-	assert(*is_another_page_ptr(p) == 0 || *is_another_page_ptr(p) == 2); // would be 1 for page in the middle of a datapage
-	releasePage(p);
+    write_offset_(-1)
+    {
+    assert(pid!=0);
+    Page *p = alloc_ ? alloc_->load_page(xid, first_page_) : loadPage(xid, first_page_);
+    if(!(*is_another_page_ptr(p) == 0 || *is_another_page_ptr(p) == 2)) {
+        printf("Page %lld is not the start of a datapage\n", first_page_);  fflush(stdout);
+        abort();
+    }
+    assert(*is_another_page_ptr(p) == 0 || *is_another_page_ptr(p) == 2); // would be 1 for page in the middle of a datapage
+    releasePage(p);
 }
 
 template <class TUPLE>
@@ -99,7 +100,7 @@ void DataPage<TUPLE>::initialize_page(pageid_t pageid) {
     //load the first page
     Page *p;
 #ifdef CHECK_FOR_SCRIBBLING
-    p = loadPage(xid_, pageid);
+    p = alloc_ ? alloc->load_page(xid_, pageid) : loadPage(xid_, pageid);
     if(*stasis_page_type_ptr(p) == DATA_PAGE) {
     	printf("Collision on page %lld\n", (long long)pageid); fflush(stdout);
     	assert(*stasis_page_type_ptr(p) != DATA_PAGE);
@@ -137,7 +138,7 @@ size_t DataPage<TUPLE>::write_bytes(const byte * buf, size_t remaining) {
 	if(chunk.page >= first_page_ + page_count_) {
 	    chunk.size = 0; // no space (should not happen)
 	} else {
-		Page *p = loadPage(xid_, chunk.page);
+		Page *p = alloc_ ? alloc_->load_page(xid_, chunk.page) : loadPage(xid_, chunk.page);
 		memcpy(data_at_offset_ptr(p, chunk.slot), buf, chunk.size);
 		writelock(p->rwlatch,0);
 		stasis_page_lsn_write(xid_, p, alloc_->get_lsn(xid_));
@@ -156,7 +157,7 @@ size_t DataPage<TUPLE>::read_bytes(byte * buf, off_t offset, size_t remaining) {
 	if(chunk.page >= first_page_ + page_count_) {
 		chunk.size = 0; // eof
 	} else {
-		Page *p = loadPage(xid_, chunk.page);
+		Page *p = alloc_ ? alloc_->load_page(xid_, chunk.page) : loadPage(xid_, chunk.page);
 		assert(p->pageType == DATA_PAGE);
 		if((chunk.page + 1 == page_count_ + first_page_)
 		  && (*is_another_page_ptr(p))) {
@@ -185,7 +186,7 @@ bool DataPage<TUPLE>::initialize_next_page() {
 	  abort();
   }
 
-  Page *p = loadPage(xid_, rid.page-1);
+  Page *p = alloc_ ? alloc_->load_page(xid_, rid.page-1) : loadPage(xid_, rid.page-1);
   *is_another_page_ptr(p) = (rid.page-1 == first_page_) ? 2 : 1;
   writelock(p->rwlatch, 0);
   stasis_page_lsn_write(xid_, p, alloc_->get_lsn(xid_));

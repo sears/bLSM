@@ -5,6 +5,7 @@
 #include "merger.h"
 
 #include "logstore.h"
+#include "regionAllocator.h"
 
 #include "network.h"
 
@@ -617,7 +618,8 @@ int op_stat_histogram(pthread_data* data, size_t limit) {
 	}
 
 	int xid = Tbegin();
-	diskTreeComponent::internalNodes::iterator * it = new diskTreeComponent::internalNodes::iterator(xid, data->ltable->get_tree_c2()->get_root_rid());
+	RegionAllocator * ro_alloc = new RegionAllocator();
+	diskTreeComponent::internalNodes::iterator * it = new diskTreeComponent::internalNodes::iterator(xid, ro_alloc, data->ltable->get_tree_c2()->get_root_rid());
 	size_t count = 0;
 	int err = 0;
 
@@ -643,7 +645,7 @@ int op_stat_histogram(pthread_data* data, size_t limit) {
 
 	size_t cur_stride = 0;
 	size_t i = 0;
-	it = new diskTreeComponent::internalNodes::iterator(xid, data->ltable->get_tree_c2()->get_root_rid()); // TODO make this method private?
+	it = new diskTreeComponent::internalNodes::iterator(xid, ro_alloc, data->ltable->get_tree_c2()->get_root_rid()); // TODO make this method private?
 	while(it->next()) {
 		i++;
 		if(i == count || !cur_stride) {  // do we want to send this key? (this matches the first, last and interior keys)
@@ -661,6 +663,7 @@ int op_stat_histogram(pthread_data* data, size_t limit) {
 
 	it->close();
 	delete(it);
+	delete(ro_alloc);
 	if(!err){ err = writeendofiteratortosocket(*(data->workitem));                         }
 	Tcommit(xid);
 	return err;

@@ -4,6 +4,7 @@
 #include <iostream>
 #include <sstream>
 #include "logstore.h"
+#include "regionAllocator.h"
 #include "diskTreeComponent.h"
 
 #include <assert.h>
@@ -114,7 +115,8 @@ void insertProbeIter_str(int  NUM_ENTRIES)
 
     
     int64_t count = 0;
-    diskTreeComponent::internalNodes::iterator * it = new diskTreeComponent::internalNodes::iterator(xid, lt->get_root_rec());
+    RegionAllocator * ro_alloc = new RegionAllocator();
+    diskTreeComponent::internalNodes::iterator * it = new diskTreeComponent::internalNodes::iterator(xid, ro_alloc, lt->get_root_rec());
 
     while(it->next()) {
         byte * key;
@@ -133,7 +135,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
 
     it->close();
     delete it;
-
+    delete ro_alloc;
 	Tcommit(xid);
     diskTreeComponent::internalNodes::deinit_stasis();
 }

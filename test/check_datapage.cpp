@@ -100,7 +100,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     int tuplenum = 0;
     for(int i = 0; i < dpages ; i++)
     {
-        DataPage<datatuple> dp(xid, dsp[i]);
+        DataPage<datatuple> dp(xid, 0, dsp[i]);
         DataPage<datatuple>::iterator itr = dp.begin();
         datatuple *dt=0;
         while( (dt=itr.getnext()) != NULL)
