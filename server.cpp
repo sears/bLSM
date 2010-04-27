@@ -85,6 +85,12 @@ int main(int argc, char *argv[])
       printf("warning: running w/ tiny c0 for testing"); // XXX build a separate test server and deployment server?
     }
 
+    if(argc == 2 && !strcmp(argv[1], "--benchmark")) {
+
+      c0_size = 1024 * 1024 * 1024 * 1;
+      printf("note: running w/ 2GB c0 for benchmarking"); // XXX build a separate test server and deployment server?
+    }
+
     mscheduler->startlogtable(lindex, c0_size);
 
     unlock(ltable.header_lock);
