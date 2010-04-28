@@ -62,8 +62,6 @@ struct logtable_mergedata
     
 };
 
-#include "logstore.h"            // XXX hacky include workaround.
-
 class merge_scheduler
 {
     std::vector<std::pair<logtable<datatuple> *, logtable_mergedata*> > mergedata;

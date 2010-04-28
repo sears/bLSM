@@ -2,6 +2,9 @@
 #include "merger.h"
 
 #include <stasis/transactional.h>
+#include <stasis/bufferManager.h>
+#include <stasis/bufferManager/bufferHash.h>
+
 #undef try
 #undef end
 
@@ -57,6 +60,18 @@ logtable<TUPLE>::~logtable()
     deletelock(header_lock);
     delete tmerger;
 }
+
+template<class TUPLE>
+void logtable<TUPLE>::init_stasis() {
+
+  DataPage<datatuple>::register_stasis_page_impl();
+
+  Tinit();
+
+}
+
+template<class TUPLE>
+void logtable<TUPLE>::deinit_stasis() { Tdeinit(); }
 
 template<class TUPLE>
 recordid logtable<TUPLE>::allocTable(int xid)

@@ -14,7 +14,7 @@ int main(int argc, char **argv)
 
     sync();
 
-    diskTreeComponent::internalNodes::init_stasis();
+    logtable<datatuple>::init_stasis();
 
     int xid = Tbegin();
 
@@ -33,7 +33,7 @@ int main(int argc, char **argv)
     delete ro_alloc;
     Tcommit(xid);
 
-    diskTreeComponent::internalNodes::deinit_stasis();
+    logtable<datatuple>::deinit_stasis();
 
 
 

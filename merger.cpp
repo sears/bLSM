@@ -7,48 +7,6 @@
 #undef try
 #undef end
 
-void merge_stats_pp(FILE* fd, merge_stats_t &stats) {
-	long long sleep_time = stats.start.tv_sec - stats.sleep.tv_sec;
-	long long work_time =  stats.done.tv_sec - stats.start.tv_sec;
-	long long total_time = sleep_time + work_time;
-	double mb_out = ((double)stats.bytes_out)     /(1024.0*1024.0);
-	double mb_ins=  ((double)stats.bytes_in_small)     /(1024.0*1024.0);
-	double mb_inl = ((double)stats.bytes_in_large)     /(1024.0*1024.0);
-	double kt_out = ((double)stats.num_tuples_out)     /(1024.0);
-	double kt_ins=  ((double)stats.num_tuples_in_small)     /(1024.0);
-	double kt_inl = ((double)stats.num_tuples_in_large)     /(1024.0);
-	double mb_hdd = mb_out + mb_inl + (stats.merge_level == 1 ? 0.0 : mb_ins);
-	double kt_hdd = kt_out + kt_inl + (stats.merge_level == 1 ? 0.0 : kt_ins);
-
-
-	fprintf(fd,
-			    "=====================================================================\n"
-                "Thread %d merge %lld: sleep %lld sec, run %lld sec\n"
-				"           megabytes kTuples datapages   MB/s (real)   kTup/s  (real)\n"
-			    "Wrote        %7lld %7lld %9lld"     " %6.1f %6.1f" " %8.1f %8.1f"   "\n"
-				"Read (small) %7lld %7lld      -   " " %6.1f %6.1f" " %8.1f %8.1f"   "\n"
-			    "Read (large) %7lld %7lld      -   " " %6.1f %6.1f" " %8.1f %8.1f"   "\n"
-			    "Disk         %7lld %7lld      -   " " %6.1f %6.1f" " %8.1f %8.1f"   "\n"
-		        ".....................................................................\n"
-			    "avg tuple len: %6.2fkb\n"
-				"effective throughput: (mb/s ; nsec/byte): (%.2f; %.2f) active"      "\n"
-			    "                                          (%.2f; %.2f) wallclock"   "\n"
-				".....................................................................\n"
-			,
-			    stats.merge_level, stats.merge_count,
-			    sleep_time,
-			    work_time,
-			    (long long)mb_out, (long long)kt_out, stats.num_datapages_out, mb_out / (double)work_time, mb_out / (double)total_time, kt_out / (double)work_time,  kt_out / (double)total_time,
-			    (long long)mb_ins, (long long)kt_ins,                          mb_ins / (double)work_time, mb_ins / (double)total_time, kt_ins / (double)work_time,  kt_ins / (double)total_time,
-			    (long long)mb_inl, (long long)kt_inl,                          mb_inl / (double)work_time, mb_inl / (double)total_time, kt_inl / (double)work_time,  kt_inl / (double)total_time,
-			    (long long)mb_hdd, (long long)kt_hdd,                          mb_hdd / (double)work_time, mb_hdd / (double)total_time, kt_hdd / (double)work_time,  kt_hdd / (double)total_time,
-			    mb_out / kt_out,
-			    mb_ins / work_time, 1000.0 * work_time / mb_ins, mb_ins / total_time, 1000.0 * total_time / mb_ins
-				);
-}
-
-double merge_stats_nsec_to_merge_in_bytes(merge_stats_t); // how many nsec did we burn on each byte from the small tree (want this to be equal for the two mergers)
-
 int merge_scheduler::addlogtable(logtable<datatuple> *ltable)
 {
 
@@ -235,7 +193,7 @@ void merge_iterators(int xid,
                     ITB *itrB,
                     logtable<datatuple> *ltable,
                     diskTreeComponent *scratch_tree,
-                    merge_stats_t *stats,
+                    mergeStats *stats,
                     bool dropDeletes);
 
 
@@ -274,11 +232,7 @@ void* memMergeThread(void*arg)
     
     while(true) // 1
     {
-        merge_stats_t stats;
-        memset((void*)&stats, 0, sizeof(stats));
-        stats.merge_level = 1;
-        stats.merge_count = merge_count;
-        gettimeofday(&stats.sleep,0);
+        mergeStats stats(1, merge_count);
         writelock(ltable->header_lock,0);
         int done = 0;
         // 2: wait for c0_mergable
@@ -410,7 +364,7 @@ void* memMergeThread(void*arg)
         unlock(ltable->header_lock);
         
         gettimeofday(&stats.done, 0);
-        merge_stats_pp(stdout, stats);
+        stats.pretty_print(stdout);
 
         //TODO: get the freeing outside of the lock
     }
@@ -434,11 +388,8 @@ void *diskMergeThread(void*arg)
     
     while(true)
     {
-        merge_stats_t stats;
-        memset((void*)&stats, 0, sizeof(stats));
-        stats.merge_level = 2;
-        stats.merge_count = merge_count;
-        gettimeofday(&stats.sleep,0);
+        mergeStats stats(2, merge_count);
+
         // 2: wait for input
         writelock(ltable->header_lock,0);
         int done = 0;
@@ -479,7 +430,7 @@ void *diskMergeThread(void*arg)
 
         // 4: do the merge.
         //create the iterators
-        diskTreeComponent::iterator *itrA = ltable->get_tree_c2()->open_iterator(); //new iterator<datatuple>(ltable->get_tree_c2()->get_root_rec());
+        diskTreeComponent::iterator *itrA = ltable->get_tree_c2()->open_iterator();
         diskTreeComponent::iterator *itrB = ltable->get_tree_c1_mergeable()->open_iterator();
 
         //create a new tree
@@ -530,7 +481,7 @@ void *diskMergeThread(void*arg)
         unlock(ltable->header_lock);
 
         gettimeofday(&stats.done, 0);
-        merge_stats_pp(stdout, stats);
+        stats.pretty_print(stdout);
 
     }
     return 0;
@@ -543,7 +494,7 @@ void merge_iterators(int xid,
                         ITA *itrA, //iterator on c1 or c2
                         ITB *itrB, //iterator on c0 or c1, respectively
                         logtable<datatuple> *ltable,
-                        diskTreeComponent *scratch_tree, merge_stats_t *stats,
+                        diskTreeComponent *scratch_tree, mergeStats *stats,
                         bool dropDeletes  // should be true iff this is biggest component
                         )
 {

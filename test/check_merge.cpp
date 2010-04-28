@@ -24,7 +24,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     unlink("storefile.txt");
     unlink("logfile.txt");
 
-    diskTreeComponent::internalNodes::init_stasis();
+    logtable<datatuple>::init_stasis();
 
     //data generation
     std::vector<std::string> * data_arr = new std::vector<std::string>;
@@ -147,7 +147,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     
     Tcommit(xid);
-    diskTreeComponent::internalNodes::deinit_stasis();
+    logtable<datatuple>::deinit_stasis();
 }
 
 

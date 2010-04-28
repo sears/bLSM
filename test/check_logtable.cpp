@@ -26,7 +26,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     sync();
 
-    diskTreeComponent::internalNodes::init_stasis();
+    logtable<datatuple>::init_stasis();
 
     int xid = Tbegin();
 
@@ -56,7 +56,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     printf("Stage 1: Writing %d keys\n", NUM_ENTRIES);
 
-    merge_stats_t *stats = (merge_stats_t*)calloc(sizeof(stats), 1);
+    mergeStats *stats = (mergeStats*)calloc(sizeof(stats), 1);
 
     for(size_t i = 0; i < NUM_ENTRIES; i++)
     {
@@ -121,7 +121,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     printf("Random Reads completed.\n");
     Tcommit(xid);
-    diskTreeComponent::internalNodes::deinit_stasis();
+    logtable<datatuple>::deinit_stasis();
 }
 
 /** @test

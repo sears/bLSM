@@ -10,6 +10,7 @@
 
 #include "datapage.h"
 #include "datatuple.h"
+#include "mergeStats.h"
 
 class diskTreeComponent {
  public:
@@ -36,7 +37,7 @@ class diskTreeComponent {
   recordid get_internal_node_allocator_rid();
   internalNodes * get_internal_nodes() { return ltree; }
   datatuple* findTuple(int xid, datatuple::key_t key, size_t keySize);
-  int insertTuple(int xid, /*DataPage<datatuple> *dp,*/ datatuple *t, merge_stats_t *stats);
+  int insertTuple(int xid, datatuple *t, mergeStats *stats);
   void writes_done();
 
 
@@ -72,9 +73,6 @@ class diskTreeComponent {
  public:
   class internalNodes{
   public:
-    // XXX move these to another module.
-    static void init_stasis();
-    static void deinit_stasis();
 
     internalNodes(int xid, pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size);
     internalNodes(int xid, recordid root, recordid internal_node_state, recordid datapage_state);

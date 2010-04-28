@@ -37,7 +37,7 @@ void terminate (int param)
 
 	  printf("Deinitializing stasis...\n");
 	  fflush(stdout);
-	  diskTreeComponent::internalNodes::deinit_stasis();
+	  logtable<datatuple>::deinit_stasis();
 
 	  exit(0);
 }
@@ -50,7 +50,7 @@ int main(int argc, char *argv[])
 
     prev_fn = signal (SIGINT,terminate);
 
-    diskTreeComponent::internalNodes::init_stasis();
+    logtable<datatuple>::init_stasis();
 
     int xid = Tbegin();
 

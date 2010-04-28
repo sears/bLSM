@@ -26,7 +26,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     sync();
 
-    diskTreeComponent::internalNodes::init_stasis();
+    logtable<datatuple>::init_stasis();
 
     //data generation
 //    std::vector<std::string> * data_arr = new std::vector<std::string>;
@@ -97,10 +97,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     gettimeofday(&stop_tv,0);
     printf("run time: %6.1f\n", (tv_to_double(stop_tv) - tv_to_double(start_tv)));
     
-    //Tcommit(xid);
-    
-    diskTreeComponent::internalNodes::deinit_stasis();
-    
+    logtable<datatuple>::deinit_stasis();
     
 }
 

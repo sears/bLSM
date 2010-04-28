@@ -30,7 +30,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     sync();
 
-    diskTreeComponent::internalNodes::init_stasis();
+    logtable<datatuple>::init_stasis();
 
     int xid = Tbegin();
 
@@ -118,7 +118,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
   
 	Tcommit(xid);
 
-	diskTreeComponent::internalNodes::deinit_stasis();
+	logtable<datatuple>::deinit_stasis();
 }
 
 

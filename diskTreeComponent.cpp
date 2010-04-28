@@ -17,8 +17,6 @@
 #include <stasis/transactional.h>
 #include <stasis/page.h>
 #include <stasis/page/slotted.h>
-#include <stasis/bufferManager.h>
-#include <stasis/bufferManager/bufferHash.h>
 
 /////////////////////////////////////////////////////////////////
 // LOGTREE implementation
@@ -32,20 +30,6 @@ const int64_t diskTreeComponent::internalNodes::FIRST_SLOT = 2; //this is the fi
 const size_t diskTreeComponent::internalNodes::root_rec_size = sizeof(int64_t);
 const int64_t diskTreeComponent::internalNodes::PREV_LEAF = 0; //pointer to prev leaf page
 const int64_t diskTreeComponent::internalNodes::NEXT_LEAF = 1; //pointer to next leaf page
-
-// TODO move init_stasis to a more appropriate module
-
-void diskTreeComponent::internalNodes::init_stasis() {
-
-  bufferManagerFileHandleType = BUFFER_MANAGER_FILE_HANDLE_PFILE;
-
-  DataPage<datatuple>::register_stasis_page_impl();
-
-  stasis_buffer_manager_factory = stasis_buffer_manager_hash_factory; // XXX workaround stasis issue #22.
-
-  Tinit();
-
-}
 
 recordid diskTreeComponent::get_root_rid() { return ltree->get_root_rec(); }
 recordid diskTreeComponent::get_datapage_allocator_rid() { return ltree->get_datapage_alloc()->header_rid(); }
@@ -76,7 +60,7 @@ void diskTreeComponent::writes_done() {
   }
 }
 
-int diskTreeComponent::insertTuple(int xid, datatuple *t, merge_stats_t *stats)
+int diskTreeComponent::insertTuple(int xid, datatuple *t, mergeStats *stats)
 {
   int ret = 0; // no error.
   if(dp==0) {
@@ -141,7 +125,6 @@ datatuple * diskTreeComponent::findTuple(int xid, datatuple::key_t key, size_t k
     return tup;
 }
 
-void diskTreeComponent::internalNodes::deinit_stasis() { Tdeinit(); }
 recordid diskTreeComponent::internalNodes::create(int xid) {
 
   pageid_t root = internal_node_alloc->alloc_extent(xid, 1);

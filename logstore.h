@@ -7,27 +7,10 @@
 
 #include <vector>
 
-
-typedef struct merge_stats_t {
-    int merge_level;               // 1 => C0->C1, 2 => C1->C2
-    pageid_t merge_count;          // This is the merge_count'th merge
-    struct timeval sleep;          // When did we go to sleep waiting for input?
-    struct timeval start;          // When did we wake up and start merging?  (at steady state with max throughput, this should be equal to sleep)
-    struct timeval done;           // When did we finish merging?
-    pageid_t bytes_out;            // How many bytes did we write (including internal tree nodes)?
-    pageid_t num_tuples_out;       // How many tuples did we write?
-    pageid_t num_datapages_out;    // How many datapages?
-    pageid_t bytes_in_small;       // How many bytes from the small input tree (for C0, we ignore tree overheads)?
-    pageid_t num_tuples_in_small;  // Tuples from the small input?
-    pageid_t bytes_in_large;       // Bytes from the large input?
-    pageid_t num_tuples_in_large;  // Tuples from large input?
-} merge_stats_t;
-
 #include "diskTreeComponent.h"
 #include "memTreeComponent.h"
 
 #include "tuplemerger.h"
-
 
 struct logtable_mergedata;
 
@@ -63,8 +46,9 @@ public:
     void openTable(int xid, recordid rid);
     void flushTable();    
 
-    inline recordid & get_table_rec(){return table_rec;}  // TODO This is called by merger.cpp for no good reason.  (remove the calls)
-    
+    static void init_stasis();
+    static void deinit_stasis();
+
     inline uint64_t get_epoch() { return epoch; }
 
     void registerIterator(iterator * it);
