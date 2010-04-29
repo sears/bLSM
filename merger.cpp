@@ -193,7 +193,7 @@ void merge_iterators(int xid,
                     ITB *itrB,
                     logtable<datatuple> *ltable,
                     diskTreeComponent *scratch_tree,
-                    mergeStats *stats,
+                    mergeManager::mergeStats *stats,
                     bool dropDeletes);
 
 
@@ -229,11 +229,12 @@ void* memMergeThread(void*arg)
     assert(ltable->get_tree_c1());
     
     int merge_count =0;
+    mergeManager::mergeStats * stats = a->ltable->merge_mgr->newMergeStats(1);
     
     while(true) // 1
     {
-        mergeStats stats(1, merge_count);
         writelock(ltable->header_lock,0);
+        stats->new_merge();
         int done = 0;
         // 2: wait for c0_mergable
         while(!ltable->get_tree_c0_mergeable())
@@ -270,7 +271,7 @@ void* memMergeThread(void*arg)
             break;
         }
 
-        stats.starting_merge();
+        stats->starting_merge();
 
         // 3: Begin transaction
         xid = Tbegin();
@@ -284,7 +285,7 @@ void* memMergeThread(void*arg)
 
         
         //create a new tree
-        diskTreeComponent * c1_prime = new diskTreeComponent(xid,  a->internal_region_size, a->datapage_region_size, a->datapage_size, &stats);
+        diskTreeComponent * c1_prime = new diskTreeComponent(xid,  a->internal_region_size, a->datapage_region_size, a->datapage_size, stats);
 
         //pthread_mutex_unlock(a->block_ready_mut);
         unlock(ltable->header_lock);
@@ -292,7 +293,7 @@ void* memMergeThread(void*arg)
         //: do the merge
         DEBUG("mmt:\tMerging:\n");
 
-        merge_iterators<typeof(*itrA),typeof(*itrB)>(xid, itrA, itrB, ltable, c1_prime, &stats, false);
+        merge_iterators<typeof(*itrA),typeof(*itrB)>(xid, itrA, itrB, ltable, c1_prime, stats, false);
 
         delete itrA;
         delete itrB;
@@ -311,7 +312,7 @@ void* memMergeThread(void*arg)
         //TODO: this is simplistic for now
         //6: if c1' is too big, signal the other merger
         double target_R = *(a->r_i);
-        double new_c1_size = stats.output_size();
+        double new_c1_size = stats->output_size();
         assert(target_R >= MIN_R);
         bool signal_c2 = (new_c1_size / ltable->max_c0_size > target_R) ||
                 (a->max_size && new_c1_size > a->max_size );
@@ -347,7 +348,7 @@ void* memMergeThread(void*arg)
           ltable->set_tree_c1_mergeable(c1_prime);
 
           // 8: c1 = new empty.
-          ltable->set_tree_c1(new diskTreeComponent(xid, a->internal_region_size, a->datapage_region_size, a->datapage_size, &stats));
+          ltable->set_tree_c1(new diskTreeComponent(xid, a->internal_region_size, a->datapage_region_size, a->datapage_size, stats));
 
           pthread_cond_signal(a->out_block_ready_cond);
 
@@ -363,8 +364,8 @@ void* memMergeThread(void*arg)
 
         unlock(ltable->header_lock);
 
-        stats.finished_merge();
-        stats.pretty_print(stdout);
+        stats->finished_merge();
+        stats->pretty_print(stdout);
 
         //TODO: get the freeing outside of the lock
     }
@@ -385,13 +386,14 @@ void *diskMergeThread(void*arg)
 
 
     int merge_count =0;
+    mergeManager::mergeStats * stats = a->ltable->merge_mgr->newMergeStats(2);
     
     while(true)
     {
-        mergeStats stats(2, merge_count);
 
         // 2: wait for input
         writelock(ltable->header_lock,0);
+        stats->new_merge();
         int done = 0;
         // get a new input for merge
         while(!ltable->get_tree_c1_mergeable())
@@ -423,7 +425,7 @@ void *diskMergeThread(void*arg)
             break;
         }
 
-        stats.starting_merge();
+        stats->starting_merge();
 
         // 3: begin
         xid = Tbegin();
@@ -434,14 +436,14 @@ void *diskMergeThread(void*arg)
         diskTreeComponent::iterator *itrB = ltable->get_tree_c1_mergeable()->open_iterator();
 
         //create a new tree
-        diskTreeComponent * c2_prime = new diskTreeComponent(xid, a->internal_region_size, a->datapage_region_size, a->datapage_size, &stats);
+        diskTreeComponent * c2_prime = new diskTreeComponent(xid, a->internal_region_size, a->datapage_region_size, a->datapage_size, stats);
 
         unlock(ltable->header_lock);
 
         //do the merge
         DEBUG("dmt:\tMerging:\n");
 
-        merge_iterators<typeof(*itrA),typeof(*itrB)>(xid, itrA, itrB, ltable, c2_prime, &stats, true);
+        merge_iterators<typeof(*itrA),typeof(*itrB)>(xid, itrA, itrB, ltable, c2_prime, stats, true);
 
         delete itrA;
         delete itrB;
@@ -467,7 +469,7 @@ void *diskMergeThread(void*arg)
 
         merge_count++;        
         //update the current optimal R value
-        *(a->r_i) = std::max(MIN_R, sqrt( (stats.output_size() * 1.0) / (ltable->max_c0_size) ) );
+        *(a->r_i) = std::max(MIN_R, sqrt( (stats->output_size() * 1.0) / (ltable->max_c0_size) ) );
         
         DEBUG("dmt:\tmerge_count %lld\t#written bytes: %lld\n optimal r %.2f", stats.merge_count, stats.output_size(), *(a->r_i));
         // 10: C2 is never to big
@@ -480,8 +482,8 @@ void *diskMergeThread(void*arg)
         
         unlock(ltable->header_lock);
 
-        stats.finished_merge();
-        stats.pretty_print(stdout);
+        stats->finished_merge();
+        stats->pretty_print(stdout);
 
     }
     return 0;
@@ -492,7 +494,7 @@ void merge_iterators(int xid,
                         ITA *itrA, //iterator on c1 or c2
                         ITB *itrB, //iterator on c0 or c1, respectively
                         logtable<datatuple> *ltable,
-                        diskTreeComponent *scratch_tree, mergeStats *stats,
+                        diskTreeComponent *scratch_tree, mergeManager::mergeStats *stats,
                         bool dropDeletes  // should be true iff this is biggest component
                         )
 {

@@ -91,6 +91,8 @@ public:
     
     int64_t max_c0_size;
 
+    mergeManager * merge_mgr;
+
     inline bool is_still_running() { return still_running_; }
     inline void stop() {
     	still_running_ = false;

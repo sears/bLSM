@@ -28,6 +28,7 @@ logtable<TUPLE>::logtable(pageid_t internal_region_size, pageid_t datapage_regio
     tree_c1_mergeable = NULL;
     tree_c2 = NULL;
     this->still_running_ = true;
+    this->merge_mgr = new mergeManager();
     this->mergedata = 0;
     //tmerger = new tuplemerger(&append_merger);
     tmerger = new tuplemerger(&replace_merger);
@@ -78,7 +79,7 @@ recordid logtable<TUPLE>::allocTable(int xid)
 {
 
     table_rec = Talloc(xid, sizeof(tbl_header));
-    mergeStats * stats = 0;
+    mergeManager::mergeStats * stats = 0;
     //create the big tree
     tree_c2 = new diskTreeComponent(xid, internal_region_size, datapage_region_size, datapage_size, stats);
 
