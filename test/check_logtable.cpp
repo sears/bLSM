@@ -30,13 +30,12 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     int xid = Tbegin();
 
-    logtable<datatuple> ltable(1000, 10000, 5);
-    recordid table_root = ltable.allocTable(xid);
-
     Tcommit(xid);
-    
+
     xid = Tbegin();
-    diskTreeComponent *ltable_c1 = ltable.get_tree_c1();
+
+    mergeStats stats(1,0);
+    diskTreeComponent *ltable_c1 = new diskTreeComponent(xid, 1000, 10000, 5, &stats);
 
     std::vector<std::string> data_arr;
     std::vector<std::string> key_arr;
@@ -56,25 +55,17 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     printf("Stage 1: Writing %d keys\n", NUM_ENTRIES);
 
-    mergeStats *stats = (mergeStats*)calloc(sizeof(stats), 1);
-
     for(size_t i = 0; i < NUM_ENTRIES; i++)
     {
         //prepare the tuple
         datatuple* newtuple = datatuple::create(key_arr[i].c_str(), key_arr[i].length()+1, data_arr[i].c_str(), data_arr[i].length()+1);
 
-        stats->bytes_in_small += newtuple->byte_length();
-
-        ltable_c1->insertTuple(xid, newtuple, stats);
-
+        ltable_c1->insertTuple(xid, newtuple);
         datatuple::freetuple(newtuple);
     }
     printf("\nTREE STRUCTURE\n");
     ltable_c1->print_tree(xid);
 
-    printf("Total data set length: %lld\n", stats->bytes_in_small);
-    printf("Storage utilization: %.2f\n", (stats->bytes_in_small+.0) / (1.0* stats->bytes_out));
-    printf("Number of datapages: %lld\n", (long long)stats->num_datapages_out);
     printf("Writes complete.\n");
 
     ltable_c1->writes_done();

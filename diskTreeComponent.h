@@ -17,15 +17,19 @@ class diskTreeComponent {
   class internalNodes;
   class iterator;
 
-  diskTreeComponent(int xid, pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size) :
+  diskTreeComponent(int xid, pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size,
+		    mergeStats* stats) :
     ltree(new diskTreeComponent::internalNodes(xid, internal_region_size, datapage_region_size, datapage_size)),
     dp(0),
-    datapage_size(datapage_size) {}
+    datapage_size(datapage_size),
+    stats(stats) {}
 
 
-  diskTreeComponent(int xid, recordid root, recordid internal_node_state, recordid datapage_state) :
+  diskTreeComponent(int xid, recordid root, recordid internal_node_state, recordid datapage_state, mergeStats* stats) :
     ltree(new diskTreeComponent::internalNodes(xid, root, internal_node_state, datapage_state)),
-    dp(0) {}
+    dp(0),
+    datapage_size(-1),
+    stats(stats) {}
 
   ~diskTreeComponent() {
     delete dp;
@@ -37,7 +41,7 @@ class diskTreeComponent {
   recordid get_internal_node_allocator_rid();
   internalNodes * get_internal_nodes() { return ltree; }
   datatuple* findTuple(int xid, datatuple::key_t key, size_t keySize);
-  int insertTuple(int xid, datatuple *t, mergeStats *stats);
+  int insertTuple(int xid, datatuple *t);
   void writes_done();
 
 
@@ -69,6 +73,7 @@ class diskTreeComponent {
   internalNodes * ltree;
   DataPage<datatuple>* dp;
   pageid_t datapage_size;
+  mergeStats *stats;
 
  public:
   class internalNodes{

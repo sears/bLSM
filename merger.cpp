@@ -284,7 +284,7 @@ void* memMergeThread(void*arg)
 
         
         //create a new tree
-        diskTreeComponent * c1_prime = new diskTreeComponent(xid,  a->internal_region_size, a->datapage_region_size, a->datapage_size);
+        diskTreeComponent * c1_prime = new diskTreeComponent(xid,  a->internal_region_size, a->datapage_region_size, a->datapage_size, &stats);
 
         //pthread_mutex_unlock(a->block_ready_mut);
         unlock(ltable->header_lock);
@@ -347,7 +347,7 @@ void* memMergeThread(void*arg)
           ltable->set_tree_c1_mergeable(c1_prime);
 
           // 8: c1 = new empty.
-          ltable->set_tree_c1(new diskTreeComponent(xid, a->internal_region_size, a->datapage_region_size, a->datapage_size));
+          ltable->set_tree_c1(new diskTreeComponent(xid, a->internal_region_size, a->datapage_region_size, a->datapage_size, &stats));
 
           pthread_cond_signal(a->out_block_ready_cond);
 
@@ -434,7 +434,7 @@ void *diskMergeThread(void*arg)
         diskTreeComponent::iterator *itrB = ltable->get_tree_c1_mergeable()->open_iterator();
 
         //create a new tree
-        diskTreeComponent * c2_prime = new diskTreeComponent(xid, a->internal_region_size, a->datapage_region_size, a->datapage_size);
+        diskTreeComponent * c2_prime = new diskTreeComponent(xid, a->internal_region_size, a->datapage_region_size, a->datapage_size, &stats);
 
         unlock(ltable->header_lock);
 
@@ -510,7 +510,7 @@ void merge_iterators(int xid,
         while(t1 != 0 && datatuple::compare(t1->key(), t1->keylen(), t2->key(), t2->keylen()) < 0) // t1 is less than t2
         {
             //insert t1
-            scratch_tree->insertTuple(xid, t1, stats);
+            scratch_tree->insertTuple(xid, t1);
             stats->wrote_tuple(t1);
             datatuple::freetuple(t1);
             //advance itrA
@@ -524,7 +524,7 @@ void merge_iterators(int xid,
 
             //insert merged tuple, drop deletes
             if(dropDeletes && !mtuple->isDelete()) {
-              scratch_tree->insertTuple(xid, mtuple, stats);
+              scratch_tree->insertTuple(xid, mtuple);
             }
             datatuple::freetuple(t1);
             t1 = itrA->next_callerFrees();  //advance itrA
@@ -536,7 +536,7 @@ void merge_iterators(int xid,
         else
         {
             //insert t2
-            scratch_tree->insertTuple(xid, t2, stats);
+            scratch_tree->insertTuple(xid, t2);
             // cannot free any tuples here; they may still be read through a lookup
         }
 
@@ -545,7 +545,7 @@ void merge_iterators(int xid,
     }
 
     while(t1 != 0) {// t1 is less than t2
-      scratch_tree->insertTuple(xid, t1, stats);
+      scratch_tree->insertTuple(xid, t1);
       stats->wrote_tuple(t1);
       datatuple::freetuple(t1);
 

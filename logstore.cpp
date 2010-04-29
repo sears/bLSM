@@ -78,12 +78,12 @@ recordid logtable<TUPLE>::allocTable(int xid)
 {
 
     table_rec = Talloc(xid, sizeof(tbl_header));
-    
+    mergeStats * stats = 0;
     //create the big tree
-    tree_c2 = new diskTreeComponent(xid, internal_region_size, datapage_region_size, datapage_size);
+    tree_c2 = new diskTreeComponent(xid, internal_region_size, datapage_region_size, datapage_size, stats);
 
     //create the small tree
-    tree_c1 = new diskTreeComponent(xid, internal_region_size, datapage_region_size, datapage_size);
+    tree_c1 = new diskTreeComponent(xid, internal_region_size, datapage_region_size, datapage_size, stats);
 
     update_persistent_header(xid);
 
@@ -93,8 +93,8 @@ template<class TUPLE>
 void logtable<TUPLE>::openTable(int xid, recordid rid) {
   table_rec = rid;
   Tread(xid, table_rec, &tbl_header);
-  tree_c2 = new diskTreeComponent(xid, tbl_header.c2_root, tbl_header.c2_state, tbl_header.c2_dp_state);
-  tree_c1 = new diskTreeComponent(xid, tbl_header.c1_root, tbl_header.c1_state, tbl_header.c1_dp_state);
+  tree_c2 = new diskTreeComponent(xid, tbl_header.c2_root, tbl_header.c2_state, tbl_header.c2_dp_state, 0);
+  tree_c1 = new diskTreeComponent(xid, tbl_header.c1_root, tbl_header.c1_state, tbl_header.c1_dp_state, 0);
 }
 template<class TUPLE>
 void logtable<TUPLE>::update_persistent_header(int xid) {

@@ -54,24 +54,26 @@ void diskTreeComponent::list_regions(int xid, pageid_t *internal_node_region_len
 
 void diskTreeComponent::writes_done() {
   if(dp) {
+    stats->wrote_datapage(dp);
     dp->writes_done();
     delete dp;
     dp = 0;
   }
 }
 
-int diskTreeComponent::insertTuple(int xid, datatuple *t, mergeStats *stats)
+int diskTreeComponent::insertTuple(int xid, datatuple *t)
 {
   int ret = 0; // no error.
   if(dp==0) {
     dp = insertDataPage(xid, t);
-    stats->num_datapages_out++;
+    //    stats->num_datapages_out++;
   } else if(!dp->append(t)) {
-    stats->bytes_out += (PAGE_SIZE * dp->get_page_count());
+    //    stats->bytes_out += (PAGE_SIZE * dp->get_page_count());
+    stats->wrote_datapage(dp);
     dp->writes_done();
     delete dp;
     dp = insertDataPage(xid, t);
-    stats->num_datapages_out++;
+    //    stats->num_datapages_out++;
   }
   return ret;
 }
@@ -89,6 +91,7 @@ DataPage<datatuple>* diskTreeComponent::insertDataPage(int xid, datatuple *tuple
         if(!dp->append(tuple))
         {
             // the last datapage must have not wanted the tuple, and then this datapage figured out the region is full.
+            stats->wrote_datapage(dp);
             dp->writes_done();
             delete dp;
             dp = 0;
