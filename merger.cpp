@@ -303,7 +303,7 @@ void* memMergeThread(void*arg)
         c1_prime->force(xid);
 
         merge_count++;        
-        DEBUG("mmt:\tmerge_count %lld #bytes written %lld\n", stats.merge_count, stats.bytes_out);
+        DEBUG("mmt:\tmerge_count %lld #bytes written %lld\n", stats.merge_count, stats.output_size());
 
         writelock(ltable->header_lock,0);
 
@@ -311,7 +311,7 @@ void* memMergeThread(void*arg)
         //TODO: this is simplistic for now
         //6: if c1' is too big, signal the other merger
         double target_R = *(a->r_i);
-        double new_c1_size = stats.bytes_out;
+        double new_c1_size = stats.output_size();
         assert(target_R >= MIN_R);
         bool signal_c2 = (new_c1_size / ltable->max_c0_size > target_R) ||
                 (a->max_size && new_c1_size > a->max_size );
@@ -467,9 +467,9 @@ void *diskMergeThread(void*arg)
 
         merge_count++;        
         //update the current optimal R value
-        *(a->r_i) = std::max(MIN_R, sqrt( (stats.bytes_out * 1.0) / (ltable->max_c0_size) ) );
+        *(a->r_i) = std::max(MIN_R, sqrt( (stats.output_size() * 1.0) / (ltable->max_c0_size) ) );
         
-        DEBUG("dmt:\tmerge_count %lld\t#written bytes: %lld\n optimal r %.2f", stats.merge_count, stats.bytes_out, *(a->r_i));
+        DEBUG("dmt:\tmerge_count %lld\t#written bytes: %lld\n optimal r %.2f", stats.merge_count, stats.output_size(), *(a->r_i));
         // 10: C2 is never to big
         ltable->set_tree_c2(c2_prime);
 
