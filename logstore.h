@@ -12,6 +12,8 @@
 
 #include "tuplemerger.h"
 
+#include "mergeStats.h"
+
 struct logtable_mergedata;
 
 template<class TUPLE>
@@ -66,8 +68,12 @@ public:
     inline memTreeComponent<datatuple>::rbtree_ptr_t get_tree_c0(){return tree_c0;}
     inline memTreeComponent<datatuple>::rbtree_ptr_t get_tree_c0_mergeable(){return tree_c0_mergeable;}
     void set_tree_c0(memTreeComponent<datatuple>::rbtree_ptr_t newtree){tree_c0 = newtree;                     bump_epoch(); }
-    void set_tree_c0_mergeable(memTreeComponent<datatuple>::rbtree_ptr_t newtree){tree_c0_mergeable = newtree; bump_epoch(); }
+    void set_max_c0_size(int64_t max_c0_size) {
+      this->max_c0_size = max_c0_size;
+      merge_mgr->set_c0_size(max_c0_size);
 
+    }
+    void set_tree_c0_mergeable(memTreeComponent<datatuple>::rbtree_ptr_t newtree){tree_c0_mergeable = newtree; bump_epoch(); }
     void update_persistent_header(int xid);
 
     void setMergeData(logtable_mergedata * mdata);
@@ -88,9 +94,7 @@ public:
 
     logtable_mergedata * mergedata;
     rwl * header_lock;
-    
     int64_t max_c0_size;
-
     mergeManager * merge_mgr;
 
     inline bool is_still_running() { return still_running_; }
@@ -121,6 +125,7 @@ private:
 
     std::vector<iterator *> its;
 
+    mergeManager::mergeStats * c0_stats;
     bool still_running_;
 public:
 

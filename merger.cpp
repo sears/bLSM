@@ -132,7 +132,7 @@ void merge_scheduler::startlogtable(int index, int64_t MAX_C0_SIZE)
 
     //disk merger args
 
-    ltable->max_c0_size = MAX_C0_SIZE;
+    ltable->set_max_c0_size(MAX_C0_SIZE);
 
     diskTreeComponent ** block1_scratch = new diskTreeComponent*;
     *block1_scratch=0;
@@ -523,6 +523,7 @@ void merge_iterators(int xid,
         if(t1 != 0 && datatuple::compare(t1->key(), t1->keylen(), t2->key(), t2->keylen()) == 0)
         {
             datatuple *mtuple = ltable->gettuplemerger()->merge(t1,t2);
+            stats->merged_tuples(mtuple, t2, t1); // this looks backwards, but is right.
 
             //insert merged tuple, drop deletes
             if(dropDeletes && !mtuple->isDelete()) {

@@ -43,6 +43,10 @@ logtable<TUPLE>::logtable(pageid_t internal_region_size, pageid_t datapage_regio
     this->internal_region_size = internal_region_size;
     this->datapage_region_size = datapage_region_size;
     this->datapage_size = datapage_size;
+
+    c0_stats = merge_mgr->newMergeStats(0);
+    c0_stats->new_merge();
+    c0_stats->starting_merge();
 }
 
 template<class TUPLE>
@@ -133,7 +137,9 @@ void logtable<TUPLE>::flushTable()
     gettimeofday(&start_tv,0);
     start = tv_to_double(start_tv);
 
-    
+    c0_stats->finished_merge();
+    c0_stats->new_merge();
+
     writelock(header_lock,0);
     pthread_mutex_lock(mergedata->rbtree_mut);
     
@@ -173,7 +179,7 @@ void logtable<TUPLE>::flushTable()
     
     set_tree_c0_mergeable(get_tree_c0());
 
-    pthread_cond_signal(mergedata->input_ready_cond);
+    pthread_cond_broadcast(mergedata->input_ready_cond);
 
     merge_count ++;
     set_tree_c0(new memTreeComponent<datatuple>::rbtree_t);
@@ -183,6 +189,7 @@ void logtable<TUPLE>::flushTable()
     
     pthread_mutex_unlock(mergedata->rbtree_mut);
     unlock(header_lock);
+    c0_stats->starting_merge();
     if(first)
     {
         printf("Blocked writes for %f sec\n", stop-start);
@@ -419,6 +426,7 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
     //lock the red-black tree
     readlock(header_lock,0);
     pthread_mutex_lock(mergedata->rbtree_mut);
+    c0_stats->read_tuple_from_small_component(tuple);
     //find the previous tuple with same key in the memtree if exists
     memTreeComponent<datatuple>::rbtree_t::iterator rbitr = tree_c0->find(tuple);
     if(rbitr != tree_c0->end())
@@ -426,6 +434,7 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
         datatuple *pre_t = *rbitr;
         //do the merging
         datatuple *new_t = tmerger->merge(pre_t, tuple);
+        c0_stats->merged_tuples(new_t, tuple, pre_t);
         tree_c0->erase(pre_t); //remove the previous tuple        
 
         tree_c0->insert(new_t); //insert the new tuple
@@ -438,12 +447,12 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
     else //no tuple with same key exists in mem-tree
     {
 
-    	datatuple *t = tuple->create_copy();
+        datatuple *t = tuple->create_copy();
 
         //insert tuple into the rbtree        
         tree_c0->insert(t);
         tsize++;
-        tree_bytes += t->byte_length() + RB_TREE_OVERHEAD;
+        tree_bytes += t->byte_length();// + RB_TREE_OVERHEAD;
 
     }
 

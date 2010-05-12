@@ -46,7 +46,7 @@ struct logtable_mergedata
     pthread_mutex_t * rbtree_mut;
 
     bool *input_needed; // memmerge-input needed
-    
+
     pthread_cond_t * input_ready_cond;
     pthread_cond_t * input_needed_cond;
     int64_t * input_size;
