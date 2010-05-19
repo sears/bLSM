@@ -4,6 +4,7 @@
 #include <stasis/transactional.h>
 #include <stasis/bufferManager.h>
 #include <stasis/bufferManager/bufferHash.h>
+#include "mergeStats.h"
 
 #undef try
 #undef end
@@ -28,12 +29,16 @@ logtable<TUPLE>::logtable(pageid_t internal_region_size, pageid_t datapage_regio
     tree_c1_mergeable = NULL;
     tree_c2 = NULL;
     this->still_running_ = true;
-    this->merge_mgr = new mergeManager();
+    this->merge_mgr = new mergeManager(this);
     this->mergedata = 0;
     //tmerger = new tuplemerger(&append_merger);
     tmerger = new tuplemerger(&replace_merger);
 
-    header_lock = initlock();
+    pthread_mutex_init(&header_mut, 0);
+    pthread_cond_init(&c0_needed, 0);
+    pthread_cond_init(&c0_ready, 0);
+    pthread_cond_init(&c1_needed, 0);
+    pthread_cond_init(&c1_ready, 0);
 
     tsize = 0;
     tree_bytes = 0;
@@ -62,7 +67,11 @@ logtable<TUPLE>::~logtable()
       memTreeComponent<datatuple>::tearDownTree(tree_c0);
     }
 
-    deletelock(header_lock);
+    pthread_mutex_destroy(&header_mut);
+    pthread_cond_destroy(&c0_needed);
+    pthread_cond_destroy(&c0_ready);
+    pthread_cond_destroy(&c1_needed);
+    pthread_cond_destroy(&c1_ready);
     delete tmerger;
 }
 
@@ -83,7 +92,7 @@ recordid logtable<TUPLE>::allocTable(int xid)
 {
 
     table_rec = Talloc(xid, sizeof(tbl_header));
-    mergeManager::mergeStats * stats = 0;
+    mergeStats * stats = 0;
     //create the big tree
     tree_c2 = new diskTreeComponent(xid, internal_region_size, datapage_region_size, datapage_size, stats);
 
@@ -104,7 +113,7 @@ void logtable<TUPLE>::openTable(int xid, recordid rid) {
 template<class TUPLE>
 void logtable<TUPLE>::update_persistent_header(int xid) {
 
-	tbl_header.c2_root = tree_c2->get_root_rid();
+    tbl_header.c2_root = tree_c2->get_root_rid();
     tbl_header.c2_dp_state = tree_c2->get_datapage_allocator_rid();
     tbl_header.c2_state = tree_c2->get_internal_node_allocator_rid();
     tbl_header.c1_root = tree_c1->get_root_rid();
@@ -117,10 +126,6 @@ void logtable<TUPLE>::update_persistent_header(int xid) {
 template<class TUPLE>
 void logtable<TUPLE>::setMergeData(logtable_mergedata * mdata){
   this->mergedata = mdata;
-  mdata->internal_region_size = internal_region_size;
-  mdata->datapage_region_size = datapage_region_size;
-  mdata->datapage_size = datapage_size;
-
   bump_epoch();
 }
 
@@ -140,38 +145,22 @@ void logtable<TUPLE>::flushTable()
     c0_stats->finished_merge();
     c0_stats->new_merge();
 
-    writelock(header_lock,0);
-    pthread_mutex_lock(mergedata->rbtree_mut);
-    
-    int expmcount = merge_count;
+    pthread_mutex_lock(&header_mut);
 
+    int expmcount = merge_count;
 
     //this is for waiting the previous merger of the mem-tree
     //hopefullly this wont happen
 
-    while(get_tree_c0_mergeable()) {
-        unlock(header_lock);
-        if(tree_bytes >= max_c0_size)
-            pthread_cond_wait(mergedata->input_needed_cond, mergedata->rbtree_mut);
-        else
-        {
-            pthread_mutex_unlock(mergedata->rbtree_mut);
-            return;
-        }
+    bool blocked = false;
 
-        
-        pthread_mutex_unlock(mergedata->rbtree_mut);
-        
-        writelock(header_lock,0);
-        pthread_mutex_lock(mergedata->rbtree_mut);
-        
-        if(expmcount != merge_count)
-        {
-            unlock(header_lock);
-            pthread_mutex_unlock(mergedata->rbtree_mut);
-            return;                    
-        }
-        
+    while(get_tree_c0_mergeable()) {
+      pthread_cond_wait(&c0_needed, &header_mut);
+      blocked = true;
+      if(expmcount != merge_count) {
+          pthread_mutex_unlock(&header_mut);
+          return;
+      }
     }
 
     gettimeofday(&stop_tv,0);
@@ -179,28 +168,30 @@ void logtable<TUPLE>::flushTable()
     
     set_tree_c0_mergeable(get_tree_c0());
 
-    pthread_cond_broadcast(mergedata->input_ready_cond);
+    pthread_cond_signal(&c0_ready);
 
     merge_count ++;
     set_tree_c0(new memTreeComponent<datatuple>::rbtree_t);
+    c0_stats->starting_merge();
 
     tsize = 0;
     tree_bytes = 0;
     
-    pthread_mutex_unlock(mergedata->rbtree_mut);
-    unlock(header_lock);
-    c0_stats->starting_merge();
-    if(first)
-    {
-        printf("Blocked writes for %f sec\n", stop-start);
-        first = 0;
+    pthread_mutex_unlock(&header_mut);
+
+    if(blocked) {
+      if(first)
+      {
+          printf("\nBlocked writes for %f sec\n", stop-start);
+          first = 0;
+      }
+      else
+      {
+          printf("\nBlocked writes for %f sec (serviced writes for %f sec)\n",
+                 stop-start, start-last_start);
+      }
+      last_start = stop;
     }
-    else
-    {
-        printf("Blocked writes for %f sec (serviced writes for %f sec)\n",
-               stop-start, start-last_start);
-    }
-    last_start = stop;
 
 }
 
@@ -208,10 +199,9 @@ template<class TUPLE>
 datatuple * logtable<TUPLE>::findTuple(int xid, const datatuple::key_t key, size_t keySize)
 {
     //prepare a search tuple
-	datatuple *search_tuple = datatuple::create(key, keySize);
+    datatuple *search_tuple = datatuple::create(key, keySize);
 
-    readlock(header_lock,0);
-    pthread_mutex_lock(mergedata->rbtree_mut);
+    pthread_mutex_lock(&header_mut);
 
     datatuple *ret_tuple=0; 
 
@@ -243,14 +233,13 @@ datatuple * logtable<TUPLE>::findTuple(int xid, const datatuple::key_t key, size
             }
             else //key first found in old mem tree
             {
-            	ret_tuple = tuple->create_copy();
+                ret_tuple = tuple->create_copy();
             }
             //we cannot free tuple from old-tree 'cos it is not a copy
         }            
     }
 
-    //release the memtree lock
-    pthread_mutex_unlock(mergedata->rbtree_mut);
+    //TODO: Arange to only hold read latches while hitting disk.
     
     //step 3: check c1    
     if(!done)
@@ -340,8 +329,7 @@ datatuple * logtable<TUPLE>::findTuple(int xid, const datatuple::key_t key, size
         }        
     }     
 
-    //pthread_mutex_unlock(mergedata->rbtree_mut);
-    unlock(header_lock);
+    pthread_mutex_unlock(&header_mut); // XXX release this each time we could block on disk...
     datatuple::freetuple(search_tuple);
     return ret_tuple;
 
@@ -357,7 +345,7 @@ datatuple * logtable<TUPLE>::findTuple_first(int xid, datatuple::key_t key, size
     //prepare a search tuple
     datatuple * search_tuple = datatuple::create(key, keySize);
         
-    pthread_mutex_lock(mergedata->rbtree_mut);
+    pthread_mutex_lock(&header_mut);
 
     datatuple *ret_tuple=0; 
     //step 1: look in tree_c0
@@ -413,7 +401,7 @@ datatuple * logtable<TUPLE>::findTuple_first(int xid, datatuple::key_t key, size
         }
     }
 
-    pthread_mutex_unlock(mergedata->rbtree_mut);
+    pthread_mutex_unlock(&header_mut);
     datatuple::freetuple(search_tuple);
     
     return ret_tuple;
@@ -424,9 +412,8 @@ template<class TUPLE>
 void logtable<TUPLE>::insertTuple(datatuple *tuple)
 {
     //lock the red-black tree
-    readlock(header_lock,0);
-    pthread_mutex_lock(mergedata->rbtree_mut);
     c0_stats->read_tuple_from_small_component(tuple);
+    pthread_mutex_lock(&header_mut);
     //find the previous tuple with same key in the memtree if exists
     memTreeComponent<datatuple>::rbtree_t::iterator rbitr = tree_c0->find(tuple);
     if(rbitr != tree_c0->end())
@@ -459,19 +446,13 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
     //flushing logic
     if(tree_bytes >= max_c0_size )
     {
-        DEBUG("tree size before merge %d tuples %lld bytes.\n", tsize, tree_bytes);
-        pthread_mutex_unlock(mergedata->rbtree_mut);
-        unlock(header_lock);
-        flushTable();
-
-        readlock(header_lock,0);
-        pthread_mutex_lock(mergedata->rbtree_mut);
+      DEBUG("tree size before merge %d tuples %lld bytes.\n", tsize, tree_bytes);
+      pthread_mutex_unlock(&header_mut);
+      flushTable();
+    } else {
+      //unlock
+      pthread_mutex_unlock(&header_mut);
     }
-    
-    //unlock
-    pthread_mutex_unlock(mergedata->rbtree_mut);
-    unlock(header_lock);
-
 
     DEBUG("tree size %d tuples %lld bytes.\n", tsize, tree_bytes);
 }
@@ -491,7 +472,7 @@ void logtable<TUPLE>::forgetIterator(iterator * it) {
 }
 template<class TUPLE>
 void logtable<TUPLE>::bump_epoch() {
-  assert(!trywritelock(header_lock,0));
+//  assert(!trywritelock(header_lock,0));
   epoch++;
   for(unsigned int i = 0; i < its.size(); i++) {
     its[i]->invalidate();

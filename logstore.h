@@ -12,9 +12,10 @@
 
 #include "tuplemerger.h"
 
+#include "mergeManager.h"
 #include "mergeStats.h"
 
-struct logtable_mergedata;
+class logtable_mergedata;
 
 template<class TUPLE>
 class logtable {
@@ -64,7 +65,11 @@ public:
     inline void set_tree_c1(diskTreeComponent *t){tree_c1=t;                      bump_epoch(); }
     inline void set_tree_c1_mergeable(diskTreeComponent *t){tree_c1_mergeable=t;  bump_epoch(); }
     inline void set_tree_c2(diskTreeComponent *t){tree_c2=t;                      bump_epoch(); }
-    
+    pthread_cond_t c0_needed;
+    pthread_cond_t c0_ready;
+    pthread_cond_t c1_needed;
+    pthread_cond_t c1_ready;
+
     inline memTreeComponent<datatuple>::rbtree_ptr_t get_tree_c0(){return tree_c0;}
     inline memTreeComponent<datatuple>::rbtree_ptr_t get_tree_c0_mergeable(){return tree_c0_mergeable;}
     void set_tree_c0(memTreeComponent<datatuple>::rbtree_ptr_t newtree){tree_c0 = newtree;                     bump_epoch(); }
@@ -93,14 +98,15 @@ public:
     };
 
     logtable_mergedata * mergedata;
-    rwl * header_lock;
+    pthread_mutex_t header_mut;
     int64_t max_c0_size;
     mergeManager * merge_mgr;
 
     inline bool is_still_running() { return still_running_; }
     inline void stop() {
-    	still_running_ = false;
-		// XXX must need to do other things!
+      still_running_ = false;
+      flushTable();
+      // XXX must need to do other things!
     }
 
 private:    
@@ -116,16 +122,17 @@ private:
     int tsize; //number of tuples
     int64_t tree_bytes; //number of bytes
 
+public:
     //DATA PAGE SETTINGS
     pageid_t internal_region_size; // in number of pages
     pageid_t datapage_region_size; // "
     pageid_t datapage_size;        // "
-
+private:
     tuplemerger *tmerger;
 
     std::vector<iterator *> its;
 
-    mergeManager::mergeStats * c0_stats;
+    mergeStats * c0_stats;
     bool still_running_;
 public:
 
@@ -241,10 +248,10 @@ public:
         last_returned(NULL),
         key(NULL),
         valid(false) {
-        writelock(ltable->header_lock, 0);
+        pthread_mutex_lock(&ltable->header_mut);
         ltable->registerIterator(this);
         validate();
-        unlock(ltable->header_lock);
+        pthread_mutex_unlock(&ltable->header_mut);
       }
 
       explicit iterator(logtable* ltable,TUPLE *key)
@@ -255,18 +262,18 @@ public:
         key(key),
         valid(false)
       {
-        writelock(ltable->header_lock, 0);
+        pthread_mutex_lock(&ltable->header_mut);
         ltable->registerIterator(this);
         validate();
-        unlock(ltable->header_lock);
+        pthread_mutex_unlock(&ltable->header_mut);
       }
 
       ~iterator() {
-        writelock(ltable->header_lock,0);
+        pthread_mutex_lock(&ltable->header_mut);
         ltable->forgetIterator(this);
         invalidate();
         if(last_returned) TUPLE::freetuple(last_returned);
-        unlock(ltable->header_lock);
+        pthread_mutex_unlock(&ltable->header_mut);
       }
   private:
       TUPLE * getnextHelper() {
@@ -280,24 +287,24 @@ public:
       }
   public:
       TUPLE * getnextIncludingTombstones() {
-          readlock(ltable->header_lock, 0);
+          pthread_mutex_lock(&ltable->header_mut);
           revalidate();
           TUPLE * ret = getnextHelper();
-          unlock(ltable->header_lock);
+          pthread_mutex_unlock(&ltable->header_mut);
           return ret ? ret->create_copy() : NULL;
       }
 
       TUPLE * getnext() {
-          readlock(ltable->header_lock, 0);
+          pthread_mutex_lock(&ltable->header_mut);
           revalidate();
           TUPLE * ret;
           while((ret = getnextHelper()) && ret->isDelete()) { }  // getNextHelper handles its own memory.
-          unlock(ltable->header_lock);
+          pthread_mutex_unlock(&ltable->header_mut);
           return ret ? ret->create_copy() : NULL; // XXX hate making copy!  Caller should not manage our memory.
       }
 
       void invalidate() {
-        assert(!trywritelock(ltable->header_lock,0));
+//        assert(!trywritelock(ltable->header_lock,0));
         if(valid) {
           delete merge_it_;
           merge_it_ = NULL;
@@ -354,7 +361,7 @@ public:
           t = NULL;
         }
 
-        c0_it              = new typename memTreeComponent<TUPLE>::revalidatingIterator(ltable->get_tree_c0(), ltable->getMergeData()->rbtree_mut,  t);
+        c0_it              = new typename memTreeComponent<TUPLE>::revalidatingIterator(ltable->get_tree_c0(), NULL/*need something that is not &ltable->header_mut*/,  t);
         c0_mergeable_it[0] = new typename memTreeComponent<TUPLE>::iterator            (ltable->get_tree_c0_mergeable(),                            t);
         disk_it[0]         = ltable->get_tree_c1()->open_iterator(t);
         if(ltable->get_tree_c1_mergeable()) {

@@ -85,16 +85,16 @@ public:
 
   public:
     revalidatingIterator( rbtree_t *s, pthread_mutex_t * rb_mut ) : s_(s), mut_(rb_mut) {
-      pthread_mutex_lock(mut_);
+      if(mut_) pthread_mutex_lock(mut_);
       if(s_->begin() == s_->end()) {
         next_ret_ = NULL;
       } else {
         next_ret_ = (*s_->begin())->create_copy();  // the create_copy() calls have to happen before we release mut_...
       }
-      pthread_mutex_unlock(mut_);
+      if(mut_) pthread_mutex_unlock(mut_);
     }
     revalidatingIterator( rbtree_t *s, pthread_mutex_t * rb_mut, TUPLE *&key ) : s_(s), mut_(rb_mut) {
-      pthread_mutex_lock(mut_);
+      if(mut_) pthread_mutex_lock(mut_);
       if(key) {
         if(s_->find(key) != s_->end()) {
           next_ret_ = (*(s_->find(key)))->create_copy();
@@ -111,7 +111,7 @@ public:
         }
       }
       //      DEBUG("changing mem next ret = %s key = %s\n", next_ret_ ?  (const char*)next_ret_->key() : "NONE", key ? (const char*)key->key() : "NULL");
-      pthread_mutex_unlock(mut_);
+      if(mut_) pthread_mutex_unlock(mut_);
     }
 
     ~revalidatingIterator() {
@@ -119,7 +119,7 @@ public:
     }
 
     TUPLE* getnext() {
-      pthread_mutex_lock(mut_);
+      if(mut_) pthread_mutex_lock(mut_);
       TUPLE * ret = next_ret_;
       if(next_ret_) {
         if(s_->upper_bound(next_ret_) == s_->end()) {
@@ -128,7 +128,7 @@ public:
           next_ret_ = (*s_->upper_bound(next_ret_))->create_copy();
         }
       }
-      pthread_mutex_unlock(mut_);
+      if(mut_) pthread_mutex_unlock(mut_);
       return ret;
     }
 

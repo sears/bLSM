@@ -72,8 +72,6 @@ int main(int argc, char *argv[])
 
     Tcommit(xid);
 
-    writelock(ltable.header_lock,0);
-
     int lindex = mscheduler->addlogtable(&ltable);
     ltable.setMergeData(mscheduler->getMergeData(lindex));
 
@@ -92,8 +90,6 @@ int main(int argc, char *argv[])
     }
 
     mscheduler->startlogtable(lindex, c0_size);
-
-    unlock(ltable.header_lock);
 
     lserver = new logserver(100, 32432);
 

@@ -14,6 +14,7 @@
 #include "diskTreeComponent.h"
 #include "regionAllocator.h"
 
+#include "mergeStats.h"
 #include <stasis/transactional.h>
 #include <stasis/page.h>
 #include <stasis/page/slotted.h>
@@ -54,7 +55,7 @@ void diskTreeComponent::list_regions(int xid, pageid_t *internal_node_region_len
 
 void diskTreeComponent::writes_done() {
   if(dp) {
-    stats->wrote_datapage(dp);
+    ((mergeStats*)stats)->wrote_datapage(dp);
     dp->writes_done();
     delete dp;
     dp = 0;
@@ -69,7 +70,7 @@ int diskTreeComponent::insertTuple(int xid, datatuple *t)
     //    stats->num_datapages_out++;
   } else if(!dp->append(t)) {
     //    stats->bytes_out += (PAGE_SIZE * dp->get_page_count());
-    stats->wrote_datapage(dp);
+    ((mergeStats*)stats)->wrote_datapage(dp);
     dp->writes_done();
     delete dp;
     dp = insertDataPage(xid, t);
@@ -91,7 +92,7 @@ DataPage<datatuple>* diskTreeComponent::insertDataPage(int xid, datatuple *tuple
         if(!dp->append(tuple))
         {
             // the last datapage must have not wanted the tuple, and then this datapage figured out the region is full.
-            stats->wrote_datapage(dp);
+          ((mergeStats*)stats)->wrote_datapage(dp);
             dp->writes_done();
             delete dp;
             dp = 0;

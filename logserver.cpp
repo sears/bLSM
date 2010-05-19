@@ -514,7 +514,7 @@ int op_stat_space_usage(pthread_data* data) {
 
 	int xid = Tbegin();
 
-	readlock(data->ltable->header_lock, 0);
+	pthread_mutex_lock(&data->ltable->header_mut);
 
 	/*	pageid_t datapage_c1_region_length, datapage_c1_mergeable_region_length = 0, datapage_c2_region_length;
 	pageid_t datapage_c1_region_count,  datapage_c1_mergeable_region_count = 0, datapage_c2_region_count;
@@ -587,7 +587,7 @@ int op_stat_space_usage(pthread_data* data) {
 		;
 	} while(TregionNextBoundaryTag(xid, &pid, &tag, 0/*all allocation managers*/));
 
-	unlock(data->ltable->header_lock);
+	pthread_mutex_unlock(&data->ltable->header_mut);
 
 	Tcommit(xid);
 
@@ -672,7 +672,7 @@ int op_dbg_blockmap(pthread_data* data) {
 	// produce a list of stasis regions
 	int xid = Tbegin();
 
-	readlock(data->ltable->header_lock, 0);
+	pthread_mutex_lock(&data->ltable->header_mut);
 
 	// produce a list of regions used by current tree components
 	/*	pageid_t datapage_c1_region_length, datapage_c1_mergeable_region_length = 0, datapage_c2_region_length;
@@ -714,7 +714,7 @@ int op_dbg_blockmap(pthread_data* data) {
 						  &internal_c2_region_length, &internal_c2_region_count, &internal_c2_regions,
 						  &datapage_c2_region_length, &datapage_c2_region_count, &datapage_c2_regions);
 
-	unlock(data->ltable->header_lock);
+	pthread_mutex_unlock(&data->ltable->header_mut);
 
 	Tcommit(xid);
 

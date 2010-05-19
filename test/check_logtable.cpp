@@ -34,8 +34,8 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     xid = Tbegin();
 
-    mergeManager merge_mgr;
-    mergeManager::mergeStats * stats = merge_mgr.newMergeStats(1);
+    mergeManager merge_mgr(0);
+    mergeStats * stats = merge_mgr.newMergeStats(1);
 
     diskTreeComponent *ltable_c1 = new diskTreeComponent(xid, 1000, 10000, 5, stats);
 

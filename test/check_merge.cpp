@@ -53,12 +53,11 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     Tcommit(xid);
 
-    writelock(ltable.header_lock,0);
     int lindex = mscheduler.addlogtable(&ltable);
     ltable.setMergeData(mscheduler.getMergeData(lindex));
 
     mscheduler.startlogtable(lindex, 10 * 1024 * 1024);
-    unlock(ltable.header_lock);
+
     printf("Stage 1: Writing %d keys\n", NUM_ENTRIES);
     
     struct timeval start_tv, stop_tv, ti_st, ti_end;

@@ -11,14 +11,13 @@
 #include "datapage.h"
 #include "datatuple.h"
 #include "mergeStats.h"
-
 class diskTreeComponent {
  public:
   class internalNodes;
   class iterator;
 
   diskTreeComponent(int xid, pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size,
-                    mergeManager::mergeStats* stats) :
+                    mergeStats* stats) :
     ltree(new diskTreeComponent::internalNodes(xid, internal_region_size, datapage_region_size, datapage_size)),
     dp(0),
     datapage_size(datapage_size),
@@ -26,7 +25,7 @@ class diskTreeComponent {
 
 
   diskTreeComponent(int xid, recordid root, recordid internal_node_state, recordid datapage_state,
-                    mergeManager::mergeStats* stats) :
+                    mergeStats* stats) :
     ltree(new diskTreeComponent::internalNodes(xid, root, internal_node_state, datapage_state)),
     dp(0),
     datapage_size(-1),
@@ -74,7 +73,7 @@ class diskTreeComponent {
   internalNodes * ltree;
   DataPage<datatuple>* dp;
   pageid_t datapage_size;
-  mergeManager::mergeStats *stats;
+  /*mergeManager::mergeStats*/ void *stats; // XXX hack to work around circular includes.
 
  public:
   class internalNodes{
