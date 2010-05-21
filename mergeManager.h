@@ -13,6 +13,10 @@
 #undef end
 #include <sys/time.h>
 #include <stdio.h>
+#include <datatuple.h>
+
+template<class TUPLE>
+class logtable;
 
 class mergeStats;
 
@@ -32,7 +36,7 @@ private:
     return (1000000ULL * (uint64_t)tv.tv_sec) + ((uint64_t)tv.tv_usec);
   }
 public:
-  mergeManager(void *ltable);
+  mergeManager(logtable<datatuple> *ltable);
 
   ~mergeManager();
 
@@ -44,19 +48,9 @@ public:
 
 private:
   pthread_mutex_t mut;
-  void*    ltable;
+  logtable<datatuple>*    ltable;
   pageid_t c0_queueSize;
   pageid_t c1_queueSize;  // How many bytes must c0-c1 consume before trying to swap over to an empty c1? ( = current target c1 size)
-  pageid_t c2_queueSize;  // How many bytes must c1-c2 consume before there is room for a new empty c1?  ( = previous c1 size)
-  pageid_t c0_totalConsumed;
-  pageid_t c0_totalCollapsed;
-  pageid_t c0_totalWorktime;
-  pageid_t c1_totalConsumed;  // What is long-term effective throughput of merger #1? (Excluding blocked times)
-  pageid_t c1_totalCollapsed;
-  pageid_t c1_totalWorktime;
-  pageid_t c2_totalConsumed;  // What is long term effective throughput of merger #2? (Excluding blocked times)
-  pageid_t c2_totalCollapsed;
-  pageid_t c2_totalWorktime;
   double throttle_seconds;
   double elapsed_seconds;
   double last_throttle_seconds;
@@ -64,7 +58,6 @@ private:
   mergeStats * c0;
   mergeStats * c1;
   mergeStats * c2;
-  struct timespec last_throttle;
   pthread_mutex_t throttle_mut;
   pthread_mutex_t dummy_throttle_mut;
   pthread_cond_t dummy_throttle_cond;

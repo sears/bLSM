@@ -55,8 +55,6 @@ void merge_scheduler::shutdown()
         pthread_join(mdata->memmerge_thread,0);
         pthread_join(mdata->diskmerge_thread,0);
     }
-    
-
 }
 
 void merge_scheduler::startlogtable(int index, int64_t MAX_C0_SIZE)
@@ -64,8 +62,6 @@ void merge_scheduler::startlogtable(int index, int64_t MAX_C0_SIZE)
 
     logtable<datatuple> * ltable = mergedata[index].first;
     struct logtable_mergedata *mdata = mergedata[index].second;
-    
-    static double R = MIN_R;
 
     //initialize rb-tree
     ltable->set_tree_c0(new memTreeComponent<datatuple>::rbtree_t);
@@ -83,7 +79,6 @@ void merge_scheduler::startlogtable(int index, int64_t MAX_C0_SIZE)
     struct merger_args diskmerge_args= {
         ltable, 
         0, //max_tree_size No max size for biggest component
-        &R, //r_i
                 };
 
     *mdata->diskmerge_args = diskmerge_args;
@@ -91,8 +86,7 @@ void merge_scheduler::startlogtable(int index, int64_t MAX_C0_SIZE)
     struct merger_args memmerge_args =
         {
             ltable,
-            (int64_t)(R * R * MAX_C0_SIZE),
-            &R,
+            (int64_t)(MAX_C0_SIZE), // XXX why did this multiply by R^2 before??
         };
     
     *mdata->memmerge_args = memmerge_args;
@@ -230,6 +224,8 @@ void* memMergeThread(void*arg)
         memTreeComponent<datatuple>::tearDownTree(ltable->get_tree_c0_mergeable());
         // 11: c0_mergeable = NULL
         ltable->set_tree_c0_mergeable(NULL);
+        double new_c1_size = stats->output_size();
+        stats->handed_off_tree();
         pthread_cond_signal(&ltable->c0_needed);
 
         ltable->update_persistent_header(xid);
@@ -237,11 +233,10 @@ void* memMergeThread(void*arg)
 
         //TODO: this is simplistic for now
         //6: if c1' is too big, signal the other merger
-        double target_R = *(a->r_i);
-        double new_c1_size = stats->output_size();
+        double target_R = *ltable->R();
         assert(target_R >= MIN_R);
-        bool signal_c2 = (new_c1_size / ltable->max_c0_size > target_R) ||
-                (a->max_size && new_c1_size > a->max_size );
+        bool signal_c2 = (new_c1_size / ltable->max_c0_size > target_R);
+        DEBUG("\nc1 size %f R %f\n", new_c1_size, target_R);
         if( signal_c2  )
         {
             DEBUG("mmt:\tsignaling C2 for merge\n");
@@ -346,7 +341,7 @@ void *diskMergeThread(void*arg)
         //do the merge
         DEBUG("dmt:\tMerging:\n");
 
-        merge_iterators<typeof(*itrA),typeof(*itrB)>(xid, NULL, itrA, itrB, ltable, c2_prime, stats, true);
+        merge_iterators<typeof(*itrA),typeof(*itrB)>(xid, c2_prime, itrA, itrB, ltable, c2_prime, stats, true);
 
         delete itrA;
         delete itrB;
@@ -372,11 +367,14 @@ void *diskMergeThread(void*arg)
 
         merge_count++;        
         //update the current optimal R value
-        *(a->r_i) = std::max(MIN_R, sqrt( (stats->output_size() * 1.0) / (ltable->max_c0_size) ) );
+        *(ltable->R()) = std::max(MIN_R, sqrt( ((double)stats->output_size()) / (ltable->max_c0_size) ) );
         
+        DEBUG("\nR = %f\n", *(ltable->R()));
+
         DEBUG("dmt:\tmerge_count %lld\t#written bytes: %lld\n optimal r %.2f", stats.merge_count, stats.output_size(), *(a->r_i));
         // 10: C2 is never to big
         ltable->set_tree_c2(c2_prime);
+        stats->handed_off_tree();
 
         DEBUG("dmt:\tUpdated C2's position on disk to %lld\n",(long long)-1);
         // 13
@@ -424,7 +422,9 @@ void merge_iterators(int xid,
             datatuple::freetuple(t1);
             //advance itrA
             t1 = itrA->next_callerFrees();
-            stats->read_tuple_from_large_component(t1);
+            if(t1) {
+              stats->read_tuple_from_large_component(t1);
+            }
         }
 
         if(t1 != 0 && datatuple::compare(t1->key(), t1->keylen(), t2->key(), t2->keylen()) == 0)

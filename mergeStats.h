@@ -24,13 +24,13 @@ class mergeStats {
       merge_mgr(merge_mgr),
       merge_level(merge_level),
       merge_count(0),
+      mergeable_size(0),
+      bytes_out_with_overhead(0),
       bytes_out(0),
       num_tuples_out(0),
       num_datapages_out(0),
       bytes_in_small(0),
       bytes_in_small_delta(0),
-      bytes_collapsed(0),
-      bytes_collapsed_delta(0),
       num_tuples_in_small(0),
       bytes_in_large(0),
       num_tuples_in_large(0),
@@ -41,15 +41,14 @@ class mergeStats {
     void new_merge() {
       merge_mgr->new_merge(this);
       merge_count++;
-      bytes_out = 0;
+      //      bytes_out_with_overhead = 0;
+      //      bytes_out = 0;
       num_tuples_out = 0;
       num_datapages_out = 0;
       bytes_in_small = 0;
       bytes_in_small_delta = 0;
-      bytes_collapsed = 0;
-      bytes_collapsed_delta = 0;
       num_tuples_in_small = 0;
-      bytes_in_large = 0;
+      //      bytes_in_large = 0;
       num_tuples_in_large = 0;
       gettimeofday(&sleep,0);
     }
@@ -57,6 +56,11 @@ class mergeStats {
       active = true;
       gettimeofday(&start, 0);
       gettimeofday(&last, 0);
+    }
+    void handed_off_tree() {
+      mergeable_size = bytes_out - bytes_in_large;
+      bytes_out = 0;
+      bytes_in_large = 0;
     }
     void finished_merge() {
       active = false;
@@ -78,19 +82,15 @@ class mergeStats {
       }
     }
     void merged_tuples(datatuple * merged, datatuple * small, datatuple * large) {
-      pageid_t d = (merged->byte_length() - (small->byte_length() + large->byte_length()));
-      bytes_collapsed += d;
-      bytes_collapsed_delta += d;
     }
     void wrote_tuple(datatuple * tup) {
       num_tuples_out++;
-      bytes_out_tuples += tup->byte_length();
+      bytes_out += tup->byte_length();
     }
     void wrote_datapage(DataPage<datatuple> *dp) {
       num_datapages_out++;
-      bytes_out += (PAGE_SIZE * dp->get_page_count());
+      bytes_out_with_overhead += (PAGE_SIZE * dp->get_page_count());
     }
-    // TODO: merger.cpp probably shouldn't compute R from this.
     pageid_t output_size() {
       return bytes_out;
     }
@@ -107,15 +107,17 @@ class mergeStats {
       return ((double)tv.tv_sec) + ((double)tv.tv_usec) / 1000000.0;
     }
     friend class mergeManager;
+protected:
+    struct timespec last_tick;
 
-    pageid_t bytes_out;            // How many bytes did we write (including internal tree nodes)?
-    pageid_t bytes_out_tuples;     // How many bytes worth of tuples did we write?
+    pageid_t mergeable_size;
+
+    pageid_t bytes_out_with_overhead;// How many bytes did we write (including internal tree nodes)?
+    pageid_t bytes_out;     // How many bytes worth of tuples did we write?
     pageid_t num_tuples_out;       // How many tuples did we write?
     pageid_t num_datapages_out;    // How many datapages?
     pageid_t bytes_in_small;       // How many bytes from the small input tree (for C0, we ignore tree overheads)?
     pageid_t bytes_in_small_delta; // How many bytes from the small input tree during this tick (for C0, we ignore tree overheads)?
-    pageid_t bytes_collapsed;      // How many bytes disappeared due to tuple merges?
-    pageid_t bytes_collapsed_delta;
     pageid_t num_tuples_in_small;  // Tuples from the small input?
     pageid_t bytes_in_large;       // Bytes from the large input?
     pageid_t num_tuples_in_large;  // Tuples from large input?
@@ -126,7 +128,7 @@ class mergeStats {
       double sleep_time = float_tv(start) - float_tv(sleep);
       double work_time  = float_tv(done)  - float_tv(start);
       double total_time = sleep_time + work_time;
-      double mb_out = ((double)bytes_out)     /(1024.0*1024.0);
+      double mb_out = ((double)bytes_out_with_overhead)     /(1024.0*1024.0);
       double mb_ins = ((double)bytes_in_small)     /(1024.0*1024.0);
       double mb_inl = ((double)bytes_in_large)     /(1024.0*1024.0);
       double kt_out = ((double)num_tuples_out)     /(1024.0);

@@ -37,107 +37,109 @@ void mergeManager::new_merge(mergeStats * s) {
     if(s->merge_level == 0) {
       // queueSize was set during startup
     } else if(s->merge_level == 1) {
-      c1_queueSize = c1_queueSize > s->bytes_out ? c1_queueSize : s->bytes_out;
+      c1_queueSize = (pageid_t)(*ltable->R() * (double)c0_queueSize); //c1_queueSize > s->bytes_out ? c1_queueSize : s->bytes_out;
     } else if(s->merge_level == 2) {
-      c2_queueSize = s->bytes_in_small;
     } else { abort(); }
-    pretty_print(stdout);
   }
   pthread_mutex_unlock(&mut);
 }
 void mergeManager::set_c0_size(int64_t size) {
   c0_queueSize = size;
 }
-void mergeManager::tick(mergeStats * s, bool done) {
-  if(s->merge_level == 0) {
-    pthread_mutex_lock(&throttle_mut);
-  }
-    // throttle?
-  if(s->bytes_in_small_delta > c0_queueSize / 10000) {
-    if(s->merge_level == 0) {
-      struct timeval now;
-      gettimeofday(&now, 0);
-      double elapsed_delta = tv_to_double(&now) - ts_to_double(&last_throttle);
-      pageid_t bytes_written_delta = (s->bytes_in_small_delta - s->bytes_collapsed_delta);
-      double min_throughput = 0.0; // don't throttle below 100 kilobytes / sec
-      double max_throughput = 10.0 * 1024.0 * 1024.0;
-      double c0_badness = (double)((c0_totalConsumed + bytes_written_delta - c1_totalConsumed)- c0_queueSize) / ((double)c0_queueSize);
-      double raw_throughput = ((double)bytes_written_delta)/elapsed_delta;
-      if(raw_throughput > max_throughput || c0_badness > 0) {
-        //double target_throughput = min_throughput / (c0_badness); // * c0_badness * c0_badness);
-        double target_throughput;
-        if(c0_badness > 0) {
-          target_throughput = (max_throughput - min_throughput) * (1.0-sqrt(sqrt(c0_badness))) + min_throughput;
-        } else {
-          target_throughput = max_throughput;
-        }
-        double target_elapsed = ((double)bytes_written_delta)/target_throughput;
-        //printf("Worked %6.1f (target %6.1f)\n", elapsed_delta, target_elapsed);
-        if(target_elapsed > elapsed_delta) {
-          struct timespec sleep_until;
-          double_to_ts(&sleep_until, ts_to_double(&last_throttle) + target_elapsed);
-          //fprintf(stdout, "Throttling for %6.1f seconds\n", target_elapsed - (double)elapsed_delta);
-          last_throttle_seconds = target_elapsed - (double)elapsed_delta;
-          last_elapsed_seconds = target_elapsed;
-          throttle_seconds += last_throttle_seconds;
-          elapsed_seconds += last_elapsed_seconds;
-          pthread_mutex_lock(&dummy_throttle_mut);
-          pthread_cond_timedwait(&dummy_throttle_cond, &dummy_throttle_mut, &sleep_until);
-          pthread_mutex_unlock(&dummy_throttle_mut);
-          memcpy(&last_throttle, &sleep_until, sizeof(sleep_until));
-        } else {
-          double_to_ts(&last_throttle, tv_to_double(&now));
-        }
-      } else {
-        double_to_ts(&last_throttle, tv_to_double(&now));
-      }
-    }
-    struct timeval now;
-    gettimeofday(&now,0);
-    unsigned long long elapsed = long_tv(now) - long_tv(s->last);
 
+/**
+ * This function is invoked periodically by the merge threads.  It updates mergeManager's statistics, and applies
+ * backpressure as necessary.
+ *
+ * Here is the backpressure algorithm.
+ *
+ * We want to maintain these two invariants:
+ *   - for each byte consumed by the app->c0 threads, a byte is consumed by the c0->c1 merge thread.
+ *   - for each byte consumed by the c0->c1 thread, the c1->c2 thread consumes a byte
+ *
+ * More concretely (and taking into account varying values of R):
+ *   capacity(C_i) - current_size(C_i) >= size(C_i_mergeable) - bytes_consumed_by_next_merger
+ *
+ * where:
+ *   capacity c0 = c0_queue_size
+ *   capacity c1 = c1_queue_size
+ *
+ *   current_size(c_i) = sum(bytes_out_delta) - sum(bytes_in_large_delta)
+ *
+ * bytes_consumed_by_merger = sum(bytes_in_small_delta)
+ */
+void mergeManager::tick(mergeStats * s, bool done) {
+  pageid_t tick_length_bytes = 1024*1024;
+  if(done || (s->bytes_in_small_delta > tick_length_bytes)) {
     pthread_mutex_lock(&mut);
-    if(s->merge_level == 0) {
-      c0_totalConsumed += s->bytes_in_small_delta;
-      c0_totalWorktime += elapsed;
-      c0_totalCollapsed += s->bytes_collapsed_delta;
-    } else if(s->merge_level == 1) {
-      c1_totalConsumed += s->bytes_in_small_delta;
-      c1_totalWorktime += elapsed;
-      c1_totalCollapsed += s->bytes_collapsed_delta;
-    } else if(s->merge_level == 2) {
-      c2_totalConsumed += s->bytes_in_small_delta;
-      c2_totalWorktime += elapsed;
-      c2_totalCollapsed += s->bytes_collapsed_delta;
-    } else { abort(); }
-    pthread_mutex_unlock(&mut);
+    struct timeval now;
+    gettimeofday(&now, 0);
+    double elapsed_delta = tv_to_double(&now) - ts_to_double(&s->last_tick);
+    double bps = (double)s->bytes_in_small_delta / (double)elapsed_delta;
+
+    pageid_t current_size = s->bytes_out - s->bytes_in_large;
+
+    int64_t overshoot;
+    int64_t overshoot_fudge = (int64_t)((double)c0_queueSize * 0.1);
+    do{
+      overshoot = 0;
+      if(s->merge_level == 0) {
+        if(done) {
+          //       c0->bytes_in_small = 0;
+        } else if(c0->mergeable_size) {
+          overshoot = (overshoot_fudge + c0->mergeable_size - c1->bytes_in_small) //   amount left to process
+                      - (c0_queueSize - current_size);            // - room for more insertions
+        }
+      } else if (s->merge_level == 1) {
+        if(done) {
+          c0->mergeable_size = 0;
+          c1->bytes_in_small = 0;
+        } else if(/*c1_queueSize && */c1->mergeable_size) {
+          overshoot = (c1->mergeable_size - c2->bytes_in_small)
+                      - (c1_queueSize - current_size);
+        }
+      } else if (s->merge_level == 2) {
+        if(done) {
+          c1->mergeable_size = 0;
+          c2->bytes_in_small = 0;
+        }
+        // Never throttle this merge.
+      }
+      static int num_skipped = 0;
+      if(num_skipped == 10) {
+        printf("#%d mbps %6.1f overshoot %9lld current_size = %9lld ",s->merge_level, bps / (1024.0*1024.0), overshoot, current_size);
+        pretty_print(stdout);
+        num_skipped = 0;
+      }
+      num_skipped ++;
+      if(overshoot > 0) {
+        // throttle
+        // it took "elapsed" seconds to process "tick_length_bytes" mb
+        double sleeptime = (double)overshoot / bps;  // 2 is a fudge factor
+
+        struct timespec sleep_until;
+        if(sleeptime > 1) { sleeptime = 1; }
+        double_to_ts(&sleep_until, sleeptime + tv_to_double(&now));
+//        printf("\nMerge thread %d Overshoot: %lld Throttle %6f\n", s->merge_level, overshoot, sleeptime);
+//        pthread_mutex_lock(&dummy_throttle_mut);
+        pthread_cond_timedwait(&dummy_throttle_cond, &mut, &sleep_until);
+//        pthread_mutex_unlock(&dummy_throttle_mut);
+        gettimeofday(&now, 0);
+      }
+    } while(overshoot > 0);
+    memcpy(&s->last_tick, &now, sizeof(now));
 
     s->bytes_in_small_delta = 0;
-    s->bytes_collapsed_delta = 0;
-
-    memcpy(&s->last, &now, sizeof(now));
-
-    pretty_print(stdout);
-  }
-  if(s->merge_level == 0) {
-    pthread_mutex_unlock(&throttle_mut);
+//    pretty_print(stdout);
+    pthread_mutex_unlock(&mut);
   }
 }
 
-mergeManager::mergeManager(void *ltable):
+mergeManager::mergeManager(logtable<datatuple> *ltable):
   ltable(ltable),
   c0_queueSize(0),
   c1_queueSize(0),
-  c2_queueSize(0),
-  c0_totalConsumed(0),
-  c0_totalCollapsed(0),
-  c0_totalWorktime(0),
-  c1_totalConsumed(0),
-  c1_totalCollapsed(0),
-  c1_totalWorktime(0),
-  c2_totalConsumed(0),
-  c2_totalCollapsed(0),
-  c2_totalWorktime(0),
+//  c2_queueSize(0),
   c0(new mergeStats(this, 0)),
   c1(new mergeStats(this, 1)),
   c2(new mergeStats(this, 2)) {
@@ -147,7 +149,9 @@ mergeManager::mergeManager(void *ltable):
   pthread_cond_init(&dummy_throttle_cond, 0);
   struct timeval tv;
   gettimeofday(&tv, 0);
-  double_to_ts(&last_throttle, tv_to_double(&tv));
+  double_to_ts(&c0->last_tick, tv_to_double(&tv));
+  double_to_ts(&c1->last_tick, tv_to_double(&tv));
+  double_to_ts(&c2->last_tick, tv_to_double(&tv));
 }
 
 void mergeManager::pretty_print(FILE * out) {
@@ -176,19 +180,21 @@ void mergeManager::pretty_print(FILE * out) {
       have_c1m ? "C1'" : "...",
       c2->active ? "RUN" : "---",
       have_c2 ? "C2" : "..");
-  fprintf(out, "Throttle: %6.1f%% (cur) %6.1f%% (overall) ", 100.0*(last_throttle_seconds/(last_elapsed_seconds)), 100.0*(throttle_seconds/(elapsed_seconds)));
-  fprintf(out, "C0 size %4lld collapsed %4lld resident %4lld ",
-               2*c0_queueSize/mb,
-               c0_totalCollapsed/mb,
-               (c0_totalConsumed - (c0_totalCollapsed + c1_totalConsumed))/mb);
-  fprintf(out, "C1 size %4lld collapsed %4lld resident %4lld ",
-               2*c1_queueSize/mb,
-               c1_totalCollapsed/mb,
-               (c1_totalConsumed - (c1_totalCollapsed + c2_totalConsumed))/mb);
-  fprintf(out, "C2 size %4lld collapsed %4lld ",
-               2*c2_queueSize/mb, c2_totalCollapsed/mb);
-  fprintf(out, "C1 MB/s (eff; active) %6.1f  C2 MB/s %6.1f\r",
-                ((double)c1_totalConsumed)/((double)c1_totalWorktime),
-                ((double)c2_totalConsumed)/((double)c2_totalWorktime));
+  fprintf(out, "[size in small/large, out, mergeable] C0 %4lld %4lld %4lld %4lld %4lld ", c0_queueSize/mb, c0->bytes_in_small/mb, c0->bytes_in_large/mb, c0->bytes_out/mb, c0->mergeable_size/mb);
+  fprintf(out, "C1 %4lld %4lld %4lld %4lld %4lld ", c1_queueSize/mb, c1->bytes_in_small/mb, c1->bytes_in_large/mb, c1->bytes_out/mb, c1->mergeable_size/mb);
+  fprintf(out, "C2 .... %4lld %4lld %4lld %4lld ", c2->bytes_in_small/mb, c2->bytes_in_large/mb, c2->bytes_out/mb, c2->mergeable_size/mb);
+//  fprintf(out, "Throttle: %6.1f%% (cur) %6.1f%% (overall) ", 100.0*(last_throttle_seconds/(last_elapsed_seconds)), 100.0*(throttle_seconds/(elapsed_seconds)));
+//  fprintf(out, "C0 size %4lld resident %4lld ",
+//               2*c0_queueSize/mb,
+//               (c0->bytes_out - c0->bytes_in_large)/mb);
+//  fprintf(out, "C1 size %4lld resident %4lld\r",
+//               2*c1_queueSize/mb,
+//               (c1->bytes_out - c1->bytes_in_large)/mb);
+//  fprintf(out, "C2 size %4lld\r",
+//               2*c2_queueSize/mb);
+//  fprintf(out, "C1 MB/s (eff; active) %6.1f  C2 MB/s %6.1f\r",
+//                ((double)c1_totalConsumed)/((double)c1_totalWorktime),
+//                ((double)c2_totalConsumed)/((double)c2_totalWorktime));
   fflush(out);
+  fprintf(out, "\r");
 }

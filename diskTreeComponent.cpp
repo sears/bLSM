@@ -69,7 +69,7 @@ int diskTreeComponent::insertTuple(int xid, datatuple *t)
     dp = insertDataPage(xid, t);
     //    stats->num_datapages_out++;
   } else if(!dp->append(t)) {
-    //    stats->bytes_out += (PAGE_SIZE * dp->get_page_count());
+    //    stats->bytes_out_with_overhead += (PAGE_SIZE * dp->get_page_count());
     ((mergeStats*)stats)->wrote_datapage(dp);
     dp->writes_done();
     delete dp;

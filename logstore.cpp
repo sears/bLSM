@@ -23,6 +23,7 @@ template<class TUPLE>
 logtable<TUPLE>::logtable(pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size)
 {
 
+    r_val = MIN_R;
     tree_c0 = NULL;
     tree_c0_mergeable = NULL;
     tree_c1 = NULL;
@@ -142,6 +143,7 @@ void logtable<TUPLE>::flushTable()
     gettimeofday(&start_tv,0);
     start = tv_to_double(start_tv);
 
+    c0_stats->handed_off_tree();
     c0_stats->finished_merge();
     c0_stats->new_merge();
 
@@ -191,6 +193,8 @@ void logtable<TUPLE>::flushTable()
                  stop-start, start-last_start);
       }
       last_start = stop;
+    } else {
+      DEBUG("signaled c0-c1 merge\n");
     }
 
 }
@@ -420,8 +424,10 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
     {        
         datatuple *pre_t = *rbitr;
         //do the merging
+        c0_stats->read_tuple_from_large_component(pre_t);
         datatuple *new_t = tmerger->merge(pre_t, tuple);
         c0_stats->merged_tuples(new_t, tuple, pre_t);
+        c0_stats->wrote_tuple(new_t);
         tree_c0->erase(pre_t); //remove the previous tuple        
 
         tree_c0->insert(new_t); //insert the new tuple
@@ -438,6 +444,7 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
 
         //insert tuple into the rbtree        
         tree_c0->insert(t);
+        c0_stats->wrote_tuple(t);
         tsize++;
         tree_bytes += t->byte_length();// + RB_TREE_OVERHEAD;
 

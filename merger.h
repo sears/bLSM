@@ -16,7 +16,6 @@ struct merger_args
 {
     logtable<datatuple> * ltable;
     int64_t max_size;
-    double * r_i;
 };
 
 struct logtable_mergedata

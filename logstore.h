@@ -37,6 +37,8 @@ public:
 
     ~logtable();
 
+    double * R() { return &r_val; }
+
     //user access functions
     datatuple * findTuple(int xid, const datatuple::key_t key, size_t keySize);
 
@@ -110,6 +112,7 @@ public:
     }
 
 private:    
+    double r_val;
     recordid table_rec;
     struct table_header tbl_header;
     uint64_t epoch;
