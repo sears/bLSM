@@ -24,6 +24,9 @@ class mergeStats {
       merge_mgr(merge_mgr),
       merge_level(merge_level),
       merge_count(0),
+      base_size(0),
+      target_size(0),
+      current_size(0),
       mergeable_size(0),
       bytes_out_with_overhead(0),
       bytes_out(0),
@@ -34,21 +37,34 @@ class mergeStats {
       num_tuples_in_small(0),
       bytes_in_large(0),
       num_tuples_in_large(0),
+      just_handed_off(false),
+      lifetime_elapsed(0),
+      lifetime_consumed(0),
+      window_elapsed(0.001),
+      window_consumed(0),
       active(false) {
       gettimeofday(&sleep,0);
       gettimeofday(&last,0);
+      merge_mgr->double_to_ts(&last_tick, merge_mgr->tv_to_double(&last));
     }
     void new_merge() {
       merge_mgr->new_merge(this);
+
+      if(just_handed_off) {
+        bytes_out = 0;
+        just_handed_off = false;
+      }
+      base_size = bytes_out;
+      current_size = base_size;
       merge_count++;
-      //      bytes_out_with_overhead = 0;
-      //      bytes_out = 0;
+      bytes_out_with_overhead = 0;
+      bytes_out = 0;
       num_tuples_out = 0;
       num_datapages_out = 0;
       bytes_in_small = 0;
       bytes_in_small_delta = 0;
       num_tuples_in_small = 0;
-      //      bytes_in_large = 0;
+      bytes_in_large = 0;
       num_tuples_in_large = 0;
       gettimeofday(&sleep,0);
     }
@@ -56,15 +72,23 @@ class mergeStats {
       active = true;
       gettimeofday(&start, 0);
       gettimeofday(&last, 0);
+      merge_mgr->double_to_ts(&last_tick, merge_mgr->tv_to_double(&last));
+
     }
     void handed_off_tree() {
-      mergeable_size = bytes_out - bytes_in_large;
-      bytes_out = 0;
-      bytes_in_large = 0;
+      if(merge_level == 2) {
+      } else {
+        mergeable_size = current_size;
+        just_handed_off = true;
+      }
     }
     void finished_merge() {
       active = false;
-      merge_mgr->tick(this, true);
+      if(merge_level == 1) {
+        merge_mgr->get_merge_stats(0)->mergeable_size = 0;
+      } else if(merge_level == 2) {
+        merge_mgr->get_merge_stats(1)->mergeable_size = 0;
+      }
       gettimeofday(&done, 0);
     }
     void read_tuple_from_large_component(datatuple * tup) {
@@ -78,7 +102,7 @@ class mergeStats {
         num_tuples_in_small++;
         bytes_in_small_delta += tup->byte_length();
         bytes_in_small += tup->byte_length();
-        merge_mgr->tick(this);
+        merge_mgr->tick(this, true);
       }
     }
     void merged_tuples(datatuple * merged, datatuple * small, datatuple * large) {
@@ -86,6 +110,7 @@ class mergeStats {
     void wrote_tuple(datatuple * tup) {
       num_tuples_out++;
       bytes_out += tup->byte_length();
+      merge_mgr->tick(this, false);
     }
     void wrote_datapage(DataPage<datatuple> *dp) {
       num_datapages_out++;
@@ -110,10 +135,13 @@ class mergeStats {
 protected:
     struct timespec last_tick;
 
+    pageid_t base_size;
+    pageid_t target_size;
+    pageid_t current_size;
     pageid_t mergeable_size;
 
     pageid_t bytes_out_with_overhead;// How many bytes did we write (including internal tree nodes)?
-    pageid_t bytes_out;     // How many bytes worth of tuples did we write?
+    pageid_t bytes_out;            // How many bytes worth of tuples did we write?
     pageid_t num_tuples_out;       // How many tuples did we write?
     pageid_t num_datapages_out;    // How many datapages?
     pageid_t bytes_in_small;       // How many bytes from the small input tree (for C0, we ignore tree overheads)?
@@ -121,6 +149,14 @@ protected:
     pageid_t num_tuples_in_small;  // Tuples from the small input?
     pageid_t bytes_in_large;       // Bytes from the large input?
     pageid_t num_tuples_in_large;  // Tuples from large input?
+
+    bool just_handed_off;
+
+    double lifetime_elapsed;
+    double lifetime_consumed;
+    double window_elapsed;
+    double window_consumed;
+
     bool active;
   public:
 

@@ -78,7 +78,7 @@ public:
     void set_max_c0_size(int64_t max_c0_size) {
       this->max_c0_size = max_c0_size;
       merge_mgr->set_c0_size(max_c0_size);
-
+      merge_mgr->get_merge_stats(1);
     }
     void set_tree_c0_mergeable(memTreeComponent<datatuple>::rbtree_ptr_t newtree){tree_c0_mergeable = newtree; bump_epoch(); }
     void update_persistent_header(int xid);

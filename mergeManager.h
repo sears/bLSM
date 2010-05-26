@@ -21,7 +21,7 @@ class logtable;
 class mergeStats;
 
 class mergeManager {
-private:
+public:
   double tv_to_double(struct timeval * tv) {
     return (double)tv->tv_sec + ((double)tv->tv_usec)/1000000.0;
   }
@@ -35,26 +35,23 @@ private:
   uint64_t long_tv(struct timeval& tv) {
     return (1000000ULL * (uint64_t)tv.tv_sec) + ((uint64_t)tv.tv_usec);
   }
-public:
   mergeManager(logtable<datatuple> *ltable);
 
   ~mergeManager();
 
   void new_merge(mergeStats * s);
   void set_c0_size(int64_t size);
-  void tick(mergeStats * s, bool done = false);
+  void tick(mergeStats * s, bool block);
   void pretty_print(FILE * out);
-  mergeStats* newMergeStats(int mergeLevel);
+  mergeStats* get_merge_stats(int mergeLevel);
 
 private:
   pthread_mutex_t mut;
   logtable<datatuple>*    ltable;
-  pageid_t c0_queueSize;
-  pageid_t c1_queueSize;  // How many bytes must c0-c1 consume before trying to swap over to an empty c1? ( = current target c1 size)
   double throttle_seconds;
-  double elapsed_seconds;
+//  double elapsed_seconds;
   double last_throttle_seconds;
-  double last_elapsed_seconds;
+//  double last_elapsed_seconds;
   mergeStats * c0;
   mergeStats * c1;
   mergeStats * c2;

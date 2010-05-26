@@ -50,7 +50,7 @@ logtable<TUPLE>::logtable(pageid_t internal_region_size, pageid_t datapage_regio
     this->datapage_region_size = datapage_region_size;
     this->datapage_size = datapage_size;
 
-    c0_stats = merge_mgr->newMergeStats(0);
+    c0_stats = merge_mgr->get_merge_stats(0);
     c0_stats->new_merge();
     c0_stats->starting_merge();
 }
@@ -143,13 +143,11 @@ void logtable<TUPLE>::flushTable()
     gettimeofday(&start_tv,0);
     start = tv_to_double(start_tv);
 
-    c0_stats->handed_off_tree();
-    c0_stats->finished_merge();
-    c0_stats->new_merge();
 
     pthread_mutex_lock(&header_mut);
 
     int expmcount = merge_count;
+    c0_stats->finished_merge();
 
     //this is for waiting the previous merger of the mem-tree
     //hopefullly this wont happen
@@ -165,12 +163,16 @@ void logtable<TUPLE>::flushTable()
       }
     }
 
+    c0_stats->handed_off_tree();
+    c0_stats->new_merge();
+
     gettimeofday(&stop_tv,0);
     stop = tv_to_double(stop_tv);
     
     set_tree_c0_mergeable(get_tree_c0());
 
     pthread_cond_signal(&c0_ready);
+    DEBUG("Signaled c0-c1 merge thread\n");
 
     merge_count ++;
     set_tree_c0(new memTreeComponent<datatuple>::rbtree_t);
@@ -181,7 +183,7 @@ void logtable<TUPLE>::flushTable()
     
     pthread_mutex_unlock(&header_mut);
 
-    if(blocked) {
+    if(blocked && stop - start > 0.1) {
       if(first)
       {
           printf("\nBlocked writes for %f sec\n", stop-start);
@@ -243,7 +245,7 @@ datatuple * logtable<TUPLE>::findTuple(int xid, const datatuple::key_t key, size
         }            
     }
 
-    //TODO: Arange to only hold read latches while hitting disk.
+    //TODO: Arrange to only hold read latches while hitting disk.
     
     //step 3: check c1    
     if(!done)
@@ -416,10 +418,11 @@ template<class TUPLE>
 void logtable<TUPLE>::insertTuple(datatuple *tuple)
 {
     //lock the red-black tree
-    c0_stats->read_tuple_from_small_component(tuple);
     pthread_mutex_lock(&header_mut);
+    c0_stats->read_tuple_from_small_component(tuple);
     //find the previous tuple with same key in the memtree if exists
     memTreeComponent<datatuple>::rbtree_t::iterator rbitr = tree_c0->find(tuple);
+    datatuple * t  = 0;
     if(rbitr != tree_c0->end())
     {        
         datatuple *pre_t = *rbitr;
@@ -427,7 +430,7 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
         c0_stats->read_tuple_from_large_component(pre_t);
         datatuple *new_t = tmerger->merge(pre_t, tuple);
         c0_stats->merged_tuples(new_t, tuple, pre_t);
-        c0_stats->wrote_tuple(new_t);
+        t = new_t;
         tree_c0->erase(pre_t); //remove the previous tuple        
 
         tree_c0->insert(new_t); //insert the new tuple
@@ -440,15 +443,17 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
     else //no tuple with same key exists in mem-tree
     {
 
-        datatuple *t = tuple->create_copy();
+        t = tuple->create_copy();
 
         //insert tuple into the rbtree        
         tree_c0->insert(t);
-        c0_stats->wrote_tuple(t);
+
         tsize++;
         tree_bytes += t->byte_length();// + RB_TREE_OVERHEAD;
 
     }
+
+    c0_stats->wrote_tuple(t);
 
     //flushing logic
     if(tree_bytes >= max_c0_size )
