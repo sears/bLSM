@@ -33,7 +33,6 @@ mergeManager::~mergeManager() {
 
 void mergeManager::new_merge(mergeStats * s) {
   pthread_mutex_lock(&mut);
-  if(s->merge_count) {
     if(s->merge_level == 0) {
       // target_size was set during startup
     } else if(s->merge_level == 1) {
@@ -43,7 +42,6 @@ void mergeManager::new_merge(mergeStats * s) {
     } else if(s->merge_level == 2) {
       // target_size is infinity...
     } else { abort(); }
-  }
   pthread_mutex_unlock(&mut);
 }
 void mergeManager::set_c0_size(int64_t size) {
@@ -96,11 +94,13 @@ void mergeManager::tick(mergeStats * s, bool block) {
       s->bytes_in_small_delta = 0;
 
       int64_t overshoot = 0;
-      int64_t overshoot_fudge = 1024*1024; // XXX set based on avg / max tuple size?
+      int64_t raw_overshoot = 0;
+      int64_t overshoot_fudge = (int64_t)((((double)s->current_size / (double)(s->target_size)) - 0.1) * 5.0*1024.0*1024.0); // XXX set based on avg / max tuple size?
       int spin = 0;
       double total_sleep = 0.0;
       do{
-
+        overshoot = 0;
+        raw_overshoot = 0;
         double c0_c1_progress = ((double)(c1->bytes_in_large + c1->bytes_in_small)) / (double)(c0->mergeable_size + c1->base_size);
         double c1_c2_progress = ((double)(c2->bytes_in_large + c2->bytes_in_small)) / (double)(c1->mergeable_size + c2->base_size);
 
@@ -110,16 +110,18 @@ void mergeManager::tick(mergeStats * s, bool block) {
         if(s->merge_level == 0) {
           pageid_t c0_c1_bytes_remaining = (pageid_t)((1.0-c0_c1_progress) * (double)c0->mergeable_size);
           pageid_t c0_bytes_left = c0->target_size - c0->current_size;
-          overshoot = overshoot_fudge + c0_c1_bytes_remaining - c0_bytes_left;
+          raw_overshoot = c0_c1_bytes_remaining - c0_bytes_left;
+          overshoot = raw_overshoot + overshoot_fudge;
           bps = c0_c1_bps;
-          if(!c0->mergeable_size) { overshoot = -1; }
-          if(c0->mergeable_size && ! c1->active) { overshoot = c0->current_size + overshoot_fudge; }
+          if(!c0->mergeable_size) { overshoot = raw_overshoot = -1; }
+          if(c0->mergeable_size && ! c1->active) { raw_overshoot = c0->current_size; overshoot = raw_overshoot + overshoot_fudge; }
         } else if (s->merge_level == 1) {
           pageid_t c1_c2_bytes_remaining = (pageid_t)((1.0-c1_c2_progress) * (double)c1->mergeable_size);
           pageid_t c1_bytes_left = c1->target_size - c1->current_size;
-          overshoot = overshoot_fudge + c1_c2_bytes_remaining - c1_bytes_left;
+          raw_overshoot = c1_c2_bytes_remaining - c1_bytes_left;
+          overshoot = raw_overshoot + overshoot_fudge;
           if(!c1->mergeable_size) { overshoot = -1; }
-          if(c1->mergeable_size && ! c2->active) { overshoot = c1->current_size + overshoot_fudge; }
+          if(c1->mergeable_size && ! c2->active) { raw_overshoot = c1->current_size; overshoot = raw_overshoot + overshoot_fudge; }
           bps = c1_c2_bps;
         }
 
@@ -139,7 +141,7 @@ void mergeManager::tick(mergeStats * s, bool block) {
           double max_c0_sleep = 0.1;
           double max_c1_sleep = 0.1;
           double max_sleep = s->merge_level == 0 ? max_c0_sleep : max_c1_sleep;
-          if(sleeptime < 0.01) { sleeptime = 0.01; }
+          if(sleeptime < 0.1) { sleeptime = 0.1; }
           if(sleeptime > max_sleep) { sleeptime = max_sleep; }
 
           spin ++;
@@ -147,7 +149,7 @@ void mergeManager::tick(mergeStats * s, bool block) {
 
           if((spin > 20) || (total_sleep > (max_sleep * 10))) {
             if(bps > 1) {
-              printf("\nMerge thread %d Overshoot: %lld Throttle min(1, %6f) spin %d, total_sleep %6.3f\n", s->merge_level, overshoot, sleeptime, spin, total_sleep);
+              printf("\nMerge thread %d Overshoot: raw=%lld, d=%lld eff=%lld Throttle min(1, %6f) spin %d, total_sleep %6.3f\n", s->merge_level, raw_overshoot, overshoot_fudge, overshoot, sleeptime, spin, total_sleep);
             }
           }
 
@@ -155,7 +157,7 @@ void mergeManager::tick(mergeStats * s, bool block) {
           pthread_cond_timedwait(&dummy_throttle_cond, &ltable->header_mut, &sleep_until);
           gettimeofday(&now, 0);
         }
-      } while(overshoot > overshoot_fudge);
+      } while((overshoot > 0) && (raw_overshoot > 0));
     } else {
       pretty_print(stdout);
     }
@@ -197,17 +199,19 @@ void mergeManager::pretty_print(FILE * out) {
 //    pthread_mutex_unlock(&lt->header_mut);
   }
 
-  double c0_c1_progress = 100.0 * (c1->bytes_in_large + c1->bytes_in_small) / (c0->mergeable_size + c1->base_size); // c1->bytes_in_small / c0->mergeable_size;
+  double c0_out_progress = 100.0 * c0->current_size / c0->target_size;
+  double c0_c1_in_progress = 100.0 * (c1->bytes_in_large + c1->bytes_in_small) / (c0->mergeable_size + c1->base_size); // c1->bytes_in_small / c0->mergeable_size;
+  double c0_c1_out_progress = 100.0 * c1->current_size / c1->target_size;
   double c1_c2_progress = 100.0 * (c2->bytes_in_large + c2->bytes_in_small) / (c1->mergeable_size + c2->base_size); //c2->bytes_in_small / c1->mergeable_size;
 
-  assert((!c1->active) || (c0_c1_progress >= -1 && c0_c1_progress < 102));
+  assert((!c1->active) || (c0_c1_in_progress >= -1 && c0_c1_in_progress < 102));
   assert((!c2->active) || (c1_c2_progress >= -1 && c1_c2_progress < 102));
 
-  fprintf(out,"[merge progress MB/s window (lifetime)]: app [%s %6lldMB %6.1fsec %4.1f (%4.1f)] %s %s [%s %3.0f%% %4.1f (%4.1f)] %s %s [%s %3.0f%% %4.1f (%4.1f)] %s ",
-      c0->active ? "RUN" : "---", (uint64_t)(c0->lifetime_consumed / mb), c0->lifetime_elapsed, c0->window_consumed/(((double)mb)*c0->window_elapsed), c0->lifetime_consumed/(((double)mb)*c0->lifetime_elapsed),
+  fprintf(out,"[merge progress MB/s window (lifetime)]: app [%s %6lldMB ~ %3.0f%% %6.1fsec %4.1f (%4.1f)] %s %s [%s %3.0f%% ~ %3.0f%% %4.1f (%4.1f)] %s %s [%s %3.0f%% %4.1f (%4.1f)] %s ",
+      c0->active ? "RUN" : "---", (uint64_t)(c0->lifetime_consumed / mb), c0_out_progress, c0->lifetime_elapsed, c0->window_consumed/(((double)mb)*c0->window_elapsed), c0->lifetime_consumed/(((double)mb)*c0->lifetime_elapsed),
       have_c0 ? "C0" : "..",
       have_c0m ? "C0'" : "...",
-      c1->active ? "RUN" : "---", c0_c1_progress, c1->window_consumed/(((double)mb)*c1->window_elapsed), c1->lifetime_consumed/(((double)mb)*c1->lifetime_elapsed),
+      c1->active ? "RUN" : "---", c0_c1_in_progress, c0_c1_out_progress, c1->window_consumed/(((double)mb)*c1->window_elapsed), c1->lifetime_consumed/(((double)mb)*c1->lifetime_elapsed),
       have_c1 ? "C1" : "..",
       have_c1m ? "C1'" : "...",
       c2->active ? "RUN" : "---", c1_c2_progress, c2->window_consumed/(((double)mb)*c2->window_elapsed), c2->lifetime_consumed/(((double)mb)*c2->lifetime_elapsed),
