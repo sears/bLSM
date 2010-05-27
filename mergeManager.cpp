@@ -154,7 +154,7 @@ void mergeManager::tick(mergeStats * s, bool block) {
           }
 
           double_to_ts(&sleep_until, sleeptime + tv_to_double(&now));
-          pthread_cond_timedwait(&dummy_throttle_cond, &ltable->header_mut, &sleep_until);
+          rwlc_cond_timedwait(&dummy_throttle_cond, ltable->header_mut, &sleep_until);
           gettimeofday(&now, 0);
         }
       } while((overshoot > 0) && (raw_overshoot > 0));

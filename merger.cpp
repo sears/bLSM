@@ -145,7 +145,7 @@ void* memMergeThread(void*arg)
     
     while(true) // 1
     {
-        pthread_mutex_lock(&ltable->header_mut);
+        rwlc_writelock(ltable->header_mut);
         stats->new_merge();
         int done = 0;
         // 2: wait for c0_mergable
@@ -160,7 +160,7 @@ void* memMergeThread(void*arg)
             
             DEBUG("mmt:\twaiting for block ready cond\n");
             
-            pthread_cond_wait(&ltable->c0_ready, &ltable->header_mut);
+            rwlc_cond_wait(&ltable->c0_ready, ltable->header_mut);
 
             DEBUG("mmt:\tblock ready\n");
             
@@ -169,7 +169,7 @@ void* memMergeThread(void*arg)
         if(done==1)
         {
             pthread_cond_signal(&ltable->c1_ready);  // no block is ready.  this allows the other thread to wake up, and see that we're shutting down.
-            pthread_mutex_unlock(&ltable->header_mut);
+            rwlc_unlock(ltable->header_mut);
             break;
         }
 
@@ -189,7 +189,7 @@ void* memMergeThread(void*arg)
         //create a new tree
         diskTreeComponent * c1_prime = new diskTreeComponent(xid,  ltable->internal_region_size, ltable->datapage_region_size, ltable->datapage_size, stats);
 
-        pthread_mutex_unlock(&ltable->header_mut);
+        rwlc_unlock(ltable->header_mut);
 
         //: do the merge
         DEBUG("mmt:\tMerging:\n");
@@ -207,7 +207,7 @@ void* memMergeThread(void*arg)
         merge_count++;        
         DEBUG("mmt:\tmerge_count %lld #bytes written %lld\n", stats.merge_count, stats.output_size());
 
-        pthread_mutex_lock(&ltable->header_mut);
+        rwlc_writelock(ltable->header_mut);
 
         // Immediately clean out c0 mergeable so that writers may continue.
 
@@ -246,7 +246,7 @@ void* memMergeThread(void*arg)
 
             // XXX need to report backpressure here!
             while(ltable->get_tree_c1_mergeable()) {
-                pthread_cond_wait(&ltable->c1_needed, &ltable->header_mut);
+                rwlc_cond_wait(&ltable->c1_needed, ltable->header_mut);
             }
 
             xid = Tbegin();
@@ -270,7 +270,7 @@ void* memMergeThread(void*arg)
 //        DEBUG("mmt:\tUpdated C1's position on disk to %lld\n",ltable->get_tree_c1()->get_root_rec().page);
         // 13
 
-        pthread_mutex_unlock(&ltable->header_mut);
+        rwlc_unlock(ltable->header_mut);
 //        stats->pretty_print(stdout);
 
         //TODO: get the freeing outside of the lock
@@ -298,7 +298,7 @@ void *diskMergeThread(void*arg)
     {
 
         // 2: wait for input
-        pthread_mutex_lock(&ltable->header_mut);
+        rwlc_writelock(ltable->header_mut);
         stats->new_merge();
         int done = 0;
         // get a new input for merge
@@ -313,13 +313,13 @@ void *diskMergeThread(void*arg)
             
             DEBUG("dmt:\twaiting for block ready cond\n");
             
-            pthread_cond_wait(&ltable->c1_ready, &ltable->header_mut);
+            rwlc_cond_wait(&ltable->c1_ready, ltable->header_mut);
 
             DEBUG("dmt:\tblock ready\n");
         }        
         if(done==1)
         {
-            pthread_mutex_unlock(&ltable->header_mut);
+            rwlc_unlock(ltable->header_mut);
             break;
         }
 
@@ -336,7 +336,7 @@ void *diskMergeThread(void*arg)
         //create a new tree
         diskTreeComponent * c2_prime = new diskTreeComponent(xid, ltable->internal_region_size, ltable->datapage_region_size, ltable->datapage_size, stats);
 
-        pthread_mutex_unlock(&ltable->header_mut);
+        rwlc_unlock(ltable->header_mut);
 
         //do the merge
         DEBUG("dmt:\tMerging:\n");
@@ -351,7 +351,7 @@ void *diskMergeThread(void*arg)
 
         // (skip 6, 7, 8, 8.5, 9))
 
-        pthread_mutex_lock(&ltable->header_mut);
+        rwlc_writelock(ltable->header_mut);
         //12
         ltable->get_tree_c2()->dealloc(xid);
         delete ltable->get_tree_c2();
@@ -383,7 +383,7 @@ void *diskMergeThread(void*arg)
 
         stats->finished_merge();
 
-        pthread_mutex_unlock(&ltable->header_mut);
+        rwlc_unlock(ltable->header_mut);
 //        stats->pretty_print(stdout);
 
     }
@@ -403,25 +403,25 @@ void merge_iterators(int xid,
   stasis_log_t * log = (stasis_log_t*)stasis_log();
 
     datatuple *t1 = itrA->next_callerFrees();
-    pthread_mutex_lock(&ltable->header_mut); // XXX slow
+    rwlc_writelock(ltable->header_mut); // XXX slow
     stats->read_tuple_from_large_component(t1);
-    pthread_mutex_unlock(&ltable->header_mut); // XXX slow
+    rwlc_unlock(ltable->header_mut); // XXX slow
     datatuple *t2 = 0;
 
     int i = 0;
 
     while( (t2=itrB->next_callerFrees()) != 0)
     {
-      pthread_mutex_lock(&ltable->header_mut); // XXX slow
+      rwlc_writelock(ltable->header_mut); // XXX slow
       stats->read_tuple_from_small_component(t2);
-      pthread_mutex_unlock(&ltable->header_mut); // XXX slow
+      rwlc_unlock(ltable->header_mut); // XXX slow
 
         DEBUG("tuple\t%lld: keylen %d datalen %d\n",
                ntuples, *(t2->keylen),*(t2->datalen) );
 
         while(t1 != 0 && datatuple::compare(t1->key(), t1->keylen(), t2->key(), t2->keylen()) < 0) // t1 is less than t2
         {
-          pthread_mutex_lock(&ltable->header_mut); // XXX slow
+          rwlc_writelock(ltable->header_mut); // XXX slow
             //insert t1
             scratch_tree->insertTuple(xid, t1);
             i+=t1->byte_length(); if(i > 1000000) { if(forceMe) forceMe->force(xid); log->force_tail(log, LOG_FORCE_WAL); i = 0; }
@@ -432,13 +432,13 @@ void merge_iterators(int xid,
             if(t1) {
               stats->read_tuple_from_large_component(t1);
             }
-            pthread_mutex_unlock(&ltable->header_mut); // XXX slow
+            rwlc_unlock(ltable->header_mut); // XXX slow
         }
 
         if(t1 != 0 && datatuple::compare(t1->key(), t1->keylen(), t2->key(), t2->keylen()) == 0)
         {
             datatuple *mtuple = ltable->gettuplemerger()->merge(t1,t2);
-            pthread_mutex_lock(&ltable->header_mut); // XXX slow
+            rwlc_writelock(ltable->header_mut); // XXX slow
             stats->merged_tuples(mtuple, t2, t1); // this looks backwards, but is right.
 
             //insert merged tuple, drop deletes
@@ -453,17 +453,17 @@ void merge_iterators(int xid,
               stats->read_tuple_from_large_component(t1);
             }
             datatuple::freetuple(mtuple);
-            pthread_mutex_unlock(&ltable->header_mut); // XXX slow
+            rwlc_unlock(ltable->header_mut); // XXX slow
         }
         else
         {
             //insert t2
             scratch_tree->insertTuple(xid, t2);
             i+=t2->byte_length(); if(i > 1000000) { if(forceMe) forceMe->force(xid); log->force_tail(log, LOG_FORCE_WAL); i = 0; }
-            pthread_mutex_lock(&ltable->header_mut); // XXX slow
+            rwlc_writelock(ltable->header_mut); // XXX slow
 
             stats->wrote_tuple(t2);
-            pthread_mutex_unlock(&ltable->header_mut); // XXX slow
+            rwlc_unlock(ltable->header_mut); // XXX slow
 
             // cannot free any tuples here; they may still be read through a lookup
         }
@@ -472,7 +472,7 @@ void merge_iterators(int xid,
     }
 
     while(t1 != 0) {// t1 is less than t2
-      pthread_mutex_lock(&ltable->header_mut); // XXX slow
+      rwlc_writelock(ltable->header_mut); // XXX slow
       scratch_tree->insertTuple(xid, t1);
       stats->wrote_tuple(t1);
       i += t1->byte_length(); if(i > 1000000) { if(forceMe) forceMe->force(xid); log->force_tail(log, LOG_FORCE_WAL); i = 0; }
@@ -481,7 +481,7 @@ void merge_iterators(int xid,
       //advance itrA
       t1 = itrA->next_callerFrees();
       stats->read_tuple_from_large_component(t1);
-      pthread_mutex_unlock(&ltable->header_mut); // XXX slow
+      rwlc_unlock(ltable->header_mut); // XXX slow
     }
     DEBUG("dpages: %d\tnpages: %d\tntuples: %d\n", dpages, npages, ntuples);
 

@@ -100,7 +100,8 @@ public:
     };
 
     logtable_mergedata * mergedata;
-    pthread_mutex_t header_mut;
+    rwlc * header_mut;
+    pthread_mutex_t rb_mut;
     int64_t max_c0_size;
     mergeManager * merge_mgr;
 
@@ -251,10 +252,12 @@ public:
         last_returned(NULL),
         key(NULL),
         valid(false) {
-        pthread_mutex_lock(&ltable->header_mut);
+        rwlc_readlock(ltable->header_mut);
+        pthread_mutex_lock(&ltable->rb_mut);
         ltable->registerIterator(this);
+        pthread_mutex_unlock(&ltable->rb_mut);
         validate();
-        pthread_mutex_unlock(&ltable->header_mut);
+        rwlc_unlock(ltable->header_mut);
       }
 
       explicit iterator(logtable* ltable,TUPLE *key)
@@ -265,18 +268,22 @@ public:
         key(key),
         valid(false)
       {
-        pthread_mutex_lock(&ltable->header_mut);
+        rwlc_readlock(ltable->header_mut);
+        pthread_mutex_lock(&ltable->rb_mut);
         ltable->registerIterator(this);
+        pthread_mutex_unlock(&ltable->rb_mut);
         validate();
-        pthread_mutex_unlock(&ltable->header_mut);
+        rwlc_unlock(ltable->header_mut);
       }
 
       ~iterator() {
-        pthread_mutex_lock(&ltable->header_mut);
+        rwlc_readlock(ltable->header_mut);
+        pthread_mutex_lock(&ltable->rb_mut);
         ltable->forgetIterator(this);
         invalidate();
+        pthread_mutex_unlock(&ltable->rb_mut);
         if(last_returned) TUPLE::freetuple(last_returned);
-        pthread_mutex_unlock(&ltable->header_mut);
+        rwlc_unlock(ltable->header_mut);
       }
   private:
       TUPLE * getnextHelper() {
@@ -290,19 +297,19 @@ public:
       }
   public:
       TUPLE * getnextIncludingTombstones() {
-          pthread_mutex_lock(&ltable->header_mut);
+          rwlc_readlock(ltable->header_mut);
           revalidate();
           TUPLE * ret = getnextHelper();
-          pthread_mutex_unlock(&ltable->header_mut);
+          rwlc_readunlock(ltable->header_mut);
           return ret ? ret->create_copy() : NULL;
       }
 
       TUPLE * getnext() {
-          pthread_mutex_lock(&ltable->header_mut);
+          rwlc_readlock(ltable->header_mut);
           revalidate();
           TUPLE * ret;
           while((ret = getnextHelper()) && ret->isDelete()) { }  // getNextHelper handles its own memory.
-          pthread_mutex_unlock(&ltable->header_mut);
+          rwlc_unlock(ltable->header_mut);
           return ret ? ret->create_copy() : NULL; // XXX hate making copy!  Caller should not manage our memory.
       }
 
@@ -364,7 +371,7 @@ public:
           t = NULL;
         }
 
-        c0_it              = new typename memTreeComponent<TUPLE>::revalidatingIterator(ltable->get_tree_c0(), NULL/*need something that is not &ltable->header_mut*/,  t);
+        c0_it              = new typename memTreeComponent<TUPLE>::revalidatingIterator(ltable->get_tree_c0(), &ltable->rb_mut,  t);
         c0_mergeable_it[0] = new typename memTreeComponent<TUPLE>::iterator            (ltable->get_tree_c0_mergeable(),                            t);
         disk_it[0]         = ltable->get_tree_c1()->open_iterator(t);
         if(ltable->get_tree_c1_mergeable()) {
