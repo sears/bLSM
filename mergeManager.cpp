@@ -26,6 +26,7 @@ mergeManager::~mergeManager() {
   pthread_mutex_destroy(&throttle_mut);
   pthread_mutex_destroy(&dummy_throttle_mut);
   pthread_cond_destroy(&dummy_throttle_cond);
+  pthread_cond_destroy(&throttle_wokeup_cond);
   delete c0;
   delete c1;
   delete c2;
@@ -77,6 +78,9 @@ void mergeManager::tick(mergeStats * s, bool block) {
     s->current_size = s->base_size + s->bytes_out - s->bytes_in_large;
 
     if(block) {
+      while(sleeping[s->merge_level]) {
+        rwlc_cond_wait(&throttle_wokeup_cond, ltable->header_mut);
+      }
 //      pthread_mutex_lock(&mut);
       struct timeval now;
       gettimeofday(&now, 0);
@@ -127,9 +131,14 @@ void mergeManager::tick(mergeStats * s, bool block) {
 
   //#define PP_THREAD_INFO
   #ifdef PP_THREAD_INFO
-          printf("#%d mbps %6.1f overshoot %9lld current_size = %9lld ",s->merge_level, bps / (1024.0*1024.0), overshoot, s->current_size);
+        printf("#%d mbps %6.1f overshoot %9lld current_size = %9lld ",s->merge_level, bps / (1024.0*1024.0), overshoot, s->current_size);
   #endif
+        if(print_skipped == 10000) {
           pretty_print(stdout);
+          print_skipped = 0;
+        } else {
+          print_skipped++;
+        }
         if(overshoot > 0) {
           // throttle
           // it took "elapsed" seconds to process "tick_length_bytes" mb
@@ -154,12 +163,20 @@ void mergeManager::tick(mergeStats * s, bool block) {
           }
 
           double_to_ts(&sleep_until, sleeptime + tv_to_double(&now));
+          sleeping[s->merge_level] = true;
           rwlc_cond_timedwait(&dummy_throttle_cond, ltable->header_mut, &sleep_until);
+          sleeping[s->merge_level] = false;
+          pthread_cond_broadcast(&throttle_wokeup_cond);
           gettimeofday(&now, 0);
         }
       } while((overshoot > 0) && (raw_overshoot > 0));
     } else {
-      pretty_print(stdout);
+      if(print_skipped == 10000) {
+        pretty_print(stdout);
+        print_skipped = 0;
+      } else {
+        print_skipped++;
+      }
     }
 //    pthread_mutex_unlock(&mut);
   }
@@ -174,8 +191,13 @@ mergeManager::mergeManager(logtable<datatuple> *ltable):
   pthread_mutex_init(&throttle_mut, 0);
   pthread_mutex_init(&dummy_throttle_mut, 0);
   pthread_cond_init(&dummy_throttle_cond, 0);
+  pthread_cond_init(&throttle_wokeup_cond, 0);
   struct timeval tv;
   gettimeofday(&tv, 0);
+  sleeping[0] = false;
+  sleeping[1] = false;
+  sleeping[2] = false;
+  print_skipped = 0;
   double_to_ts(&c0->last_tick, tv_to_double(&tv));
   double_to_ts(&c1->last_tick, tv_to_double(&tv));
   double_to_ts(&c2->last_tick, tv_to_double(&tv));

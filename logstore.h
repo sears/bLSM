@@ -107,9 +107,13 @@ public:
 
     inline bool is_still_running() { return still_running_; }
     inline void stop() {
-      still_running_ = false;
-      flushTable();
-      // XXX must need to do other things!
+      rwlc_writelock(header_mut);
+      if(still_running_) {
+        still_running_ = false;
+        flushTable();
+      }
+      rwlc_unlock(header_mut);
+      // XXX must need to do other things! (join the threads?)
     }
 
 private:    

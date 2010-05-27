@@ -48,6 +48,9 @@ public:
     rid_.page = INVALID_PAGE;
     regionCount_ = -1;
   }
+  ~RegionAllocator() {
+    bm_->closeHandleImpl(bm_, bmh_);
+  }
   Page * load_page(int xid, pageid_t p) { return bm_->loadPageImpl(bm_, bmh_, xid, p, UNKNOWN_TYPE_PAGE); }
 
   // XXX handle disk full?
@@ -83,7 +86,6 @@ public:
       Tread(xid, list_entry, &pid);
       TregionForce(xid, bm_, bmh_, pid);
     }
-    bm_->closeHandleImpl(bm_, bmh_);
   }
   void dealloc_regions(int xid) {
     pageid_t regionCount = TarrayListLength(xid, header_.region_list);

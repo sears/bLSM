@@ -390,6 +390,16 @@ void *diskMergeThread(void*arg)
     return 0;
 }
 
+#define FORCE_INTERVAL 1000000 // XXX do not hardcode FORCE_INTERVAL
+
+static void periodically_force(int xid, int *i, diskTreeComponent * forceMe, stasis_log_t * log) {
+  if(*i > FORCE_INTERVAL) {
+    if(forceMe) forceMe->force(xid);
+    log->force_tail(log, LOG_FORCE_WAL);
+    *i = 0;
+  }
+}
+
 template <class ITA, class ITB>
 void merge_iterators(int xid,
                         diskTreeComponent * forceMe,
@@ -410,9 +420,9 @@ void merge_iterators(int xid,
 
     int i = 0;
 
+    rwlc_writelock(ltable->header_mut); // XXX slow
     while( (t2=itrB->next_callerFrees()) != 0)
     {
-      rwlc_writelock(ltable->header_mut); // XXX slow
       stats->read_tuple_from_small_component(t2);
       rwlc_unlock(ltable->header_mut); // XXX slow
 
@@ -421,10 +431,10 @@ void merge_iterators(int xid,
 
         while(t1 != 0 && datatuple::compare(t1->key(), t1->keylen(), t2->key(), t2->keylen()) < 0) // t1 is less than t2
         {
-          rwlc_writelock(ltable->header_mut); // XXX slow
+            rwlc_writelock(ltable->header_mut); // XXX slow
             //insert t1
             scratch_tree->insertTuple(xid, t1);
-            i+=t1->byte_length(); if(i > 1000000) { if(forceMe) forceMe->force(xid); log->force_tail(log, LOG_FORCE_WAL); i = 0; }
+            i+=t1->byte_length();
             stats->wrote_tuple(t1);
             datatuple::freetuple(t1);
             //advance itrA
@@ -433,6 +443,8 @@ void merge_iterators(int xid,
               stats->read_tuple_from_large_component(t1);
             }
             rwlc_unlock(ltable->header_mut); // XXX slow
+
+            periodically_force(xid, &i, forceMe, log);
         }
 
         if(t1 != 0 && datatuple::compare(t1->key(), t1->keylen(), t2->key(), t2->keylen()) == 0)
@@ -444,7 +456,7 @@ void merge_iterators(int xid,
             //insert merged tuple, drop deletes
             if(dropDeletes && !mtuple->isDelete()) {
               scratch_tree->insertTuple(xid, mtuple);
-              i+=mtuple->byte_length(); if(i > 1000000) { if(forceMe) forceMe->force(xid); log->force_tail(log, LOG_FORCE_WAL); i = 0; }
+              i+=mtuple->byte_length();
             }
             datatuple::freetuple(t1);
             stats->wrote_tuple(mtuple);
@@ -457,33 +469,36 @@ void merge_iterators(int xid,
         }
         else
         {
+            rwlc_writelock(ltable->header_mut); // XXX slow
             //insert t2
             scratch_tree->insertTuple(xid, t2);
-            i+=t2->byte_length(); if(i > 1000000) { if(forceMe) forceMe->force(xid); log->force_tail(log, LOG_FORCE_WAL); i = 0; }
-            rwlc_writelock(ltable->header_mut); // XXX slow
+            i+=t2->byte_length();
 
             stats->wrote_tuple(t2);
             rwlc_unlock(ltable->header_mut); // XXX slow
 
             // cannot free any tuples here; they may still be read through a lookup
         }
-
+        periodically_force(xid, &i, forceMe, log);
         datatuple::freetuple(t2);
+        rwlc_writelock(ltable->header_mut); // XXX slow
     }
 
     while(t1 != 0) {// t1 is less than t2
-      rwlc_writelock(ltable->header_mut); // XXX slow
       scratch_tree->insertTuple(xid, t1);
       stats->wrote_tuple(t1);
-      i += t1->byte_length(); if(i > 1000000) { if(forceMe) forceMe->force(xid); log->force_tail(log, LOG_FORCE_WAL); i = 0; }
+      i += t1->byte_length();
       datatuple::freetuple(t1);
 
       //advance itrA
       t1 = itrA->next_callerFrees();
       stats->read_tuple_from_large_component(t1);
       rwlc_unlock(ltable->header_mut); // XXX slow
+      periodically_force(xid, &i, forceMe, log);
+      rwlc_writelock(ltable->header_mut); // XXX slow
     }
     DEBUG("dpages: %d\tnpages: %d\tntuples: %d\n", dpages, npages, ntuples);
 
     scratch_tree->writes_done();
+    rwlc_writeunlock(ltable->header_mut);
 }

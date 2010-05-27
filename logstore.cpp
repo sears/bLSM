@@ -82,6 +82,8 @@ template<class TUPLE>
 void logtable<TUPLE>::init_stasis() {
 
   DataPage<datatuple>::register_stasis_page_impl();
+  // XXX Workaround Stasis' (still broken) default concurrent buffer manager
+  stasis_buffer_manager_factory = stasis_buffer_manager_hash_factory;
 
   Tinit();
 
@@ -146,8 +148,6 @@ void logtable<TUPLE>::flushTable()
     start = tv_to_double(start_tv);
 
 
-    rwlc_writelock(header_mut);
-
     int expmcount = merge_count;
     c0_stats->finished_merge();
 
@@ -160,7 +160,6 @@ void logtable<TUPLE>::flushTable()
       rwlc_cond_wait(&c0_needed, header_mut);
       blocked = true;
       if(expmcount != merge_count) {
-          rwlc_writeunlock(header_mut);
           return;
       }
     }
@@ -182,8 +181,6 @@ void logtable<TUPLE>::flushTable()
 
     tsize = 0;
     tree_bytes = 0;
-    
-    rwlc_writeunlock(header_mut);
 
     if(blocked && stop - start > 0.1) {
       if(first)
@@ -429,7 +426,7 @@ datatuple * logtable<TUPLE>::findTuple_first(int xid, datatuple::key_t key, size
 template<class TUPLE>
 void logtable<TUPLE>::insertTuple(datatuple *tuple)
 {
-    rwlc_readlock(header_mut);
+    rwlc_writelock(header_mut); // XXX want this to be a readlock, but tick, and the stats need it to be a writelock for now...
     //lock the red-black tree
     pthread_mutex_lock(&rb_mut);
     c0_stats->read_tuple_from_small_component(tuple);
@@ -474,12 +471,14 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
     if(tree_bytes >= max_c0_size )
     {
       DEBUG("tree size before merge %d tuples %lld bytes.\n", tsize, tree_bytes);
-      rwlc_unlock(header_mut);
-      flushTable();
-    } else {
-      //unlock
-      rwlc_unlock(header_mut);
+//      rwlc_unlock(header_mut);
+//      rwlc_writelock(header_mut);
+      // the test of tree size needs to be atomic with the flushTable, and flushTable needs a writelock.
+      if(tree_bytes >= max_c0_size) {
+        flushTable();
+      }
     }
+    rwlc_unlock(header_mut);
 
     DEBUG("tree size %d tuples %lld bytes.\n", tsize, tree_bytes);
 }
@@ -499,7 +498,6 @@ void logtable<TUPLE>::forgetIterator(iterator * it) {
 }
 template<class TUPLE>
 void logtable<TUPLE>::bump_epoch() {
-//  assert(!trywritelock(header_lock,0));
   epoch++;
   for(unsigned int i = 0; i < its.size(); i++) {
     its[i]->invalidate();
