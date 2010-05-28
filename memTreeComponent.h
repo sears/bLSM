@@ -118,7 +118,7 @@ public:
       if(next_ret_) TUPLE::freetuple(next_ret_);
     }
 
-    TUPLE* getnext() {
+    TUPLE* next_callerFrees() {
       if(mut_) pthread_mutex_lock(mut_);
       TUPLE * ret = next_ret_;
       if(next_ret_) {

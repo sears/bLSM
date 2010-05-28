@@ -428,8 +428,8 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
 {
     rwlc_writelock(header_mut); // XXX want this to be a readlock, but tick, and the stats need it to be a writelock for now...
     //lock the red-black tree
+    c0_stats->read_tuple_from_small_component(tuple);  // has to be before rb_mut, since it calls tick with block = true, and that releases header_mut.
     pthread_mutex_lock(&rb_mut);
-    c0_stats->read_tuple_from_small_component(tuple);
     //find the previous tuple with same key in the memtree if exists
     memTreeComponent<datatuple>::rbtree_t::iterator rbitr = tree_c0->find(tuple);
     datatuple * t  = 0;

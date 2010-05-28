@@ -201,13 +201,13 @@ void* memMergeThread(void*arg)
 
         // 5: force c1'
 
+        rwlc_writelock(ltable->header_mut);
+
         //force write the new tree to disk
         c1_prime->force(xid);
 
         merge_count++;        
         DEBUG("mmt:\tmerge_count %lld #bytes written %lld\n", stats.merge_count, stats.output_size());
-
-        rwlc_writelock(ltable->header_mut);
 
         // Immediately clean out c0 mergeable so that writers may continue.
 
@@ -412,8 +412,8 @@ void merge_iterators(int xid,
 {
   stasis_log_t * log = (stasis_log_t*)stasis_log();
 
-    datatuple *t1 = itrA->next_callerFrees();
     rwlc_writelock(ltable->header_mut); // XXX slow
+    datatuple *t1 = itrA->next_callerFrees();
     stats->read_tuple_from_large_component(t1);
     rwlc_unlock(ltable->header_mut); // XXX slow
     datatuple *t2 = 0;
@@ -442,9 +442,8 @@ void merge_iterators(int xid,
             if(t1) {
               stats->read_tuple_from_large_component(t1);
             }
-            rwlc_unlock(ltable->header_mut); // XXX slow
-
             periodically_force(xid, &i, forceMe, log);
+            rwlc_unlock(ltable->header_mut); // XXX slow
         }
 
         if(t1 != 0 && datatuple::compare(t1->key(), t1->keylen(), t2->key(), t2->keylen()) == 0)
@@ -465,6 +464,7 @@ void merge_iterators(int xid,
               stats->read_tuple_from_large_component(t1);
             }
             datatuple::freetuple(mtuple);
+            periodically_force(xid, &i, forceMe, log);
             rwlc_unlock(ltable->header_mut); // XXX slow
         }
         else
@@ -475,11 +475,10 @@ void merge_iterators(int xid,
             i+=t2->byte_length();
 
             stats->wrote_tuple(t2);
+            periodically_force(xid, &i, forceMe, log);
             rwlc_unlock(ltable->header_mut); // XXX slow
-
             // cannot free any tuples here; they may still be read through a lookup
         }
-        periodically_force(xid, &i, forceMe, log);
         datatuple::freetuple(t2);
         rwlc_writelock(ltable->header_mut); // XXX slow
     }
@@ -493,12 +492,12 @@ void merge_iterators(int xid,
       //advance itrA
       t1 = itrA->next_callerFrees();
       stats->read_tuple_from_large_component(t1);
-      rwlc_unlock(ltable->header_mut); // XXX slow
       periodically_force(xid, &i, forceMe, log);
+      rwlc_unlock(ltable->header_mut); // XXX slow
       rwlc_writelock(ltable->header_mut); // XXX slow
     }
     DEBUG("dpages: %d\tnpages: %d\tntuples: %d\n", dpages, npages, ntuples);
 
     scratch_tree->writes_done();
-    rwlc_writeunlock(ltable->header_mut);
+    rwlc_unlock(ltable->header_mut);
 }

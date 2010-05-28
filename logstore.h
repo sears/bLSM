@@ -157,7 +157,7 @@ public:
         merge_(merge),
         dups((int*)malloc(sizeof(*dups)*num_iters_))
         {
-        current_[0] = first_iter_->getnext();
+        current_[0] = first_iter_->next_callerFrees();
         for(int i = 1; i < num_iters_; i++) {
           iters_[i-1] = iters[i-1];
           current_[i] = iters_[i-1] ? iters_[i-1]->next_callerFrees() : NULL;
@@ -178,17 +178,17 @@ public:
         free(dups);
       }
       TUPLE * peek() {
-          TUPLE * ret = getnext();
+          TUPLE * ret = next_callerFrees();
           last_iter_ = -1; // don't advance iterator on next peek() or getnext() call.
           return ret;
       }
-      TUPLE * getnext() {
+      TUPLE * next_callerFrees() {
         int num_dups = 0;
         if(last_iter_ != -1) {
           // get the value after the one we just returned to the user
           //TUPLE::freetuple(current_[last_iter_]); // should never be null
           if(last_iter_ == 0) {
-              current_[last_iter_] = first_iter_->getnext();
+              current_[last_iter_] = first_iter_->next_callerFrees();
           } else if(last_iter_ != -1){
               current_[last_iter_] = iters_[last_iter_-1]->next_callerFrees();
           } else {
@@ -291,7 +291,7 @@ public:
       }
   private:
       TUPLE * getnextHelper() {
-          TUPLE * tmp = merge_it_->getnext();
+          TUPLE * tmp = merge_it_->next_callerFrees();
           if(last_returned && tmp) {
               assert(TUPLE::compare(last_returned->key(), last_returned->keylen(), tmp->key(), tmp->keylen()) < 0);
               TUPLE::freetuple(last_returned);
@@ -304,8 +304,9 @@ public:
           rwlc_readlock(ltable->header_mut);
           revalidate();
           TUPLE * ret = getnextHelper();
-          rwlc_readunlock(ltable->header_mut);
-          return ret ? ret->create_copy() : NULL;
+          ret = ret ? ret->create_copy() : NULL;
+          rwlc_unlock(ltable->header_mut);
+          return ret;
       }
 
       TUPLE * getnext() {
@@ -313,8 +314,9 @@ public:
           revalidate();
           TUPLE * ret;
           while((ret = getnextHelper()) && ret->isDelete()) { }  // getNextHelper handles its own memory.
+          ret = ret ? ret->create_copy() : NULL; // XXX hate making copy!  Caller should not manage our memory.
           rwlc_unlock(ltable->header_mut);
-          return ret ? ret->create_copy() : NULL; // XXX hate making copy!  Caller should not manage our memory.
+          return ret;
       }
 
       void invalidate() {
@@ -392,7 +394,7 @@ public:
           TUPLE * junk = merge_it_->peek();
           if(junk && !TUPLE::compare(junk->key(), junk->keylen(), last_returned->key(), last_returned->keylen())) {
             // we already returned junk
-            TUPLE::freetuple(merge_it_->getnext());
+            TUPLE::freetuple(merge_it_->next_callerFrees());
           }
         }
         valid = true;
