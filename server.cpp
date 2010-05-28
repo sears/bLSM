@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
 
     mscheduler->startlogtable(lindex, c0_size);
 
-    lserver = new logserver(5, 32432);
+    lserver = new logserver(100, 32432);
 
     lserver->startserver(&ltable);
 
