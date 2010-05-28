@@ -38,7 +38,7 @@ void mergeManager::new_merge(mergeStats * s) {
       // target_size was set during startup
     } else if(s->merge_level == 1) {
       assert(c0->target_size);
-      c1->target_size = (pageid_t)(*ltable->R() * (double)c0->target_size); //c1_queueSize > s->bytes_out ? c1_queueSize : s->bytes_out;
+      c1->target_size = (pageid_t)(*ltable->R() * (double)c0->target_size);
       assert(c1->target_size);
     } else if(s->merge_level == 2) {
       // target_size is infinity...
@@ -71,6 +71,7 @@ void mergeManager::set_c0_size(int64_t size) {
  * bytes_consumed_by_merger = sum(bytes_in_small_delta)
  */
 void mergeManager::tick(mergeStats * s, bool block) {
+#define PRINT_SKIP 0 //10000
   pageid_t tick_length_bytes = 10*1024;
 
   if(true || s->bytes_in_small_delta > tick_length_bytes) {
@@ -81,7 +82,6 @@ void mergeManager::tick(mergeStats * s, bool block) {
       while(sleeping[s->merge_level]) {
         rwlc_cond_wait(&throttle_wokeup_cond, ltable->header_mut);
       }
-//      pthread_mutex_lock(&mut);
       struct timeval now;
       gettimeofday(&now, 0);
       double elapsed_delta = tv_to_double(&now) - ts_to_double(&s->last_tick);
@@ -99,41 +99,57 @@ void mergeManager::tick(mergeStats * s, bool block) {
 
       int64_t overshoot = 0;
       int64_t raw_overshoot = 0;
-      int64_t overshoot_fudge = (int64_t)((((double)s->current_size / (double)(s->target_size)) - 0.1) * 5.0*1024.0*1024.0); // XXX set based on avg / max tuple size?
+      int64_t overshoot_fudge = (int64_t)(((((double)s->current_size) / (double)(s->target_size)) - 0.5) * 2.0*1024.0*1024.0); // XXX set based on avg / max tuple size?
       int spin = 0;
       double total_sleep = 0.0;
       do{
         overshoot = 0;
         raw_overshoot = 0;
-        double c0_c1_progress = ((double)(c1->bytes_in_large + c1->bytes_in_small)) / (double)(c0->mergeable_size + c1->base_size);
-        double c1_c2_progress = ((double)(c2->bytes_in_large + c2->bytes_in_small)) / (double)(c1->mergeable_size + c2->base_size);
+
+        double c0_out_progress, c0_c1_out_progress;
+        if(c0->mergeable_size) {
+          c0_out_progress = ((double)c0->current_size) / (double)c0->target_size;
+        } else {
+          c0_out_progress = 0; // don't throttle if our consumer is blocked on us.
+        }
+        if(c1->mergeable_size) {
+          c0_c1_out_progress = ((double)c1->current_size) / (double)c1->target_size;
+        } else {
+          c0_c1_out_progress = 0;
+        }
+
+        double c0_c1_in_progress, c1_c2_in_progress;
+        if(c1->active) {
+          c0_c1_in_progress = ((double)(c1->bytes_in_large + c1->bytes_in_small)) / (double)(c0->mergeable_size + c1->base_size);
+        } else {
+          c0_c1_in_progress = 0; // if our consumer is not active, it hasn't made any progress on our most recent output
+        }
+        if(c2->active) {
+          c1_c2_in_progress = ((double)(c2->bytes_in_large + c2->bytes_in_small)) / (double)(c1->mergeable_size + c2->base_size);
+        } else {
+          c1_c2_in_progress = 0;
+        }
 
         double c0_c1_bps = c1->window_consumed / c1->window_elapsed;
         double c1_c2_bps = c2->window_consumed / c2->window_elapsed;
 
         if(s->merge_level == 0) {
-          pageid_t c0_c1_bytes_remaining = (pageid_t)((1.0-c0_c1_progress) * (double)c0->mergeable_size);
-          pageid_t c0_bytes_left = c0->target_size - c0->current_size;
-          raw_overshoot = c0_c1_bytes_remaining - c0_bytes_left;
+          if(!(c1->active && c0->mergeable_size)) { overshoot_fudge = 0; }
+          raw_overshoot = (int64_t)(((double)c0->target_size) * (c0_out_progress - c0_c1_in_progress));
           overshoot = raw_overshoot + overshoot_fudge;
           bps = c0_c1_bps;
-          if(!c0->mergeable_size) { overshoot = raw_overshoot = -1; }
-          if(c0->mergeable_size && ! c1->active) { raw_overshoot = c0->current_size; overshoot = raw_overshoot + overshoot_fudge; }
         } else if (s->merge_level == 1) {
-          pageid_t c1_c2_bytes_remaining = (pageid_t)((1.0-c1_c2_progress) * (double)c1->mergeable_size);
-          pageid_t c1_bytes_left = c1->target_size - c1->current_size;
-          raw_overshoot = c1_c2_bytes_remaining - c1_bytes_left;
+          if(!(c2->active && c1->mergeable_size)) { overshoot_fudge = 0; }
+          raw_overshoot = (int64_t)(((double)c1->target_size) * (c0_c1_out_progress - c1_c2_in_progress));
           overshoot = raw_overshoot + overshoot_fudge;
-          if(!c1->mergeable_size) { overshoot = -1; }
-          if(c1->mergeable_size && ! c2->active) { raw_overshoot = c1->current_size; overshoot = raw_overshoot + overshoot_fudge; }
           bps = c1_c2_bps;
         }
 
-  //#define PP_THREAD_INFO
+//#define PP_THREAD_INFO
   #ifdef PP_THREAD_INFO
-        printf("#%d mbps %6.1f overshoot %9lld current_size = %9lld ",s->merge_level, bps / (1024.0*1024.0), overshoot, s->current_size);
+        printf("\nMerge thread %d %6f %6f Overshoot: raw=%lld, d=%lld eff=%lld Throttle min(1, %6f) spin %d, total_sleep %6.3f\n", s->merge_level, c0_out_progress, c0_c1_in_progress, raw_overshoot, overshoot_fudge, overshoot, -1.0, spin, total_sleep);
   #endif
-        if(print_skipped == 10000) {
+        if(print_skipped == PRINT_SKIP) {
           pretty_print(stdout);
           print_skipped = 0;
         } else {
@@ -143,7 +159,6 @@ void mergeManager::tick(mergeStats * s, bool block) {
           // throttle
           // it took "elapsed" seconds to process "tick_length_bytes" mb
           double sleeptime = 2.0 * (double)overshoot / bps;
-
 
           struct timespec sleep_until;
 
@@ -157,9 +172,7 @@ void mergeManager::tick(mergeStats * s, bool block) {
           total_sleep += sleeptime;
 
           if((spin > 20) || (total_sleep > (max_sleep * 10))) {
-            if(bps > 1) {
-              printf("\nMerge thread %d Overshoot: raw=%lld, d=%lld eff=%lld Throttle min(1, %6f) spin %d, total_sleep %6.3f\n", s->merge_level, raw_overshoot, overshoot_fudge, overshoot, sleeptime, spin, total_sleep);
-            }
+            printf("\nMerge thread %d Overshoot: raw=%lld, d=%lld eff=%lld Throttle min(1, %6f) spin %d, total_sleep %6.3f\n", s->merge_level, raw_overshoot, overshoot_fudge, overshoot, sleeptime, spin, total_sleep);
           }
 
           double_to_ts(&sleep_until, sleeptime + tv_to_double(&now));
@@ -171,7 +184,7 @@ void mergeManager::tick(mergeStats * s, bool block) {
         }
       } while((overshoot > 0) && (raw_overshoot > 0));
     } else {
-      if(print_skipped == 10000) {
+      if(print_skipped == PRINT_SKIP) {
         pretty_print(stdout);
         print_skipped = 0;
       } else {
@@ -184,9 +197,9 @@ void mergeManager::tick(mergeStats * s, bool block) {
 
 mergeManager::mergeManager(logtable<datatuple> *ltable):
   ltable(ltable),
-  c0(new mergeStats(this, 0)),
-  c1(new mergeStats(this, 1)),
-  c2(new mergeStats(this, 2)) {
+  c0(new mergeStats(this, 0, ltable->max_c0_size)),
+  c1(new mergeStats(this, 1, (int64_t)(((double)ltable->max_c0_size) * *ltable->R()))),
+  c2(new mergeStats(this, 2, 0)) {
   pthread_mutex_init(&mut, 0);
   pthread_mutex_init(&throttle_mut, 0);
   pthread_mutex_init(&dummy_throttle_mut, 0);
@@ -222,9 +235,9 @@ void mergeManager::pretty_print(FILE * out) {
   }
 
   double c0_out_progress = 100.0 * c0->current_size / c0->target_size;
-  double c0_c1_in_progress = 100.0 * (c1->bytes_in_large + c1->bytes_in_small) / (c0->mergeable_size + c1->base_size); // c1->bytes_in_small / c0->mergeable_size;
+  double c0_c1_in_progress = 100.0 * (c1->bytes_in_large + c1->bytes_in_small) / (c0->mergeable_size + c1->base_size);
   double c0_c1_out_progress = 100.0 * c1->current_size / c1->target_size;
-  double c1_c2_progress = 100.0 * (c2->bytes_in_large + c2->bytes_in_small) / (c1->mergeable_size + c2->base_size); //c2->bytes_in_small / c1->mergeable_size;
+  double c1_c2_progress = 100.0 * (c2->bytes_in_large + c2->bytes_in_small) / (c1->mergeable_size + c2->base_size);
 
   assert((!c1->active) || (c0_c1_in_progress >= -1 && c0_c1_in_progress < 102));
   assert((!c2->active) || (c1_c2_progress >= -1 && c1_c2_progress < 102));

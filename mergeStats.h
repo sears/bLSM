@@ -20,12 +20,12 @@
 
 class mergeStats {
   public:
-    mergeStats(mergeManager* merge_mgr, int merge_level) :
+    mergeStats(mergeManager* merge_mgr, int merge_level, int64_t target_size) :
       merge_mgr(merge_mgr),
       merge_level(merge_level),
       merge_count(0),
       base_size(0),
-      target_size(0),
+      target_size(target_size),
       current_size(0),
       mergeable_size(0),
       bytes_out_with_overhead(0),

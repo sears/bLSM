@@ -390,10 +390,10 @@ void *diskMergeThread(void*arg)
     return 0;
 }
 
-#define FORCE_INTERVAL 1000000 // XXX do not hardcode FORCE_INTERVAL
+#define FORCE_INTERVAL (2 * 1024 * 1024) // XXX do not hardcode FORCE_INTERVAL
 
 static void periodically_force(int xid, int *i, diskTreeComponent * forceMe, stasis_log_t * log) {
-  if(*i > FORCE_INTERVAL) {
+  if(0 && *i > FORCE_INTERVAL) {
     if(forceMe) forceMe->force(xid);
     log->force_tail(log, LOG_FORCE_WAL);
     *i = 0;
