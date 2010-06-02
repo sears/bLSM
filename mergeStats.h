@@ -16,12 +16,12 @@
 #include <stdio.h>
 #include "datatuple.h"
 #include "datapage.h"
-#include "mergeManager.h"
+
+#include <mergeManager.h> // XXX for double_to_ts, etc... create a util class.
 
 class mergeStats {
   public:
-    mergeStats(mergeManager* merge_mgr, int merge_level, int64_t target_size) :
-      merge_mgr(merge_mgr),
+    mergeStats(int merge_level, int64_t target_size) :
       merge_level(merge_level),
       merge_count(0),
       base_size(0),
@@ -42,14 +42,13 @@ class mergeStats {
       lifetime_consumed(0),
       window_elapsed(0.001),
       window_consumed(0),
+      print_skipped(0),
       active(false) {
       gettimeofday(&sleep,0);
       gettimeofday(&last,0);
-      merge_mgr->double_to_ts(&last_tick, merge_mgr->tv_to_double(&last));
+      mergeManager::double_to_ts(&last_tick, mergeManager::tv_to_double(&last));
     }
-    void new_merge() {
-      merge_mgr->new_merge(this);
-
+    void new_merge2() {
       if(just_handed_off) {
         bytes_out = 0;
         just_handed_off = false;
@@ -72,7 +71,7 @@ class mergeStats {
       active = true;
       gettimeofday(&start, 0);
       gettimeofday(&last, 0);
-      merge_mgr->double_to_ts(&last_tick, merge_mgr->tv_to_double(&last));
+      mergeManager::double_to_ts(&last_tick, mergeManager::tv_to_double(&last));
 
     }
     void handed_off_tree() {
@@ -82,35 +81,13 @@ class mergeStats {
         just_handed_off = true;
       }
     }
-    void finished_merge() {
-      active = false;
-      if(merge_level == 1) {
-        merge_mgr->get_merge_stats(0)->mergeable_size = 0;
-      } else if(merge_level == 2) {
-        merge_mgr->get_merge_stats(1)->mergeable_size = 0;
-      }
-      gettimeofday(&done, 0);
-    }
     void read_tuple_from_large_component(datatuple * tup) {
       if(tup) {
         num_tuples_in_large++;
         bytes_in_large += tup->byte_length();
       }
     }
-    void read_tuple_from_small_component(datatuple * tup) {
-      if(tup) {
-        num_tuples_in_small++;
-        bytes_in_small_delta += tup->byte_length();
-        bytes_in_small += tup->byte_length();
-        merge_mgr->tick(this, true);
-      }
-    }
     void merged_tuples(datatuple * merged, datatuple * small, datatuple * large) {
-    }
-    void wrote_tuple(datatuple * tup) {
-      num_tuples_out++;
-      bytes_out += tup->byte_length();
-      merge_mgr->tick(this, false);
     }
     void wrote_datapage(DataPage<datatuple> *dp) {
       num_datapages_out++;
@@ -119,9 +96,8 @@ class mergeStats {
     pageid_t output_size() {
       return bytes_out;
     }
+    const int merge_level;               // 1 => C0->C1, 2 => C1->C2
   protected:
-    mergeManager* merge_mgr;
-    int merge_level;               // 1 => C0->C1, 2 => C1->C2
     pageid_t merge_count;          // This is the merge_count'th merge
     struct timeval sleep;          // When did we go to sleep waiting for input?
     struct timeval start;          // When did we wake up and start merging?  (at steady state with max throughput, this should be equal to sleep)
@@ -132,13 +108,13 @@ class mergeStats {
       return ((double)tv.tv_sec) + ((double)tv.tv_usec) / 1000000.0;
     }
     friend class mergeManager;
-protected:
+
     struct timespec last_tick;
 
     pageid_t base_size;
     pageid_t target_size;
     pageid_t current_size;
-    pageid_t mergeable_size;
+    pageid_t mergeable_size;  // protected by mutex.
 
     pageid_t bytes_out_with_overhead;// How many bytes did we write (including internal tree nodes)?
     pageid_t bytes_out;            // How many bytes worth of tuples did we write?
@@ -156,6 +132,8 @@ protected:
     double lifetime_consumed;
     double window_elapsed;
     double window_consumed;
+
+    int print_skipped;  // used by pretty print in mergeManager.
 
     bool active;
   public:

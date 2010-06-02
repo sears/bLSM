@@ -52,7 +52,7 @@ logtable<TUPLE>::logtable(pageid_t internal_region_size, pageid_t datapage_regio
     this->datapage_size = datapage_size;
 
     c0_stats = merge_mgr->get_merge_stats(0);
-    c0_stats->new_merge();
+    merge_mgr->new_merge(0);
     c0_stats->starting_merge();
 }
 
@@ -149,7 +149,7 @@ void logtable<TUPLE>::flushTable()
 
 
     int expmcount = merge_count;
-    c0_stats->finished_merge();
+    merge_mgr->finished_merge(0);
 
     //this is for waiting the previous merger of the mem-tree
     //hopefullly this wont happen
@@ -165,7 +165,7 @@ void logtable<TUPLE>::flushTable()
     }
 
     c0_stats->handed_off_tree();
-    c0_stats->new_merge();
+    merge_mgr->new_merge(0);
 
     gettimeofday(&stop_tv,0);
     stop = tv_to_double(stop_tv);
@@ -428,7 +428,7 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
 {
     rwlc_writelock(header_mut); // XXX want this to be a readlock, but tick, and the stats need it to be a writelock for now...
     //lock the red-black tree
-    c0_stats->read_tuple_from_small_component(tuple);  // has to be before rb_mut, since it calls tick with block = true, and that releases header_mut.
+    merge_mgr->read_tuple_from_small_component(0, tuple);  // has to be before rb_mut, since it calls tick with block = true, and that releases header_mut.
     pthread_mutex_lock(&rb_mut);
     //find the previous tuple with same key in the memtree if exists
     memTreeComponent<datatuple>::rbtree_t::iterator rbitr = tree_c0->find(tuple);
@@ -463,7 +463,7 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
 
     }
 
-    c0_stats->wrote_tuple(t);
+    merge_mgr->wrote_tuple(0, t);
 
     pthread_mutex_unlock(&rb_mut);
 

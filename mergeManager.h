@@ -17,18 +17,17 @@
 
 template<class TUPLE>
 class logtable;
-
 class mergeStats;
 
 class mergeManager {
 public:
-  double tv_to_double(struct timeval * tv) {
+  static double tv_to_double(struct timeval * tv) {
     return (double)tv->tv_sec + ((double)tv->tv_usec)/1000000.0;
   }
-  double ts_to_double(struct timespec * ts) {
+  static double ts_to_double(struct timespec * ts) {
     return (double)ts->tv_sec + ((double)ts->tv_nsec)/1000000000.0;
   }
-  void double_to_ts(struct timespec *ts, double time) {
+  static void double_to_ts(struct timespec *ts, double time) {
     ts->tv_sec = (time_t)(time);
     ts->tv_nsec = (long)((time - (double)ts->tv_sec) * 1000000000.0);
   }
@@ -39,11 +38,14 @@ public:
 
   ~mergeManager();
 
-  void new_merge(mergeStats * s);
+  void new_merge(int mergelevel);
   void set_c0_size(int64_t size);
   void tick(mergeStats * s, bool block);
-  void pretty_print(FILE * out);
   mergeStats* get_merge_stats(int mergeLevel);
+  void read_tuple_from_small_component(int merge_level, datatuple * tup);
+  void wrote_tuple(int merge_level, datatuple * tup);
+  void finished_merge(int merge_level);
+  void pretty_print(FILE * out);
 
 private:
   pthread_mutex_t mut;
@@ -60,7 +62,6 @@ private:
   pthread_cond_t dummy_throttle_cond;
   pthread_cond_t throttle_wokeup_cond;
   bool sleeping[3];
-  int print_skipped;
 
 };
 #endif /* MERGEMANAGER_H_ */

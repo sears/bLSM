@@ -32,7 +32,8 @@ mergeManager::~mergeManager() {
   delete c2;
 }
 
-void mergeManager::new_merge(mergeStats * s) {
+void mergeManager::new_merge(int mergeLevel) {
+  mergeStats * s = get_merge_stats(mergeLevel);
   pthread_mutex_lock(&mut);
     if(s->merge_level == 0) {
       // target_size was set during startup
@@ -44,6 +45,7 @@ void mergeManager::new_merge(mergeStats * s) {
       // target_size is infinity...
     } else { abort(); }
   pthread_mutex_unlock(&mut);
+  s->new_merge2();
 }
 void mergeManager::set_c0_size(int64_t size) {
   c0->target_size = size;
@@ -71,12 +73,16 @@ void mergeManager::set_c0_size(int64_t size) {
  * bytes_consumed_by_merger = sum(bytes_in_small_delta)
  */
 void mergeManager::tick(mergeStats * s, bool block) {
-#define PRINT_SKIP 0 //10000
-  pageid_t tick_length_bytes = 10*1024;
+#define PRINT_SKIP 20
+  pageid_t tick_length_bytes = 128*1024; // probably lower than it could be for production machines. 256KB leads to whining on my dev box.
 
-  if(true || s->bytes_in_small_delta > tick_length_bytes) {
+//  if(s->bytes_in_small_delta > tick_length_bytes) {
+  pageid_t new_current_size = s->base_size + s->bytes_out - s->bytes_in_large;
 
-    s->current_size = s->base_size + s->bytes_out - s->bytes_in_large;
+  if(((!block) && (new_current_size - s->current_size > tick_length_bytes)) ||
+      (block && s->bytes_in_small_delta > tick_length_bytes)) {  // other than R, these are protected by a mutex, but this is the only thread that can write them
+
+    s->current_size = new_current_size; //  s->base_size + s->bytes_out - s->bytes_in_large;
 
     if(block) {
       while(sleeping[s->merge_level]) {
@@ -149,11 +155,11 @@ void mergeManager::tick(mergeStats * s, bool block) {
   #ifdef PP_THREAD_INFO
         printf("\nMerge thread %d %6f %6f Overshoot: raw=%lld, d=%lld eff=%lld Throttle min(1, %6f) spin %d, total_sleep %6.3f\n", s->merge_level, c0_out_progress, c0_c1_in_progress, raw_overshoot, overshoot_fudge, overshoot, -1.0, spin, total_sleep);
   #endif
-        if(print_skipped == PRINT_SKIP) {
+        if(s->print_skipped == PRINT_SKIP) {
           pretty_print(stdout);
-          print_skipped = 0;
+          s->print_skipped = 0;
         } else {
-          print_skipped++;
+          s->print_skipped++;
         }
         if(overshoot > 0) {
           // throttle
@@ -184,22 +190,48 @@ void mergeManager::tick(mergeStats * s, bool block) {
         }
       } while((overshoot > 0) && (raw_overshoot > 0));
     } else {
-      if(print_skipped == PRINT_SKIP) {
+      if(s->print_skipped == PRINT_SKIP) {
         pretty_print(stdout);
-        print_skipped = 0;
+        s->print_skipped = 0;
       } else {
-        print_skipped++;
+        s->print_skipped++;
       }
     }
 //    pthread_mutex_unlock(&mut);
   }
 }
 
+void mergeManager::read_tuple_from_small_component(int merge_level, datatuple * tup) {
+  if(tup) {
+    mergeStats * s = get_merge_stats(merge_level);
+    (s->num_tuples_in_small)++;
+    (s->bytes_in_small_delta) += tup->byte_length();
+    (s->bytes_in_small) += tup->byte_length();
+    tick(s, true);
+  }
+}
+void mergeManager::wrote_tuple(int merge_level, datatuple * tup) {
+  mergeStats * s = get_merge_stats(merge_level);
+  (s->num_tuples_out)++;
+  (s->bytes_out) += tup->byte_length();
+
+  // XXX this just updates stat's current size, and (perhaps) does a pretty print.  It should not need a mutex.
+  tick(s, false);
+}
+
+void mergeManager::finished_merge(int merge_level) {
+  get_merge_stats(merge_level)->active = false;
+  if(merge_level != 0) {
+    get_merge_stats(merge_level - 1)->mergeable_size = 0;
+  }
+  gettimeofday(&get_merge_stats(merge_level)->done, 0);
+}
+
 mergeManager::mergeManager(logtable<datatuple> *ltable):
   ltable(ltable),
-  c0(new mergeStats(this, 0, ltable->max_c0_size)),
-  c1(new mergeStats(this, 1, (int64_t)(((double)ltable->max_c0_size) * *ltable->R()))),
-  c2(new mergeStats(this, 2, 0)) {
+  c0(new mergeStats(0, ltable->max_c0_size)),
+  c1(new mergeStats(1, (int64_t)(((double)ltable->max_c0_size) * *ltable->R()))),
+  c2(new mergeStats(2, 0)) {
   pthread_mutex_init(&mut, 0);
   pthread_mutex_init(&throttle_mut, 0);
   pthread_mutex_init(&dummy_throttle_mut, 0);
@@ -210,7 +242,6 @@ mergeManager::mergeManager(logtable<datatuple> *ltable):
   sleeping[0] = false;
   sleeping[1] = false;
   sleeping[2] = false;
-  print_skipped = 0;
   double_to_ts(&c0->last_tick, tv_to_double(&tv));
   double_to_ts(&c1->last_tick, tv_to_double(&tv));
   double_to_ts(&c2->last_tick, tv_to_double(&tv));
@@ -251,8 +282,8 @@ void mergeManager::pretty_print(FILE * out) {
       have_c1m ? "C1'" : "...",
       c2->active ? "RUN" : "---", c1_c2_progress, c2->window_consumed/(((double)mb)*c2->window_elapsed), c2->lifetime_consumed/(((double)mb)*c2->lifetime_elapsed),
       have_c2 ? "C2" : "..");
-#define PP_SIZES
-  #ifdef PP_SIZES
+//#define PP_SIZES
+#ifdef PP_SIZES
   fprintf(out, "[size in small/large, out, mergeable] C0 %4lld %4lld %4lld %4lld %4lld %4lld ",
           c0->target_size/mb, c0->current_size/mb, c0->bytes_in_small/mb,
           c0->bytes_in_large/mb, c0->bytes_out/mb, c0->mergeable_size/mb);

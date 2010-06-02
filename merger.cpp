@@ -146,7 +146,7 @@ void* memMergeThread(void*arg)
     while(true) // 1
     {
         rwlc_writelock(ltable->header_mut);
-        stats->new_merge();
+        ltable->merge_mgr->new_merge(1);
         int done = 0;
         // 2: wait for c0_mergable
         while(!ltable->get_tree_c0_mergeable())
@@ -230,7 +230,7 @@ void* memMergeThread(void*arg)
         ltable->update_persistent_header(xid);
         Tcommit(xid);
 
-        stats->finished_merge();
+        ltable->merge_mgr->finished_merge(1);
 
         //TODO: this is simplistic for now
         //6: if c1' is too big, signal the other merger
@@ -299,7 +299,7 @@ void *diskMergeThread(void*arg)
 
         // 2: wait for input
         rwlc_writelock(ltable->header_mut);
-        stats->new_merge();
+        ltable->merge_mgr->new_merge(2);
         int done = 0;
         // get a new input for merge
         while(!ltable->get_tree_c1_mergeable())
@@ -381,7 +381,7 @@ void *diskMergeThread(void*arg)
         ltable->update_persistent_header(xid);
         Tcommit(xid);
 
-        stats->finished_merge();
+        ltable->merge_mgr->finished_merge(2);
 
         rwlc_unlock(ltable->header_mut);
 //        stats->pretty_print(stdout);
@@ -423,7 +423,7 @@ void merge_iterators(int xid,
     rwlc_writelock(ltable->header_mut); // XXX slow
     while( (t2=itrB->next_callerFrees()) != 0)
     {
-      stats->read_tuple_from_small_component(t2);
+      ltable->merge_mgr->read_tuple_from_small_component(stats->merge_level, t2);
       rwlc_unlock(ltable->header_mut); // XXX slow
 
         DEBUG("tuple\t%lld: keylen %d datalen %d\n",
@@ -435,7 +435,7 @@ void merge_iterators(int xid,
             //insert t1
             scratch_tree->insertTuple(xid, t1);
             i+=t1->byte_length();
-            stats->wrote_tuple(t1);
+            ltable->merge_mgr->wrote_tuple(stats->merge_level, t1);
             datatuple::freetuple(t1);
             //advance itrA
             t1 = itrA->next_callerFrees();
@@ -458,7 +458,7 @@ void merge_iterators(int xid,
               i+=mtuple->byte_length();
             }
             datatuple::freetuple(t1);
-            stats->wrote_tuple(mtuple);
+            ltable->merge_mgr->wrote_tuple(stats->merge_level, mtuple);
             t1 = itrA->next_callerFrees();  //advance itrA
             if(t1) {
               stats->read_tuple_from_large_component(t1);
@@ -474,7 +474,7 @@ void merge_iterators(int xid,
             scratch_tree->insertTuple(xid, t2);
             i+=t2->byte_length();
 
-            stats->wrote_tuple(t2);
+            ltable->merge_mgr->wrote_tuple(stats->merge_level, t2);
             periodically_force(xid, &i, forceMe, log);
             rwlc_unlock(ltable->header_mut); // XXX slow
             // cannot free any tuples here; they may still be read through a lookup
@@ -485,7 +485,7 @@ void merge_iterators(int xid,
 
     while(t1 != 0) {// t1 is less than t2
       scratch_tree->insertTuple(xid, t1);
-      stats->wrote_tuple(t1);
+      ltable->merge_mgr->wrote_tuple(stats->merge_level, t1);
       i += t1->byte_length();
       datatuple::freetuple(t1);
 
