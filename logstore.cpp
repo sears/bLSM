@@ -182,7 +182,7 @@ void logtable<TUPLE>::flushTable()
     tsize = 0;
     tree_bytes = 0;
 
-    if(blocked && stop - start > 0.1) {
+    if(blocked && stop - start > 1.0) {
       if(first)
       {
           printf("\nBlocked writes for %f sec\n", stop-start);

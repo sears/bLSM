@@ -74,7 +74,7 @@ void mergeManager::set_c0_size(int64_t size) {
  */
 void mergeManager::tick(mergeStats * s, bool block) {
 #define PRINT_SKIP 20
-  pageid_t tick_length_bytes = 128*1024; // probably lower than it could be for production machines. 256KB leads to whining on my dev box.
+  pageid_t tick_length_bytes = 64*1024; // probably lower than it could be for production machines. 256KB leads to whining on my dev box.
 
 //  if(s->bytes_in_small_delta > tick_length_bytes) {
   pageid_t new_current_size = s->base_size + s->bytes_out - s->bytes_in_large;
