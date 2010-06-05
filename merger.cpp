@@ -105,7 +105,7 @@ void merge_iterators(int xid, diskTreeComponent * forceMe,
                     ITB *itrB,
                     logtable<datatuple> *ltable,
                     diskTreeComponent *scratch_tree,
-                    mergeStats *stats,
+                    mergeStats * stats,
                     bool dropDeletes);
 
 
@@ -406,7 +406,7 @@ void merge_iterators(int xid,
                         ITA *itrA, //iterator on c1 or c2
                         ITB *itrB, //iterator on c0 or c1, respectively
                         logtable<datatuple> *ltable,
-                        diskTreeComponent *scratch_tree, mergeStats *stats,
+                        diskTreeComponent *scratch_tree, mergeStats * stats,
                         bool dropDeletes  // should be true iff this is biggest component
                         )
 {
@@ -414,7 +414,7 @@ void merge_iterators(int xid,
 
     rwlc_writelock(ltable->header_mut); // XXX slow
     datatuple *t1 = itrA->next_callerFrees();
-    stats->read_tuple_from_large_component(t1);
+    ltable->merge_mgr->read_tuple_from_large_component(stats->merge_level, t1);
     rwlc_unlock(ltable->header_mut); // XXX slow
     datatuple *t2 = 0;
 
@@ -440,7 +440,7 @@ void merge_iterators(int xid,
             //advance itrA
             t1 = itrA->next_callerFrees();
             if(t1) {
-              stats->read_tuple_from_large_component(t1);
+              ltable->merge_mgr->read_tuple_from_large_component(stats->merge_level, t1);
             }
             periodically_force(xid, &i, forceMe, log);
             rwlc_unlock(ltable->header_mut); // XXX slow
@@ -461,7 +461,7 @@ void merge_iterators(int xid,
             ltable->merge_mgr->wrote_tuple(stats->merge_level, mtuple);
             t1 = itrA->next_callerFrees();  //advance itrA
             if(t1) {
-              stats->read_tuple_from_large_component(t1);
+              ltable->merge_mgr->read_tuple_from_large_component(stats->merge_level, t1);
             }
             datatuple::freetuple(mtuple);
             periodically_force(xid, &i, forceMe, log);
@@ -491,7 +491,7 @@ void merge_iterators(int xid,
 
       //advance itrA
       t1 = itrA->next_callerFrees();
-      stats->read_tuple_from_large_component(t1);
+      ltable->merge_mgr->read_tuple_from_large_component(stats->merge_level, t1);
       periodically_force(xid, &i, forceMe, log);
       rwlc_unlock(ltable->header_mut); // XXX slow
       rwlc_writelock(ltable->header_mut); // XXX slow

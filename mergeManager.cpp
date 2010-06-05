@@ -51,6 +51,28 @@ void mergeManager::set_c0_size(int64_t size) {
   c0->target_size = size;
 }
 
+void mergeManager::update_progress(mergeStats * s, int delta) {
+  s->delta += delta;
+  if((!delta) || s->delta > 512 * 1024) {
+    s->delta = 0;
+    if(delta) s->need_tick = true;
+    if(s->merge_level != 0) {
+      if(s->active) {
+        s->in_progress =  ((double)(s->bytes_in_large + s->bytes_in_small)) / (double)(get_merge_stats(s->merge_level-1)->mergeable_size + s->base_size);
+      } else {
+        s->in_progress = 0;
+      }
+    }
+    if(s->merge_level != 2) {
+      if(s->mergeable_size) {
+        s->out_progress = ((double)s->current_size) / (double)s->target_size;
+      } else {
+        s->out_progress = 0;
+      }
+    }
+  }
+}
+
 /**
  * This function is invoked periodically by the merge threads.  It updates mergeManager's statistics, and applies
  * backpressure as necessary.
@@ -72,17 +94,20 @@ void mergeManager::set_c0_size(int64_t size) {
  *
  * bytes_consumed_by_merger = sum(bytes_in_small_delta)
  */
-void mergeManager::tick(mergeStats * s, bool block) {
+void mergeManager::tick(mergeStats * s, bool block, bool force) {
 #define PRINT_SKIP 20
-  pageid_t tick_length_bytes = 64*1024; // probably lower than it could be for production machines. 256KB leads to whining on my dev box.
+  pageid_t tick_length_bytes = 256*1024; // probably lower than it could be for production machines. 256KB leads to whining on my dev box.
 
 //  if(s->bytes_in_small_delta > tick_length_bytes) {
   pageid_t new_current_size = s->base_size + s->bytes_out - s->bytes_in_large;
 
-  if(((!block) && (new_current_size - s->current_size > tick_length_bytes)) ||
-      (block && s->bytes_in_small_delta > tick_length_bytes)) {  // other than R, these are protected by a mutex, but this is the only thread that can write them
+//  if(force || ((!block) && (new_current_size - s->current_size > tick_length_bytes)) ||
+//      (block && s->bytes_in_small_delta > tick_length_bytes)) {  // other than R, these are protected by a mutex, but this is the only thread that can write them
 
-    s->current_size = new_current_size; //  s->base_size + s->bytes_out - s->bytes_in_large;
+  if(force || s->need_tick) {
+    if(block) { s->need_tick = false; }
+    s->current_size = new_current_size; // xxx move to update_progress
+
 
     if(block) {
       while(sleeping[s->merge_level]) {
@@ -92,6 +117,8 @@ void mergeManager::tick(mergeStats * s, bool block) {
       gettimeofday(&now, 0);
       double elapsed_delta = tv_to_double(&now) - ts_to_double(&s->last_tick);
       double bps = 0; //  = (double)s->bytes_in_small_delta / (double)elapsed_delta;
+
+      // xxx move bps stuff to update_progress
 
       s->lifetime_elapsed += elapsed_delta;
       s->lifetime_consumed += s->bytes_in_small_delta;
@@ -105,48 +132,24 @@ void mergeManager::tick(mergeStats * s, bool block) {
 
       int64_t overshoot = 0;
       int64_t raw_overshoot = 0;
-      int64_t overshoot_fudge = (int64_t)(((((double)s->current_size) / (double)(s->target_size)) - 0.5) * 2.0*1024.0*1024.0); // XXX set based on avg / max tuple size?
+      int64_t overshoot_fudge = (int64_t)(((((double)s->current_size) / (double)(s->target_size)) - 0.5) * 4.0*1024.0*1024.0); // XXX set based on avg / max tuple size?
       int spin = 0;
       double total_sleep = 0.0;
       do{
         overshoot = 0;
         raw_overshoot = 0;
-
-        double c0_out_progress, c0_c1_out_progress;
-        if(c0->mergeable_size) {
-          c0_out_progress = ((double)c0->current_size) / (double)c0->target_size;
-        } else {
-          c0_out_progress = 0; // don't throttle if our consumer is blocked on us.
-        }
-        if(c1->mergeable_size) {
-          c0_c1_out_progress = ((double)c1->current_size) / (double)c1->target_size;
-        } else {
-          c0_c1_out_progress = 0;
-        }
-
-        double c0_c1_in_progress, c1_c2_in_progress;
-        if(c1->active) {
-          c0_c1_in_progress = ((double)(c1->bytes_in_large + c1->bytes_in_small)) / (double)(c0->mergeable_size + c1->base_size);
-        } else {
-          c0_c1_in_progress = 0; // if our consumer is not active, it hasn't made any progress on our most recent output
-        }
-        if(c2->active) {
-          c1_c2_in_progress = ((double)(c2->bytes_in_large + c2->bytes_in_small)) / (double)(c1->mergeable_size + c2->base_size);
-        } else {
-          c1_c2_in_progress = 0;
-        }
-
+        // more bps stuff for update_progress
         double c0_c1_bps = c1->window_consumed / c1->window_elapsed;
         double c1_c2_bps = c2->window_consumed / c2->window_elapsed;
 
         if(s->merge_level == 0) {
           if(!(c1->active && c0->mergeable_size)) { overshoot_fudge = 0; }
-          raw_overshoot = (int64_t)(((double)c0->target_size) * (c0_out_progress - c0_c1_in_progress));
+          raw_overshoot = (int64_t)(((double)c0->target_size) * (c0->out_progress - c1->in_progress));
           overshoot = raw_overshoot + overshoot_fudge;
           bps = c0_c1_bps;
         } else if (s->merge_level == 1) {
           if(!(c2->active && c1->mergeable_size)) { overshoot_fudge = 0; }
-          raw_overshoot = (int64_t)(((double)c1->target_size) * (c0_c1_out_progress - c1_c2_in_progress));
+          raw_overshoot = (int64_t)(((double)c1->target_size) * (c1->out_progress - c2->in_progress));
           overshoot = raw_overshoot + overshoot_fudge;
           bps = c1_c2_bps;
         }
@@ -161,7 +164,7 @@ void mergeManager::tick(mergeStats * s, bool block) {
         } else {
           s->print_skipped++;
         }
-        if(overshoot > 0) {
+        if(overshoot > 0 && (raw_overshoot > 0 || total_sleep < 0.5)) {
           // throttle
           // it took "elapsed" seconds to process "tick_length_bytes" mb
           double sleeptime = 2.0 * (double)overshoot / bps;
@@ -187,8 +190,10 @@ void mergeManager::tick(mergeStats * s, bool block) {
           sleeping[s->merge_level] = false;
           pthread_cond_broadcast(&throttle_wokeup_cond);
           gettimeofday(&now, 0);
+        } else {
+          break;
         }
-      } while((overshoot > 0) && (raw_overshoot > 0));
+      } while(1);
     } else {
       if(s->print_skipped == PRINT_SKIP) {
         pretty_print(stdout);
@@ -207,24 +212,40 @@ void mergeManager::read_tuple_from_small_component(int merge_level, datatuple * 
     (s->num_tuples_in_small)++;
     (s->bytes_in_small_delta) += tup->byte_length();
     (s->bytes_in_small) += tup->byte_length();
+    update_progress(s, tup->byte_length());
     tick(s, true);
   }
 }
+void mergeManager::read_tuple_from_large_component(int merge_level, datatuple * tup) {
+  if(tup) {
+    mergeStats * s = get_merge_stats(merge_level);
+    s->num_tuples_in_large++;
+    s->bytes_in_large += tup->byte_length();
+//    tick(s, false); // would be no-op; we just reduced current_size.
+    update_progress(s, tup->byte_length());
+  }
+}
+
 void mergeManager::wrote_tuple(int merge_level, datatuple * tup) {
   mergeStats * s = get_merge_stats(merge_level);
   (s->num_tuples_out)++;
   (s->bytes_out) += tup->byte_length();
 
   // XXX this just updates stat's current size, and (perhaps) does a pretty print.  It should not need a mutex.
+  update_progress(s, tup->byte_length());
   tick(s, false);
 }
 
 void mergeManager::finished_merge(int merge_level) {
+  update_progress(get_merge_stats(merge_level), 0);
+  tick(get_merge_stats(merge_level), false, true);  // XXX what does this do???
   get_merge_stats(merge_level)->active = false;
   if(merge_level != 0) {
     get_merge_stats(merge_level - 1)->mergeable_size = 0;
+    update_progress(get_merge_stats(merge_level-1), 0);
   }
   gettimeofday(&get_merge_stats(merge_level)->done, 0);
+  update_progress(get_merge_stats(merge_level), 0);
 }
 
 mergeManager::mergeManager(logtable<datatuple> *ltable):

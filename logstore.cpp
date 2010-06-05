@@ -437,7 +437,7 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
     {        
         datatuple *pre_t = *rbitr;
         //do the merging
-        c0_stats->read_tuple_from_large_component(pre_t);
+        merge_mgr->read_tuple_from_large_component(0, pre_t);
         datatuple *new_t = tmerger->merge(pre_t, tuple);
         c0_stats->merged_tuples(new_t, tuple, pre_t);
         t = new_t;

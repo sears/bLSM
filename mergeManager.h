@@ -40,9 +40,11 @@ public:
 
   void new_merge(int mergelevel);
   void set_c0_size(int64_t size);
-  void tick(mergeStats * s, bool block);
+  void update_progress(mergeStats *s, int delta);
+  void tick(mergeStats * s, bool block, bool force = false);
   mergeStats* get_merge_stats(int mergeLevel);
   void read_tuple_from_small_component(int merge_level, datatuple * tup);
+  void read_tuple_from_large_component(int merge_level, datatuple * tup);
   void wrote_tuple(int merge_level, datatuple * tup);
   void finished_merge(int merge_level);
   void pretty_print(FILE * out);

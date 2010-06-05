@@ -38,6 +38,10 @@ class mergeStats {
       bytes_in_large(0),
       num_tuples_in_large(0),
       just_handed_off(false),
+      delta(0),
+      need_tick(false),
+      in_progress(0),
+      out_progress(0),
       lifetime_elapsed(0),
       lifetime_consumed(0),
       window_elapsed(0.001),
@@ -51,6 +55,7 @@ class mergeStats {
     void new_merge2() {
       if(just_handed_off) {
         bytes_out = 0;
+        out_progress = 0;
         just_handed_off = false;
       }
       base_size = bytes_out;
@@ -65,6 +70,7 @@ class mergeStats {
       num_tuples_in_small = 0;
       bytes_in_large = 0;
       num_tuples_in_large = 0;
+      in_progress = 0;
       gettimeofday(&sleep,0);
     }
     void starting_merge() {
@@ -79,12 +85,6 @@ class mergeStats {
       } else {
         mergeable_size = current_size;
         just_handed_off = true;
-      }
-    }
-    void read_tuple_from_large_component(datatuple * tup) {
-      if(tup) {
-        num_tuples_in_large++;
-        bytes_in_large += tup->byte_length();
       }
     }
     void merged_tuples(datatuple * merged, datatuple * small, datatuple * large) {
@@ -127,6 +127,11 @@ class mergeStats {
     pageid_t num_tuples_in_large;  // Tuples from large input?
 
     bool just_handed_off;
+
+    int delta;
+    bool need_tick;
+    double in_progress;
+    double out_progress;
 
     double lifetime_elapsed;
     double lifetime_consumed;
