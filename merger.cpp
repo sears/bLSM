@@ -412,26 +412,21 @@ void merge_iterators(int xid,
 {
   stasis_log_t * log = (stasis_log_t*)stasis_log();
 
-    rwlc_writelock(ltable->header_mut); // XXX slow
     datatuple *t1 = itrA->next_callerFrees();
     ltable->merge_mgr->read_tuple_from_large_component(stats->merge_level, t1);
-    rwlc_unlock(ltable->header_mut); // XXX slow
     datatuple *t2 = 0;
 
     int i = 0;
 
-    rwlc_writelock(ltable->header_mut); // XXX slow
     while( (t2=itrB->next_callerFrees()) != 0)
     {
       ltable->merge_mgr->read_tuple_from_small_component(stats->merge_level, t2);
-      rwlc_unlock(ltable->header_mut); // XXX slow
 
         DEBUG("tuple\t%lld: keylen %d datalen %d\n",
                ntuples, *(t2->keylen),*(t2->datalen) );
 
         while(t1 != 0 && datatuple::compare(t1->key(), t1->keylen(), t2->key(), t2->keylen()) < 0) // t1 is less than t2
         {
-            rwlc_writelock(ltable->header_mut); // XXX slow
             //insert t1
             scratch_tree->insertTuple(xid, t1);
             i+=t1->byte_length();
@@ -443,13 +438,11 @@ void merge_iterators(int xid,
               ltable->merge_mgr->read_tuple_from_large_component(stats->merge_level, t1);
             }
             periodically_force(xid, &i, forceMe, log);
-            rwlc_unlock(ltable->header_mut); // XXX slow
         }
 
         if(t1 != 0 && datatuple::compare(t1->key(), t1->keylen(), t2->key(), t2->keylen()) == 0)
         {
             datatuple *mtuple = ltable->gettuplemerger()->merge(t1,t2);
-            rwlc_writelock(ltable->header_mut); // XXX slow
             stats->merged_tuples(mtuple, t2, t1); // this looks backwards, but is right.
 
             //insert merged tuple, drop deletes
@@ -465,22 +458,18 @@ void merge_iterators(int xid,
             }
             datatuple::freetuple(mtuple);
             periodically_force(xid, &i, forceMe, log);
-            rwlc_unlock(ltable->header_mut); // XXX slow
         }
         else
         {
-            rwlc_writelock(ltable->header_mut); // XXX slow
             //insert t2
             scratch_tree->insertTuple(xid, t2);
             i+=t2->byte_length();
 
             ltable->merge_mgr->wrote_tuple(stats->merge_level, t2);
             periodically_force(xid, &i, forceMe, log);
-            rwlc_unlock(ltable->header_mut); // XXX slow
             // cannot free any tuples here; they may still be read through a lookup
         }
         datatuple::freetuple(t2);
-        rwlc_writelock(ltable->header_mut); // XXX slow
     }
 
     while(t1 != 0) {// t1 is less than t2
@@ -493,11 +482,8 @@ void merge_iterators(int xid,
       t1 = itrA->next_callerFrees();
       ltable->merge_mgr->read_tuple_from_large_component(stats->merge_level, t1);
       periodically_force(xid, &i, forceMe, log);
-      rwlc_unlock(ltable->header_mut); // XXX slow
-      rwlc_writelock(ltable->header_mut); // XXX slow
     }
     DEBUG("dpages: %d\tnpages: %d\tntuples: %d\n", dpages, npages, ntuples);
 
     scratch_tree->writes_done();
-    rwlc_unlock(ltable->header_mut);
 }

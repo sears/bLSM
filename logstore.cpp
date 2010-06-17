@@ -169,7 +169,7 @@ void logtable<TUPLE>::flushTable()
 
     gettimeofday(&stop_tv,0);
     stop = tv_to_double(stop_tv);
-    
+    pthread_mutex_lock(&rb_mut);
     set_tree_c0_mergeable(get_tree_c0());
 
     pthread_cond_signal(&c0_ready);
@@ -177,6 +177,7 @@ void logtable<TUPLE>::flushTable()
 
     merge_count ++;
     set_tree_c0(new memTreeComponent<datatuple>::rbtree_t);
+    pthread_mutex_unlock(&rb_mut);
     c0_stats->starting_merge();
 
     tsize = 0;
@@ -426,7 +427,6 @@ datatuple * logtable<TUPLE>::findTuple_first(int xid, datatuple::key_t key, size
 template<class TUPLE>
 void logtable<TUPLE>::insertTuple(datatuple *tuple)
 {
-    rwlc_writelock(header_mut); // XXX want this to be a readlock, but tick, and the stats need it to be a writelock for now...
     //lock the red-black tree
     merge_mgr->read_tuple_from_small_component(0, tuple);  // has to be before rb_mut, since it calls tick with block = true, and that releases header_mut.
     pthread_mutex_lock(&rb_mut);
@@ -471,14 +471,14 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
     if(tree_bytes >= max_c0_size )
     {
       DEBUG("tree size before merge %d tuples %lld bytes.\n", tsize, tree_bytes);
-//      rwlc_unlock(header_mut);
-//      rwlc_writelock(header_mut);
+
+      rwlc_writelock(header_mut);
       // the test of tree size needs to be atomic with the flushTable, and flushTable needs a writelock.
       if(tree_bytes >= max_c0_size) {
         flushTable();
       }
+      rwlc_unlock(header_mut);
     }
-    rwlc_unlock(header_mut);
 
     DEBUG("tree size %d tuples %lld bytes.\n", tsize, tree_bytes);
 }

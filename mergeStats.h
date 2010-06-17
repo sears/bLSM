@@ -51,6 +51,10 @@ class mergeStats {
       gettimeofday(&sleep,0);
       gettimeofday(&last,0);
       mergeManager::double_to_ts(&last_tick, mergeManager::tv_to_double(&last));
+      pthread_mutex_init(&mut,0);
+    }
+    ~mergeStats() {
+      pthread_mutex_destroy(&mut);
     }
     void new_merge2() {
       if(just_handed_off) {
@@ -138,9 +142,13 @@ class mergeStats {
     double window_elapsed;
     double window_consumed;
 
+    double bps;
+
     int print_skipped;  // used by pretty print in mergeManager.
 
     bool active;
+
+    pthread_mutex_t mut; // protects things touched in tick(), and nothing else.
   public:
 
     void pretty_print(FILE* fd) {

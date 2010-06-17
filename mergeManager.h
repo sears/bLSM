@@ -50,7 +50,6 @@ public:
   void pretty_print(FILE * out);
 
 private:
-  pthread_mutex_t mut;
   logtable<datatuple>*    ltable;
   double throttle_seconds;
 //  double elapsed_seconds;
