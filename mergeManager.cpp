@@ -122,8 +122,6 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
       rwlc_writelock(ltable->header_mut);
       s->need_tick = false;
       while(sleeping[s->merge_level]) {
-        assert(!sleeping[s->merge_level]);
-
         rwlc_cond_wait(&throttle_wokeup_cond, ltable->header_mut);
       }
 
