@@ -48,9 +48,11 @@ void mergeManager::set_c0_size(int64_t size) {
   c0->target_size = size;
 }
 
+static const int UPDATE_PROGRESS_DELTA = 1 * 1024 * 1024;
+
 void mergeManager::update_progress(mergeStats * s, int delta) {
   s->delta += delta;
-  if((!delta) || s->delta > 64 * 1024) { //512 * 1024) {
+  if((!delta) || s->delta > UPDATE_PROGRESS_DELTA) { //512 * 1024) {
     if(delta) {
       rwlc_writelock(ltable->header_mut);
       s->delta = 0;
@@ -127,7 +129,7 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
 
       int64_t overshoot = 0;
       int64_t raw_overshoot = 0;
-      int64_t overshoot_fudge = (int64_t)((s->out_progress-0.5) * 4.0 * 1024.0 * 1024.0);
+      int64_t overshoot_fudge = (int64_t)((s->out_progress-0.5) * 18.0 * 1024.0 * 1024.0);
       int spin = 0;
       double total_sleep = 0.0;
       do{
@@ -193,6 +195,7 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
           if(s->merge_level == 0) { update_progress(c1, 0); }
           if(s->merge_level == 1) { update_progress(c2, 0); }
         } else {
+          if(overshoot > 0) { s->need_tick = 1; }
           break;
         }
       } while(1);
@@ -255,8 +258,8 @@ void mergeManager::finished_merge(int merge_level) {
 
 mergeManager::mergeManager(logtable<datatuple> *ltable):
   ltable(ltable),
-  c0(new mergeStats(0, ltable->max_c0_size)),
-  c1(new mergeStats(1, (int64_t)(((double)ltable->max_c0_size) * *ltable->R()))),
+  c0(new mergeStats(0, ltable ? ltable->max_c0_size : 10000000)),
+  c1(new mergeStats(1, (int64_t)(ltable ? ((double)(ltable->max_c0_size) * *ltable->R()) : 100000000.0) )),
   c2(new mergeStats(2, 0)) {
   pthread_mutex_init(&throttle_mut, 0);
   pthread_mutex_init(&dummy_throttle_mut, 0);
