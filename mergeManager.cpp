@@ -125,27 +125,44 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
       }
 
       int64_t overshoot = 0;
+      int64_t overshoot2 = 0;
       int64_t raw_overshoot = 0;
-//      int64_t overshoot_fudge = (int64_t)((s->out_progress-0.5) * 18.0 * 1024.0 * 1024.0);
-//      double skew = 0.5; // should be between 0 and 0.5.  0 means that there is no 'catch up' after merge commit
-      int64_t overshoot_fudge = UPDATE_PROGRESS_DELTA + (int64_t)(s->out_progress * ((double)FORCE_INTERVAL)); //+ (int64_t)((s->out_progress-skew) * (0.0 / (1.0-skew)) * 1024.0 * 1024.0);  // should be some function of R, delta interval, and force interval. // xxx divide FORCE_INTERVAL by R?
+
+      /* model the effect of linux + stasis' write caches; at the end
+         of this merge, we need to force up to FORCE_INTERVAL bytes
+         after we think we're done writing the next component. */
+      double skew = 0.0; // should be between 0 and 0.5.  0 means that there is no 'catch up' after merge commit
+
+      int64_t overshoot_fudge = (int64_t)((s->out_progress-skew) * ((double)FORCE_INTERVAL)/(1.0-skew));
+      /* model the effect of amortizing this computation: we could
+         become this much more overshot if we don't act now. */
+      int64_t overshoot_fudge2 = UPDATE_PROGRESS_DELTA;
+      /* multiply by 2 for good measure.  These are 'soft' walls, and
+         still let writes trickle through.  Once we've exausted the
+         fudge factors, we'll hit a hard wall, and stop writes
+         entirely, so it's better to start thottling too early than
+         too late. */
       overshoot_fudge *= 2;
+      overshoot_fudge2 *= 2;
       int spin = 0;
       double total_sleep = 0.0;
       do{
         overshoot = 0;
+        overshoot2 = 0;
         raw_overshoot = 0;
         double bps;
         // This needs to be here (and not in update_progress), since the other guy's in_progress changes while we sleep.
         if(s->merge_level == 0) {
-          if(!(c1->active && c0->mergeable_size)) { overshoot_fudge = 0; }
+          if(!(c1->active && c0->mergeable_size)) { overshoot_fudge = 0; overshoot_fudge2 = 0; }
           raw_overshoot = (int64_t)(((double)c0->target_size) * (c0->out_progress - c1->in_progress));
           overshoot = raw_overshoot + overshoot_fudge;
+          overshoot2 = raw_overshoot + overshoot_fudge2;
           bps = c1->bps;
         } else if (s->merge_level == 1) {
-          if(!(c2->active && c1->mergeable_size)) { overshoot_fudge = 0; }
+          if(!(c2->active && c1->mergeable_size)) { overshoot_fudge = 0; overshoot_fudge2 = 0; }
           raw_overshoot = (int64_t)(((double)c1->target_size) * (c1->out_progress - c2->in_progress));
           overshoot = raw_overshoot + overshoot_fudge;
+          overshoot2 = raw_overshoot + overshoot_fudge2;
           bps = c2->bps;
         }
 
@@ -159,10 +176,14 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
         } else {
           s->print_skipped++;
         }
-        if(overshoot > 0 && (raw_overshoot > 0 || total_sleep < 0.01)) {
+        bool one_threshold = (overshoot > 0 || overshoot2 > 0) || (raw_overshoot > 0);
+        bool two_threshold = (overshoot > 0 || overshoot2 > 0) && (raw_overshoot > 0);
+
+        //        if(overshoot > 0 && (raw_overshoot > 0 || total_sleep < 0.01)) {
+        if(one_threshold && (two_threshold || total_sleep < 0.01)) {
           // throttle
           // it took "elapsed" seconds to process "tick_length_bytes" mb
-          double sleeptime = 2.0 * (double)overshoot / bps;
+          double sleeptime = 2.0 * fmax((double)overshoot,(double)overshoot2) / bps;
 
           struct timespec sleep_until;
 
@@ -197,7 +218,7 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
           if(s->merge_level == 0) { update_progress(c1, 0); }
           if(s->merge_level == 1) { update_progress(c2, 0); }
         } else {
-          if(overshoot > 0) {
+          if(overshoot > 0 || overshoot2 > 0) {
             s->need_tick ++;
             if(s->need_tick > 100) { printf("need tick %d\n", s->need_tick); }
           } else {
