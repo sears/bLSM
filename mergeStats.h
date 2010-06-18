@@ -39,7 +39,7 @@ class mergeStats {
       num_tuples_in_large(0),
       just_handed_off(false),
       delta(0),
-      need_tick(false),
+      need_tick(0),
       in_progress(0),
       out_progress(0),
       lifetime_elapsed(0),
@@ -133,7 +133,7 @@ class mergeStats {
     bool just_handed_off;
 
     int delta;
-    bool need_tick;
+    int need_tick;
     double in_progress;
     double out_progress;
 
