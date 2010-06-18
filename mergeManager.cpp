@@ -131,7 +131,7 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
       /* model the effect of linux + stasis' write caches; at the end
          of this merge, we need to force up to FORCE_INTERVAL bytes
          after we think we're done writing the next component. */
-      double skew = 0.0; // should be between 0 and 0.5.  0 means that there is no 'catch up' after merge commit
+      double skew = 0.0;
 
       int64_t overshoot_fudge = (int64_t)((s->out_progress-skew) * ((double)FORCE_INTERVAL)/(1.0-skew));
       /* model the effect of amortizing this computation: we could
@@ -179,7 +179,6 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
         bool one_threshold = (overshoot > 0 || overshoot2 > 0) || (raw_overshoot > 0);
         bool two_threshold = (overshoot > 0 || overshoot2 > 0) && (raw_overshoot > 0);
 
-        //        if(overshoot > 0 && (raw_overshoot > 0 || total_sleep < 0.01)) {
         if(one_threshold && (two_threshold || total_sleep < 0.01)) {
           // throttle
           // it took "elapsed" seconds to process "tick_length_bytes" mb
