@@ -104,6 +104,7 @@ public:
 
     logtable_mergedata * mergedata;
     rwlc * header_mut;
+    pthread_mutex_t tick_mut;
     pthread_mutex_t rb_mut;
     int64_t max_c0_size;
     mergeManager * merge_mgr;

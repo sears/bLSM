@@ -79,7 +79,7 @@ int main(int argc, char *argv[])
 
     if(argc == 2 && !strcmp(argv[1], "--test")) {
 
-      c0_size = 1024 * 1024 * 10;
+      c0_size = 1024 * 1024 * 100;
       printf("warning: running w/ tiny c0 for testing"); // XXX build a separate test server and deployment server?
     }
 

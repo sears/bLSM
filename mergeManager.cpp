@@ -118,10 +118,13 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
   if(force || s->need_tick) {
 
     if(block) {
-      rwlc_writelock(ltable->header_mut);
+      pthread_mutex_lock(&ltable->tick_mut);
+      rwlc_readlock(ltable->header_mut);
 
       while(sleeping[s->merge_level]) {
-        rwlc_cond_wait(&throttle_wokeup_cond, ltable->header_mut);
+        rwlc_unlock(ltable->header_mut);
+        pthread_cond_wait(&throttle_wokeup_cond, &ltable->tick_mut);
+        rwlc_readlock(ltable->header_mut);
       }
 
       int64_t overshoot = 0;
@@ -143,7 +146,7 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
          entirely, so it's better to start thottling too early than
          too late. */
       overshoot_fudge *= 2;
-      overshoot_fudge2 *= 2;
+      overshoot_fudge2 *= 4;
       int spin = 0;
       double total_sleep = 0.0;
       do{
@@ -187,7 +190,7 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
           struct timespec sleep_until;
 
           double max_c0_sleep = 0.1;
-          double min_c0_sleep = 0.05;
+          double min_c0_sleep = 0.01;
           double max_c1_sleep = 0.5;
           double min_c1_sleep = 0.1;
           double max_sleep = s->merge_level == 0 ? max_c0_sleep : max_c1_sleep;
@@ -200,9 +203,7 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
           total_sleep += sleeptime;
 
           if((spin > 40) || (total_sleep > (max_sleep * 20.0))) {
-//            if(spin > 20 || s->merge_level == 0) {
               printf("\nMerge thread %d Overshoot: raw=%lld, d=%lld eff=%lld Throttle min(1, %6f) spin %d, total_sleep %6.3f\n", s->merge_level, raw_overshoot, overshoot_fudge, overshoot, sleeptime, spin, total_sleep);
-//            }
           }
 
           struct timeval now;
@@ -210,7 +211,9 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
 
           double_to_ts(&sleep_until, sleeptime + tv_to_double(&now));
           sleeping[s->merge_level] = true;
-          rwlc_cond_timedwait(&dummy_throttle_cond, ltable->header_mut, &sleep_until);
+          rwlc_unlock(ltable->header_mut);
+          pthread_cond_timedwait(&dummy_throttle_cond, &ltable->tick_mut, &sleep_until);
+          rwlc_readlock(ltable->header_mut);
           sleeping[s->merge_level] = false;
           pthread_cond_broadcast(&throttle_wokeup_cond);
           gettimeofday(&now, 0);
@@ -219,7 +222,7 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
         } else {
           if(overshoot > 0 || overshoot2 > 0) {
             s->need_tick ++;
-            if(s->need_tick > 100) { printf("need tick %d\n", s->need_tick); }
+            if(s->need_tick > 500) { printf("need tick %d\n", s->need_tick); }
           } else {
             s->need_tick = 0;
           }
@@ -227,14 +230,19 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
         }
       } while(1);
       rwlc_unlock(ltable->header_mut);
+      pthread_mutex_unlock(&ltable->tick_mut);
     } else {
-      if(s->print_skipped == PRINT_SKIP) {
-        if(!force) rwlc_writelock(ltable->header_mut);
-        pretty_print(stdout);
-        if(!force) rwlc_unlock(ltable->header_mut);
-        s->print_skipped = 0;
-      } else {
-        s->print_skipped++;
+      if(!force) {
+        if(s->print_skipped == PRINT_SKIP) {
+          pthread_mutex_lock(&ltable->tick_mut);
+          rwlc_readlock(ltable->header_mut);
+          pretty_print(stdout);
+          rwlc_unlock(ltable->header_mut);
+          pthread_mutex_unlock(&ltable->tick_mut);
+          s->print_skipped = 0;
+        } else {
+          s->print_skipped++;
+        }
       }
     }
   }

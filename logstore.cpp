@@ -36,6 +36,7 @@ logtable<TUPLE>::logtable(pageid_t internal_region_size, pageid_t datapage_regio
     tmerger = new tuplemerger(&replace_merger);
 
     header_mut = rwlc_initlock();
+    pthread_mutex_init(&tick_mut, 0);
     pthread_mutex_init(&rb_mut, 0);
     pthread_cond_init(&c0_needed, 0);
     pthread_cond_init(&c0_ready, 0);
@@ -66,6 +67,7 @@ logtable<TUPLE>::~logtable()
     }
 
     pthread_mutex_destroy(&rb_mut);
+    pthread_mutex_destroy(&tick_mut);
     rwlc_deletelock(header_mut);
     pthread_cond_destroy(&c0_needed);
     pthread_cond_destroy(&c0_ready);
