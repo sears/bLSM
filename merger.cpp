@@ -14,9 +14,6 @@ int merge_scheduler::addlogtable(logtable<datatuple> *ltable)
 
     // initialize merge data
     ltable->set_tree_c0_mergeable(NULL);
-
-    mdata->diskmerge_args = new merger_args;
-    mdata->memmerge_args = new merger_args;
     
     mergedata.push_back(std::make_pair(ltable, mdata));
     return mergedata.size()-1;
@@ -25,14 +22,6 @@ int merge_scheduler::addlogtable(logtable<datatuple> *ltable)
 
 merge_scheduler::~merge_scheduler()
 {
-    for(size_t i=0; i<mergedata.size(); i++)
-    {
-        logtable<datatuple> *ltable = mergedata[i].first;
-        logtable_mergedata *mdata = mergedata[i].second;
-
-        delete mdata->diskmerge_args;
-        delete mdata->memmerge_args;
-    }
     mergedata.clear();
 
 }
@@ -76,26 +65,11 @@ void merge_scheduler::startlogtable(int index, int64_t MAX_C0_SIZE)
     DEBUG("Tree C1 is %lld\n", (long long)ltable->get_tree_c1()->get_root_rec().page);
     DEBUG("Tree C2 is %lld\n", (long long)ltable->get_tree_c2()->get_root_rec().page);
 
-    struct merger_args diskmerge_args= {
-        ltable, 
-        0, //max_tree_size No max size for biggest component
-                };
-
-    *mdata->diskmerge_args = diskmerge_args;
-
-    struct merger_args memmerge_args =
-        {
-            ltable,
-            (int64_t)(MAX_C0_SIZE), // XXX why did this multiply by R^2 before??
-        };
-    
-    *mdata->memmerge_args = memmerge_args;
-
     void * (*diskmerger)(void*) = diskMergeThread;
     void * (*memmerger)(void*) = memMergeThread;
 
-    pthread_create(&mdata->diskmerge_thread, 0, diskmerger, mdata->diskmerge_args);
-    pthread_create(&mdata->memmerge_thread, 0, memmerger, mdata->memmerge_args);
+    pthread_create(&mdata->diskmerge_thread, 0, diskmerger, ltable);
+    pthread_create(&mdata->memmerge_thread, 0, memmerger, ltable);
     
 }
 
@@ -135,13 +109,11 @@ void* memMergeThread(void*arg)
 
     int xid;
 
-    merger_args * a = (merger_args*)(arg);
-
-    logtable<datatuple> * ltable = a->ltable;
+    logtable<datatuple> * ltable = (logtable<datatuple>*)arg;
     assert(ltable->get_tree_c1());
     
     int merge_count =0;
-    mergeStats * stats = a->ltable->merge_mgr->get_merge_stats(1);
+    mergeStats * stats = ltable->merge_mgr->get_merge_stats(1);
     
     while(true) // 1
     {
@@ -227,7 +199,7 @@ void* memMergeThread(void*arg)
         double new_c1_size = stats->output_size();
         pthread_cond_signal(&ltable->c0_needed);
 
-        ltable->update_persistent_header(xid);
+        ltable->update_persistent_header(xid, 1);
         Tcommit(xid);
 
         ltable->merge_mgr->finished_merge(1);
@@ -261,8 +233,10 @@ void* memMergeThread(void*arg)
           ltable->set_tree_c1(new diskTreeComponent(xid, ltable->internal_region_size, ltable->datapage_region_size, ltable->datapage_size, stats));
 
           pthread_cond_signal(&ltable->c1_ready);
-
-          ltable->update_persistent_header(xid);
+          pageid_t old_bytes_out = stats->bytes_out;
+          stats->bytes_out = 0; // XXX HACK
+          ltable->update_persistent_header(xid, 1);
+          stats->bytes_out = old_bytes_out;
           Tcommit(xid);
 
         }
@@ -285,14 +259,12 @@ void *diskMergeThread(void*arg)
 {
     int xid;
 
-    merger_args * a = (merger_args*)(arg);
-
-    logtable<datatuple> * ltable = a->ltable;
+    logtable<datatuple> * ltable = (logtable<datatuple>*)arg;
     assert(ltable->get_tree_c2());
 
 
     int merge_count =0;
-    mergeStats * stats = a->ltable->merge_mgr->get_merge_stats(2);
+    mergeStats * stats = ltable->merge_mgr->get_merge_stats(2);
     
     while(true)
     {
@@ -378,7 +350,7 @@ void *diskMergeThread(void*arg)
 
         DEBUG("dmt:\tUpdated C2's position on disk to %lld\n",(long long)-1);
         // 13
-        ltable->update_persistent_header(xid);
+        ltable->update_persistent_header(xid, 2);
         Tcommit(xid);
 
         ltable->merge_mgr->finished_merge(2);

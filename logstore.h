@@ -81,7 +81,7 @@ public:
       merge_mgr->get_merge_stats(1);
     }
     void set_tree_c0_mergeable(memTreeComponent<datatuple>::rbtree_ptr_t newtree){tree_c0_mergeable = newtree; bump_epoch(); }
-    void update_persistent_header(int xid);
+    void update_persistent_header(int xid, int merge_level);
 
     void setMergeData(logtable_mergedata * mdata);
     logtable_mergedata* getMergeData(){return mergedata;}
@@ -97,6 +97,9 @@ public:
         recordid c1_root;
         recordid c1_state;
         recordid c1_dp_state;
+        pageid_t c2_base_size;
+        pageid_t c1_mergeable_size;
+        pageid_t c1_base_size;
     };
 
     logtable_mergedata * mergedata;

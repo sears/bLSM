@@ -25,9 +25,9 @@ class mergeStats {
       merge_level(merge_level),
       merge_count(0),
       base_size(0),
+      mergeable_size(0),
       target_size(target_size),
       current_size(0),
-      mergeable_size(0),
       bytes_out_with_overhead(0),
       bytes_out(0),
       num_tuples_out(0),
@@ -114,14 +114,17 @@ class mergeStats {
     friend class mergeManager;
 
     struct timespec last_tick;
-
+  public: // XXX only accessed during initialization.
     pageid_t base_size;
+    pageid_t mergeable_size;  // protected by mutex.
+  protected:
     pageid_t target_size;
     pageid_t current_size;
-    pageid_t mergeable_size;  // protected by mutex.
 
     pageid_t bytes_out_with_overhead;// How many bytes did we write (including internal tree nodes)?
+  public:
     pageid_t bytes_out;            // How many bytes worth of tuples did we write?
+  protected:
     pageid_t num_tuples_out;       // How many tuples did we write?
     pageid_t num_datapages_out;    // How many datapages?
     pageid_t bytes_in_small;       // How many bytes from the small input tree (for C0, we ignore tree overheads)?

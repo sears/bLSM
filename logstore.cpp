@@ -50,10 +50,6 @@ logtable<TUPLE>::logtable(pageid_t internal_region_size, pageid_t datapage_regio
     this->internal_region_size = internal_region_size;
     this->datapage_region_size = datapage_region_size;
     this->datapage_size = datapage_size;
-
-    c0_stats = merge_mgr->get_merge_stats(0);
-    merge_mgr->new_merge(0);
-    c0_stats->starting_merge();
 }
 
 template<class TUPLE>
@@ -104,7 +100,13 @@ recordid logtable<TUPLE>::allocTable(int xid)
     //create the small tree
     tree_c1 = new diskTreeComponent(xid, internal_region_size, datapage_region_size, datapage_size, stats);
 
-    update_persistent_header(xid);
+    c0_stats = merge_mgr->get_merge_stats(0);
+    merge_mgr->new_merge(0);
+    c0_stats->starting_merge();
+
+    update_persistent_header(xid, 1);
+    update_persistent_header(xid, 2);
+
 
     return table_rec;
 }
@@ -114,9 +116,20 @@ void logtable<TUPLE>::openTable(int xid, recordid rid) {
   Tread(xid, table_rec, &tbl_header);
   tree_c2 = new diskTreeComponent(xid, tbl_header.c2_root, tbl_header.c2_state, tbl_header.c2_dp_state, 0);
   tree_c1 = new diskTreeComponent(xid, tbl_header.c1_root, tbl_header.c1_state, tbl_header.c1_dp_state, 0);
+
+  merge_mgr->get_merge_stats(1)->bytes_out = tbl_header.c1_base_size;
+  merge_mgr->get_merge_stats(1)->base_size = tbl_header.c1_base_size;
+  merge_mgr->get_merge_stats(1)->mergeable_size = tbl_header.c1_mergeable_size;
+  merge_mgr->get_merge_stats(2)->base_size = tbl_header.c2_base_size;
+  merge_mgr->get_merge_stats(2)->bytes_out = tbl_header.c2_base_size;
+
+  c0_stats = merge_mgr->get_merge_stats(0);
+  merge_mgr->new_merge(0);
+  c0_stats->starting_merge();
+
 }
 template<class TUPLE>
-void logtable<TUPLE>::update_persistent_header(int xid) {
+void logtable<TUPLE>::update_persistent_header(int xid, int merge_level) {
 
     tbl_header.c2_root = tree_c2->get_root_rid();
     tbl_header.c2_dp_state = tree_c2->get_datapage_allocator_rid();
@@ -125,6 +138,17 @@ void logtable<TUPLE>::update_persistent_header(int xid) {
     tbl_header.c1_dp_state = tree_c1->get_datapage_allocator_rid();
     tbl_header.c1_state = tree_c1->get_internal_node_allocator_rid();
     
+    if(merge_level == 1) {
+      tbl_header.c1_base_size = merge_mgr->get_merge_stats(1)->bytes_out;
+      tbl_header.c1_mergeable_size = merge_mgr->get_merge_stats(1)->mergeable_size;
+    } else if(merge_level == 2) {
+      tbl_header.c1_mergeable_size = 0;
+      tbl_header.c2_base_size = merge_mgr->get_merge_stats(2)->bytes_out;
+    } else {
+      assert(merge_level == 1 || merge_level == 2);
+      abort();
+    }
+
     Tset(xid, table_rec, &tbl_header);    
 }
 
@@ -218,8 +242,8 @@ datatuple * logtable<TUPLE>::findTuple(int xid, const datatuple::key_t key, size
         ret_tuple = (*rbitr)->create_copy();
     }
 
-    rwlc_readlock(header_mut);  // has to be before rb_mut, or we could merge the tuple with itself due to an intervening merge
     pthread_mutex_unlock(&rb_mut);
+    rwlc_readlock(header_mut);  // XXX: FIXME with optimisitic concurrency control.  Has to be before rb_mut, or we could merge the tuple with itself due to an intervening merge
 
     bool done = false;
     //step: 2 look into first in tree if exists (a first level merge going on)
@@ -371,8 +395,8 @@ datatuple * logtable<TUPLE>::findTuple_first(int xid, datatuple::key_t key, size
     {
         DEBUG("Not in mem tree %d\n", tree_c0->size());
 
-        rwlc_readlock(header_mut);
         pthread_mutex_unlock(&rb_mut);
+        rwlc_readlock(header_mut); // XXX FIXME WITH OCC!!
 
         //step: 2 look into first in tree if exists (a first level merge going on)
         if(get_tree_c0_mergeable() != NULL)

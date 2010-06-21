@@ -12,23 +12,11 @@
 static const int RB_TREE_OVERHEAD = 400;
 static const double MIN_R = 3.0;
 
-struct merger_args
-{
-    logtable<datatuple> * ltable;
-    int64_t max_size;
-};
-
 struct logtable_mergedata
 {
     //merge threads
     pthread_t diskmerge_thread;
     pthread_t memmerge_thread;
-
-    //merge args 1
-    struct merger_args *diskmerge_args;
-    //merge args 2
-    struct merger_args *memmerge_args;
-    
 };
 
 class merge_scheduler
