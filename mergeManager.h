@@ -22,6 +22,7 @@ class mergeStats;
 class mergeManager {
 public:
   static const int UPDATE_PROGRESS_DELTA = 10 * 1024 * 1024;
+  const double UPDATE_PROGRESS_PERIOD; // in seconds, defined in constructor.
   static const int FORCE_INTERVAL = 25 * 1024 * 1024;
   static double tv_to_double(struct timeval * tv) {
     return (double)tv->tv_sec + ((double)tv->tv_usec)/1000000.0;

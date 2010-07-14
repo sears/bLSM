@@ -38,19 +38,20 @@ class mergeStats {
       bytes_in_large(0),
       num_tuples_in_large(0),
       just_handed_off(false),
+      mini_delta(0),
       delta(0),
       need_tick(0),
       in_progress(0),
       out_progress(0),
       lifetime_elapsed(0),
       lifetime_consumed(0),
-      window_elapsed(0.001),
-      window_consumed(0),
+      bps(10.0*1024.0*1024.0),
       print_skipped(0),
       active(false) {
       gettimeofday(&sleep,0);
       gettimeofday(&last,0);
       mergeManager::double_to_ts(&last_tick, mergeManager::tv_to_double(&last));
+      mergeManager::double_to_ts(&last_mini_tick, mergeManager::tv_to_double(&last));
       pthread_mutex_init(&mut,0);
     }
     ~mergeStats() {
@@ -82,6 +83,7 @@ class mergeStats {
       gettimeofday(&start, 0);
       gettimeofday(&last, 0);
       mergeManager::double_to_ts(&last_tick, mergeManager::tv_to_double(&last));
+      mergeManager::double_to_ts(&last_mini_tick, mergeManager::tv_to_double(&last));
 
     }
     void handed_off_tree() {
@@ -113,6 +115,7 @@ class mergeStats {
     }
     friend class mergeManager;
 
+    struct timespec last_mini_tick;
     struct timespec last_tick;
   public: // XXX only accessed during initialization.
     pageid_t base_size;
@@ -135,6 +138,7 @@ class mergeStats {
 
     bool just_handed_off;
 
+    int mini_delta;
     int delta;
     int need_tick;
     double in_progress;
@@ -142,8 +146,6 @@ class mergeStats {
 
     double lifetime_elapsed;
     double lifetime_consumed;
-    double window_elapsed;
-    double window_consumed;
 
     double bps;
 
