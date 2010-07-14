@@ -116,6 +116,9 @@ void DataPage<TUPLE>::initialize_page(pageid_t pageid) {
     //initialize header
     p->pageType = DATA_PAGE;
     
+    //clear page (arranges for null-padding)
+    memset(p->memAddr, 0, PAGE_SIZE);
+
     //we're the last page for now.
     *is_another_page_ptr(p) = 0;
     
@@ -263,7 +266,7 @@ bool DataPage<TUPLE>::append(TUPLE const * dat)
 }
 
 template <class TUPLE>
-bool DataPage<TUPLE>::recordRead(typename TUPLE::key_t key, size_t keySize,  TUPLE ** buf)
+bool DataPage<TUPLE>::recordRead(const typename TUPLE::key_t key, size_t keySize,  TUPLE ** buf)
 {
   iterator itr(this, NULL);
 

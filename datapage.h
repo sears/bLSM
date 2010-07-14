@@ -87,7 +87,7 @@ public:
     }
 
     bool append(TUPLE const * dat);
-    bool recordRead(typename TUPLE::key_t key, size_t keySize,  TUPLE ** buf);
+    bool recordRead(const typename TUPLE::key_t key, size_t keySize,  TUPLE ** buf);
 
     inline uint16_t recordCount();
 

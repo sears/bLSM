@@ -504,6 +504,9 @@ recordid diskTreeComponent::internalNodes::buildPathToLeaf(int xid, recordid roo
     DEBUG("%lld <-> %lld\n", lastLeaf, child);
   }
 
+  // Crucially, this happens *after* the recursion.  Therefore, we can query the
+  // tree with impunity while the leaf is being built and don't have to worry
+  // about dangling pointers to pages that are in the process of being allocated.
   writeNodeRecord(xid, root_p, root, key, key_len, child);
 
   return ret;
