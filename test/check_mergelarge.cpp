@@ -57,7 +57,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     mscheduler.startlogtable(lindex, 10 * 1024 * 1024);
 
-    printf("Stage 1: Writing %d keys\n", NUM_ENTRIES);
+    printf("Stage 1: Writing %llu keys\n", (unsigned long long)NUM_ENTRIES);
     
     struct timeval start_tv, stop_tv, ti_st, ti_end;
     double insert_time = 0;
@@ -88,7 +88,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     printf("\nTREE STRUCTURE\n");
     //ltable.get_tree_c1()->print_tree(xid);
-    printf("datasize: %lld\n", datasize);
+    printf("datasize: %llu\n", (unsigned long long)datasize);
     
     mscheduler.shutdown();
     printf("merge threads finished.\n");

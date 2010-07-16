@@ -56,7 +56,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     //ltable.get_tree_c1()->print_tree(xid);
     printf("datasize: %lld\n", (long long)datasize);
 
-    printf("Stage 2: Looking up %d keys:\n", NUM_ENTRIES);
+    printf("Stage 2: Looking up %llu keys:\n", (unsigned long long)NUM_ENTRIES);
 
     int found_tuples=0;
     for(int i=NUM_ENTRIES-1; i>=0; i--)

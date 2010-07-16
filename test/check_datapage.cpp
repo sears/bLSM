@@ -52,7 +52,7 @@ void insertWithConcurrentReads(size_t NUM_ENTRIES) {
 
   RegionAllocator * alloc = new RegionAllocator(xid, 10000); // ~ 10 datapages per region.
 
-  printf("Stage 1: Writing %d keys\n", NUM_ENTRIES);
+  printf("Stage 1: Writing %llu keys\n", (unsigned long long)NUM_ENTRIES);
 
   int pcount = 1000;
   int dpages = 0;
@@ -154,7 +154,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     RegionAllocator * alloc = new RegionAllocator(xid, 10000); // ~ 10 datapages per region.
 
-    printf("Stage 1: Writing %d keys\n", NUM_ENTRIES);
+    printf("Stage 1: Writing %llu keys\n", (unsigned long long)NUM_ENTRIES);
       
     int pcount = 1000;
     int dpages = 0;
@@ -196,7 +196,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     xid = Tbegin();
 
 
-    printf("Stage 2: Reading %d tuples\n", NUM_ENTRIES);
+    printf("Stage 2: Reading %llu tuples\n", (unsigned long long)NUM_ENTRIES);
 
     
     int tuplenum = 0;

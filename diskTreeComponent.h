@@ -128,7 +128,7 @@ class diskTreeComponent {
     const static int64_t DEPTH;
     const static int64_t COMPARATOR;
     const static int64_t FIRST_SLOT;
-    const static size_t root_rec_size;
+    const static ssize_t root_rec_size;
     const static int64_t PREV_LEAF;
     const static int64_t NEXT_LEAF;
     pageid_t lastLeaf;

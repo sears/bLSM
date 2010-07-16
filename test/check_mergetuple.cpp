@@ -47,7 +47,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
         std::sort(key_arr->begin(), key_arr->end(), &mycmp);
         key_v_list->push_back(key_arr);
-        printf("size partition %d is %d\n", i+1, key_arr->size());
+        printf("size partition %llu is %llu\n", (unsigned long long)i+1, (unsigned long long)key_arr->size());
     }
 
     key_v_t * key_arr = new key_v_t;
@@ -58,7 +58,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         iters.push_back(new key_v_t::iterator((*key_v_list)[i]->begin()));
     }
 
-    int lc = 0;
+    size_t lc = 0;
     while(true)
     {
         int list_index = -1;
@@ -80,7 +80,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         (*iters[list_index])++;        
         lc++;
         if(lc % max_partition_size == 0)
-            printf("%d/%d completed.\n", lc, NUM_ENTRIES);
+            printf("%llu/%llu completed.\n", (unsigned long long)lc, (unsigned long long)NUM_ENTRIES);
     }
 
     for(int i=0; i<list_size; i++)
@@ -92,7 +92,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     key_v_list->clear();
     delete key_v_list;
     
-    printf("key arr size: %d\n", key_arr->size());
+    printf("key arr size: %llu\n", (unsigned long long)key_arr->size());
 
     if(key_arr->size() > NUM_ENTRIES)
         key_arr->erase(key_arr->begin()+NUM_ENTRIES, key_arr->end());
@@ -112,7 +112,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     mscheduler.startlogtable(lindex, 10 * 1024 * 1024);
 
-    printf("Stage 1: Writing %d keys\n", NUM_ENTRIES);
+    printf("Stage 1: Writing %llu keys\n", (unsigned long long)NUM_ENTRIES);
     
     struct timeval start_tv, stop_tv, ti_st, ti_end;
     double insert_time = 0;
@@ -187,13 +187,13 @@ void insertProbeIter(size_t NUM_ENTRIES)
     printf("#deletions: %d\n#updates: %d\n", delcount, upcount);
 
     printf("\nTREE STRUCTURE\n");
-    printf("datasize: %lld\n", datasize);
+    printf("datasize: %llu\n", (unsigned long long)datasize);
 
     xid = Tbegin();
 
 
 
-    printf("Stage 2: Looking up %d keys:\n", NUM_ENTRIES);
+    printf("Stage 2: Looking up %llu keys:\n", (unsigned long long)NUM_ENTRIES);
 
     int found_tuples=0;
     for(int i=NUM_ENTRIES-1; i>=0; i--)

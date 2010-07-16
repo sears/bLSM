@@ -34,8 +34,8 @@ void insertProbeIter(size_t NUM_ENTRIES)
     const static size_t max_partition_size = 100000;
     int KEY_LEN = 100;
     std::vector<key_v_t*> *key_v_list = new std::vector<key_v_t*>;
-    int list_size = NUM_ENTRIES / max_partition_size + 1;
-    for(int i =0; i<list_size; i++)
+    size_t list_size = NUM_ENTRIES / max_partition_size + 1;
+    for(size_t i =0; i<list_size; i++)
     {
         key_v_t * key_arr = new key_v_t;
         if(NUM_ENTRIES < max_partition_size*(i+1))
@@ -45,7 +45,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
         std::sort(key_arr->begin(), key_arr->end(), &mycmp);
         key_v_list->push_back(key_arr);
-        printf("size partition %d is %d\n", i+1, key_arr->size());
+        printf("size partition %llu is %llu\n", (unsigned long long)i+1, (unsigned long long)key_arr->size());
     }
 
 
@@ -53,7 +53,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     key_v_t * key_arr = new key_v_t;
     
     std::vector<key_v_t::iterator*> iters;
-    for(int i=0; i<list_size; i++)
+    for(size_t i=0; i<list_size; i++)
     {
         iters.push_back(new key_v_t::iterator((*key_v_list)[i]->begin()));
     }
@@ -62,7 +62,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     while(true)
     {
         int list_index = -1;
-        for(int i=0; i<list_size; i++)
+        for(size_t i=0; i<list_size; i++)
         {
             if(*iters[i] == (*key_v_list)[i]->end())
                 continue;
@@ -80,10 +80,10 @@ void insertProbeIter(size_t NUM_ENTRIES)
         (*iters[list_index])++;        
         lc++;
         if(lc % max_partition_size == 0)
-            printf("%d/%d completed.\n", lc, NUM_ENTRIES);
+            printf("%llu/%llu completed.\n", (unsigned long long)lc, (unsigned long long)NUM_ENTRIES);
     }
 
-    for(int i=0; i<list_size; i++)
+    for(size_t i=0; i<list_size; i++)
     {
         (*key_v_list)[i]->clear();
         delete (*key_v_list)[i];
@@ -91,14 +91,14 @@ void insertProbeIter(size_t NUM_ENTRIES)
     }
     key_v_list->clear();
     delete key_v_list;
-    printf("key arr size: %d\n", key_arr->size());
+    printf("key arr size: %llu\n", (unsigned long long)key_arr->size());
 
     if(key_arr->size() > NUM_ENTRIES)
         key_arr->erase(key_arr->begin()+NUM_ENTRIES, key_arr->end());
     
     NUM_ENTRIES=key_arr->size();
     
-    printf("Stage 1: Writing %d keys\n", NUM_ENTRIES);
+    printf("Stage 1: Writing %llu keys\n", (unsigned long long)NUM_ENTRIES);
     
     struct timeval start_tv, stop_tv, ti_st, ti_end;
     double insert_time = 0;
@@ -134,7 +134,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         datatuple::freetuple(newtuple);
 
         if(i % 10000 == 0 && i > 0)
-            printf("%d / %d inserted.\n", i, NUM_ENTRIES);
+            printf("%llu / %llu inserted.\n", (unsigned long long)i, (unsigned long long)NUM_ENTRIES);
             
     }
     gettimeofday(&stop_tv,0);
@@ -144,7 +144,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     
 
-    printf("Stage 2: Looking up %d keys:\n", NUM_ENTRIES);
+    printf("Stage 2: Looking up %llu keys:\n", (unsigned long long)NUM_ENTRIES);
 
 
     int found_tuples=0;

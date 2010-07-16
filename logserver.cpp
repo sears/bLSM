@@ -145,8 +145,8 @@ void logserver::stopserver()
         tot_threadwork_time += idle_th->data->work_time;
         num_reqs += idle_th->data->num_reqs;
 
-        printf("thread %d: work_time %.3f\t#calls %d\tavg req process time:\t%.3f\n",
-               i,
+        printf("thread %llu: work_time %.3f\t#calls %d\tavg req process time:\t%.3f\n",
+               (unsigned long long)i,
                idle_th->data->work_time,
                idle_th->data->num_reqs,
                (( idle_th->data->num_reqs == 0 ) ? 0 : idle_th->data->work_time / idle_th->data->num_reqs)
@@ -899,8 +899,8 @@ void * thread_work_fn( void * args)
 		if(err) {
 		    if(opcode != OP_DONE) {
 		    	char *msg;
-		    	if(-1 != asprintf(&msg, "network error. conn closed. (%d, %d) ",
-		    			*(item->data->workitem), item->data->work_queue->size())) {
+		    	if(-1 != asprintf(&msg, "network error. conn closed. (%d, %llu) ",
+		    			*(item->data->workitem), (unsigned long long)item->data->work_queue->size())) {
 		    		perror(msg);
 		    		free(msg);
 		    	} else {

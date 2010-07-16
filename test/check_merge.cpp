@@ -58,7 +58,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     mscheduler.startlogtable(lindex, 10 * 1024 * 1024);
 
-    printf("Stage 1: Writing %d keys\n", NUM_ENTRIES);
+    printf("Stage 1: Writing %llu keys\n", (unsigned long long)NUM_ENTRIES);
     
     struct timeval start_tv, stop_tv, ti_st, ti_end;
     double insert_time = 0;
@@ -100,7 +100,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     xid = Tbegin();
 
 
-    printf("Stage 2: Looking up %d keys:\n", NUM_ENTRIES);
+    printf("Stage 2: Looking up %llu keys:\n", (unsigned long long)NUM_ENTRIES);
 
     int found_tuples=0;
     for(int i=NUM_ENTRIES-1; i>=0; i--)

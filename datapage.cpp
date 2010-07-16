@@ -133,7 +133,7 @@ void DataPage<TUPLE>::initialize_page(pageid_t pageid) {
     releasePage(p);
 }
 template <class TUPLE>
-size_t DataPage<TUPLE>::write_bytes(const byte * buf, size_t remaining) {
+size_t DataPage<TUPLE>::write_bytes(const byte * buf, ssize_t remaining) {
 	recordid chunk = calc_chunk_from_offset(write_offset_);
 	if(chunk.size > remaining) {
 		chunk.size = remaining;
@@ -152,7 +152,7 @@ size_t DataPage<TUPLE>::write_bytes(const byte * buf, size_t remaining) {
 	return chunk.size;
 }
 template <class TUPLE>
-size_t DataPage<TUPLE>::read_bytes(byte * buf, off_t offset, size_t remaining) {
+size_t DataPage<TUPLE>::read_bytes(byte * buf, off_t offset, ssize_t remaining) {
 	recordid chunk = calc_chunk_from_offset(offset);
 	if(chunk.size > remaining) {
 		chunk.size = remaining;

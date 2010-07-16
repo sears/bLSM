@@ -55,7 +55,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     if(data_arr.size() > NUM_ENTRIES)
         data_arr.erase(data_arr.begin()+NUM_ENTRIES, data_arr.end());  
     
-    printf("Stage 1: Writing %d keys\n", NUM_ENTRIES);
+    printf("Stage 1: Writing %llu keys\n", (unsigned long long)NUM_ENTRIES);
 
     for(size_t i = 0; i < NUM_ENTRIES; i++)
     {
@@ -75,7 +75,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     Tcommit(xid);
     xid = Tbegin();
 
-    printf("Stage 2: Sequentially reading %d tuples\n", NUM_ENTRIES);
+    printf("Stage 2: Sequentially reading %llu tuples\n", (unsigned long long)NUM_ENTRIES);
     
     size_t tuplenum = 0;
     diskTreeComponent::iterator * tree_itr = ltable_c1->open_iterator();

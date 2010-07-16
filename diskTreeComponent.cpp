@@ -28,7 +28,7 @@
 const int64_t diskTreeComponent::internalNodes::DEPTH = 0;      //in root this is the slot num where the DEPTH (of tree) is stored
 const int64_t diskTreeComponent::internalNodes::COMPARATOR = 1; //in root this is the slot num where the COMPARATOR id is stored
 const int64_t diskTreeComponent::internalNodes::FIRST_SLOT = 2; //this is the first unused slot in all index pages
-const size_t diskTreeComponent::internalNodes::root_rec_size = sizeof(int64_t);
+const ssize_t diskTreeComponent::internalNodes::root_rec_size = sizeof(int64_t);
 const int64_t diskTreeComponent::internalNodes::PREV_LEAF = 0; //pointer to prev leaf page
 const int64_t diskTreeComponent::internalNodes::NEXT_LEAF = 1; //pointer to next leaf page
 
