@@ -128,8 +128,9 @@ private:
     	assert(ret.size);
     	return ret;
     }
-    size_t write_bytes(const byte * buf, ssize_t remaining);
+    size_t write_bytes(const byte * buf, ssize_t remaining, Page ** latch_p = NULL);
     size_t read_bytes(byte * buf, off_t offset, ssize_t remaining);
+    Page * write_data_and_latch(const byte * buf, size_t len, bool init_next = true, bool latch = true);
     bool write_data(const byte * buf, size_t len, bool init_next = true);
     bool read_data(byte * buf, off_t offset, size_t len);
     bool initialize_next_page();

@@ -56,9 +56,11 @@ void merge_scheduler::startlogtable(int index, int64_t MAX_C0_SIZE)
     ltable->set_tree_c0(new memTreeComponent<datatuple>::rbtree_t);
 
     //disk merger args
-
+#ifdef NO_SNOWSHOVEL
     ltable->set_max_c0_size(MAX_C0_SIZE);
-
+#else
+    ltable->set_max_c0_size(MAX_C0_SIZE*2); // XXX blatant hack.
+#endif
     diskTreeComponent ** block1_scratch = new diskTreeComponent*;
     *block1_scratch=0;
 
@@ -121,6 +123,7 @@ void* memMergeThread(void*arg)
         ltable->merge_mgr->new_merge(1);
         int done = 0;
         // 2: wait for c0_mergable
+#ifdef NO_SNOWSHOVEL
         while(!ltable->get_tree_c0_mergeable())
         {            
             pthread_cond_signal(&ltable->c0_needed);
@@ -136,7 +139,21 @@ void* memMergeThread(void*arg)
 
             DEBUG("mmt:\tblock ready\n");
             
-        }        
+        }
+#else
+        if(!ltable->is_still_running()) {
+          done = 1;
+        }
+        while(ltable->tree_bytes < 0.5 * (double)ltable->max_c0_size && ! done) {
+          rwlc_unlock(ltable->header_mut);
+          sleep(1); // XXX fixme!
+          rwlc_writelock(ltable->header_mut);
+
+          if(!ltable->is_still_running()) {
+            done = 1;
+          }
+        }
+#endif
 
         if(done==1)
         {
@@ -154,12 +171,18 @@ void* memMergeThread(void*arg)
 
         //create the iterators
         diskTreeComponent::iterator *itrA = ltable->get_tree_c1()->open_iterator();
+#ifdef NO_SNOWSHOVEL
         memTreeComponent<datatuple>::iterator *itrB =
             new memTreeComponent<datatuple>::iterator(ltable->get_tree_c0_mergeable());
-
+#else
+        memTreeComponent<datatuple>::revalidatingIterator *itrB =
+            new memTreeComponent<datatuple>::revalidatingIterator(ltable->get_tree_c0(), &ltable->rb_mut);
+#endif
         
         //create a new tree
         diskTreeComponent * c1_prime = new diskTreeComponent(xid,  ltable->internal_region_size, ltable->datapage_region_size, ltable->datapage_size, stats);
+
+        ltable->set_tree_c1_prime(c1_prime);
 
         rwlc_unlock(ltable->header_mut);
 
@@ -191,11 +214,15 @@ void* memMergeThread(void*arg)
 
         // 10: c1 = c1'
         ltable->set_tree_c1(c1_prime);
+        ltable->set_tree_c1_prime(0);
 
+#ifdef NO_SNOWSHOVEL
         // 11.5: delete old c0_mergeable
         memTreeComponent<datatuple>::tearDownTree(ltable->get_tree_c0_mergeable());
         // 11: c0_mergeable = NULL
         ltable->set_tree_c0_mergeable(NULL);
+#endif
+        ltable->set_c0_is_merging(false);
         double new_c1_size = stats->output_size();
         pthread_cond_signal(&ltable->c0_needed);
 
@@ -226,7 +253,7 @@ void* memMergeThread(void*arg)
             // we just set c1 = c1'.  Want to move c1 -> c1 mergeable, clean out c1.
 
           // 7: and perhaps c1_mergeable
-          ltable->set_tree_c1_mergeable(c1_prime); // c1_prime == c1.
+          ltable->set_tree_c1_mergeable(ltable->get_tree_c1()); // c1_prime == c1.
           stats->handed_off_tree();
 
           // 8: c1 = new empty.
@@ -344,7 +371,7 @@ void *diskMergeThread(void*arg)
         DEBUG("\nR = %f\n", *(ltable->R()));
 
         DEBUG("dmt:\tmerge_count %lld\t#written bytes: %lld\n optimal r %.2f", stats.merge_count, stats.output_size(), *(a->r_i));
-        // 10: C2 is never to big
+        // 10: C2 is never too big
         ltable->set_tree_c2(c2_prime);
         stats->handed_off_tree();
 
@@ -439,6 +466,27 @@ void merge_iterators(int xid,
             periodically_force(xid, &i, forceMe, log);
             // cannot free any tuples here; they may still be read through a lookup
         }
+#ifndef NO_SNOWSHOVEL
+        pthread_mutex_lock(&ltable->rb_mut);
+        if(stats->merge_level == 1) {
+          datatuple * t2tmp = NULL;
+          {
+          memTreeComponent<datatuple>::rbtree_t::iterator rbitr = ltable->get_tree_c0()->find(t2);
+            if(rbitr != ltable->get_tree_c0()->end()) {
+              t2tmp = *rbitr;
+              if((t2tmp->datalen() == t2->datalen()) &&
+                 !memcmp(t2tmp->data(), t2->data(), t2->datalen())) {
+              }
+            }
+          }
+          if(t2tmp) {
+            ltable->get_tree_c0()->erase(t2);
+            ltable->tree_bytes -= t2->byte_length();
+            datatuple::freetuple(t2tmp);
+          }
+        }
+        pthread_mutex_unlock(&ltable->rb_mut);
+#endif
         datatuple::freetuple(t2);
     }
 

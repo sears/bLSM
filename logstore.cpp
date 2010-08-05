@@ -26,6 +26,8 @@ logtable<TUPLE>::logtable(pageid_t internal_region_size, pageid_t datapage_regio
     r_val = MIN_R;
     tree_c0 = NULL;
     tree_c0_mergeable = NULL;
+    c0_is_merging = false;
+    tree_c1_prime = NULL;
     tree_c1 = NULL;
     tree_c1_mergeable = NULL;
     tree_c2 = NULL;
@@ -81,6 +83,7 @@ void logtable<TUPLE>::init_stasis() {
 
   DataPage<datatuple>::register_stasis_page_impl();
   // XXX Workaround Stasis' (still broken) default concurrent buffer manager
+  stasis_buffer_manager_size = 1024 * 1024; // 4GB = 2^10 pages:
   stasis_buffer_manager_factory = stasis_buffer_manager_hash_factory;
 
   Tinit();
@@ -173,35 +176,42 @@ void logtable<TUPLE>::flushTable()
     gettimeofday(&start_tv,0);
     start = tv_to_double(start_tv);
 
-
-    int expmcount = merge_count;
     merge_mgr->finished_merge(0);
-
-    //this is for waiting the previous merger of the mem-tree
-    //hopefullly this wont happen
 
     bool blocked = false;
 
+    int expmcount = merge_count;
+    //this waits for the previous merger of the mem-tree
+    //hopefullly this wont happen
+
+#ifdef NO_SNOWSHOVEL
     while(get_tree_c0_mergeable()) {
+#else
+    while(get_c0_is_merging()) {
+#endif
       rwlc_cond_wait(&c0_needed, header_mut);
       blocked = true;
       if(expmcount != merge_count) {
           return;
       }
     }
+    set_c0_is_merging(true);
 
     c0_stats->handed_off_tree();
     merge_mgr->new_merge(0);
 
     gettimeofday(&stop_tv,0);
     stop = tv_to_double(stop_tv);
+#ifdef NO_SNOWSHOVEL
     set_tree_c0_mergeable(get_tree_c0());
-
+#endif
     pthread_cond_signal(&c0_ready);
     DEBUG("Signaled c0-c1 merge thread\n");
 
     merge_count ++;
+#ifdef NO_SNOWSHOVEL
     set_tree_c0(new memTreeComponent<datatuple>::rbtree_t);
+#endif
     c0_stats->starting_merge();
 
     tsize = 0;
@@ -273,8 +283,37 @@ datatuple * logtable<TUPLE>::findTuple(int xid, const datatuple::key_t key, size
         }            
     }
 
-    
-    //step 3: check c1    
+    //step 2.5: check new c1 if exists
+    if(!done && get_tree_c1_prime() != 0)
+    {
+        DEBUG("old c1 tree not null\n");
+        datatuple *tuple_oc1 = get_tree_c1_prime()->findTuple(xid, key, keySize);
+
+        if(tuple_oc1 != NULL)
+        {
+            bool use_copy = false;
+            if(tuple_oc1->isDelete())
+                done = true;
+            else if(ret_tuple != 0) //merge the two
+            {
+                datatuple *mtuple = tmerger->merge(tuple_oc1, ret_tuple);  //merge the two
+                datatuple::freetuple(ret_tuple); //free tuple from before
+                ret_tuple = mtuple; //set return tuple to merge result
+            }
+            else //found for the first time
+            {
+                use_copy = true;
+                ret_tuple = tuple_oc1;
+            }
+
+            if(!use_copy)
+            {
+                datatuple::freetuple(tuple_oc1); //free tuple from tree old c1
+            }
+        }
+    }
+
+    //step 3: check c1
     if(!done)
     {
         datatuple *tuple_c1 = get_tree_c1()->findTuple(xid, key, keySize);
@@ -282,13 +321,13 @@ datatuple * logtable<TUPLE>::findTuple(int xid, const datatuple::key_t key, size
         {
             bool use_copy = false;
             if(tuple_c1->isDelete()) //tuple deleted
-                done = true;        
+                done = true;
             else if(ret_tuple != 0) //merge the two
             {
                 datatuple *mtuple = tmerger->merge(tuple_c1, ret_tuple);  //merge the two
                 datatuple::freetuple(ret_tuple);  //free tuple from before
-                ret_tuple = mtuple; //set return tuple to merge result            
-            }            
+                ret_tuple = mtuple; //set return tuple to merge result
+            }
             else //found for the first time
             {
                 use_copy = true;
@@ -413,6 +452,19 @@ datatuple * logtable<TUPLE>::findTuple_first(int xid, datatuple::key_t key, size
 
         if(ret_tuple == 0)
         {
+            DEBUG("Not in first disk tree\n");
+
+            //step 4: check in progress c1 if exists
+            if( get_tree_c1_prime() != 0)
+            {
+              DEBUG("old c1 tree not null\n");
+              ret_tuple = get_tree_c1_prime()->findTuple(xid, key, keySize);
+            }
+
+        }
+
+        if(ret_tuple == 0)
+        {
             DEBUG("Not in old mem tree\n");
 
             //step 3: check c1
@@ -453,15 +505,16 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
 {
     //lock the red-black tree
     merge_mgr->read_tuple_from_small_component(0, tuple);  // has to be before rb_mut, since it calls tick with block = true, and that releases header_mut.
+    datatuple * pre_t = 0; // this is a pointer to any data tuples that we'll be deleting below.  We need to update the merge_mgr statistics with it, but have to do so outside of the rb_mut region.
+
     pthread_mutex_lock(&rb_mut);
     //find the previous tuple with same key in the memtree if exists
     memTreeComponent<datatuple>::rbtree_t::iterator rbitr = tree_c0->find(tuple);
     datatuple * t  = 0;
     if(rbitr != tree_c0->end())
     {        
-        datatuple *pre_t = *rbitr;
+        pre_t = *rbitr;
         //do the merging
-        merge_mgr->read_tuple_from_large_component(0, pre_t);
         datatuple *new_t = tmerger->merge(pre_t, tuple);
         c0_stats->merged_tuples(new_t, tuple, pre_t);
         t = new_t;
@@ -472,7 +525,6 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
         //update the tree size (+ new_t size - pre_t size)
         tree_bytes += ((int64_t)new_t->byte_length() - (int64_t)pre_t->byte_length());
 
-        datatuple::freetuple(pre_t); //free the previous tuple
     }
     else //no tuple with same key exists in mem-tree
     {
@@ -486,9 +538,9 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
         tree_bytes += t->byte_length();// + RB_TREE_OVERHEAD;
 
     }
+    merge_mgr->wrote_tuple(0, t);  // needs to be here; doesn't grab a mutex.
 
-    merge_mgr->wrote_tuple(0, t);
-
+#ifdef NO_SNOWSHOVEL
     //flushing logic
     if(tree_bytes >= max_c0_size )
     {
@@ -501,12 +553,18 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
       rwlc_writelock(header_mut);
       // the test of tree size needs to be atomic with the flushTable, and flushTable needs a writelock.
       if(tree_bytes >= max_c0_size) {
-        flushTable();
+        flushTable();  // this needs to hold rb_mut if snowshoveling is disabled, but can't hold rb_mut if snowshoveling is enabled.
       }
       rwlc_unlock(header_mut);
-    }
-
+#endif
     pthread_mutex_unlock(&rb_mut);
+
+    //  XXX is it OK to move this after the NO_SNOWSHOVEL block?
+    if(pre_t) {
+      // needs to be here; calls update_progress, which sometimes grabs mutexes..
+      merge_mgr->read_tuple_from_large_component(0, pre_t);  // was interspersed with the erase, insert above...
+      datatuple::freetuple(pre_t); //free the previous tuple
+    }
 
     DEBUG("tree size %d tuples %lld bytes.\n", tsize, tree_bytes);
 }

@@ -63,9 +63,11 @@ public:
     inline diskTreeComponent * get_tree_c2(){return tree_c2;}
     inline diskTreeComponent * get_tree_c1(){return tree_c1;}
     inline diskTreeComponent * get_tree_c1_mergeable(){return tree_c1_mergeable;}
+    inline diskTreeComponent * get_tree_c1_prime(){return tree_c1_prime;}
 
     inline void set_tree_c1(diskTreeComponent *t){tree_c1=t;                      bump_epoch(); }
     inline void set_tree_c1_mergeable(diskTreeComponent *t){tree_c1_mergeable=t;  bump_epoch(); }
+    inline void set_tree_c1_prime(diskTreeComponent *t){tree_c1_prime=t;  bump_epoch(); }
     inline void set_tree_c2(diskTreeComponent *t){tree_c2=t;                      bump_epoch(); }
     pthread_cond_t c0_needed;
     pthread_cond_t c0_ready;
@@ -80,6 +82,8 @@ public:
       merge_mgr->set_c0_size(max_c0_size);
       merge_mgr->get_merge_stats(1);
     }
+    bool get_c0_is_merging() { return c0_is_merging; }
+    void set_c0_is_merging(bool is_merging) { c0_is_merging = is_merging; }
     void set_tree_c0_mergeable(memTreeComponent<datatuple>::rbtree_ptr_t newtree){tree_c0_mergeable = newtree; bump_epoch(); }
     void update_persistent_header(int xid, int merge_level);
 
@@ -128,13 +132,15 @@ private:
     diskTreeComponent *tree_c2; //big tree
     diskTreeComponent *tree_c1; //small tree
     diskTreeComponent *tree_c1_mergeable; //small tree: ready to be merged with c2
+    diskTreeComponent *tree_c1_prime; //small tree: ready to be merged with c2
     memTreeComponent<datatuple>::rbtree_ptr_t tree_c0; // in-mem red black tree
     memTreeComponent<datatuple>::rbtree_ptr_t tree_c0_mergeable; // in-mem red black tree: ready to be merged with c1.
+    bool c0_is_merging;
 
     int tsize; //number of tuples
+public:
     int64_t tree_bytes; //number of bytes
 
-public:
     //DATA PAGE SETTINGS
     pageid_t internal_region_size; // in number of pages
     pageid_t datapage_region_size; // "
@@ -369,7 +375,7 @@ public:
       void validate() {
         typename memTreeComponent<TUPLE>::revalidatingIterator * c0_it;
         typename memTreeComponent<TUPLE>::iterator *c0_mergeable_it[1];
-        diskTreeComponent::iterator * disk_it[3];
+        diskTreeComponent::iterator * disk_it[4];
         epoch = ltable->get_epoch();
 
         datatuple *t;
@@ -383,17 +389,22 @@ public:
 
         c0_it              = new typename memTreeComponent<TUPLE>::revalidatingIterator(ltable->get_tree_c0(), &ltable->rb_mut,  t);
         c0_mergeable_it[0] = new typename memTreeComponent<TUPLE>::iterator            (ltable->get_tree_c0_mergeable(),                            t);
-        disk_it[0]         = ltable->get_tree_c1()->open_iterator(t);
-        if(ltable->get_tree_c1_mergeable()) {
-          disk_it[1]         = ltable->get_tree_c1_mergeable()->open_iterator(t);
+        if(ltable->get_tree_c1_prime()) {
+          disk_it[0] = ltable->get_tree_c1_prime()->open_iterator(t);
         } else {
-          disk_it[1] = NULL;
+          disk_it[0] = NULL;
         }
-        disk_it[2]         = ltable->get_tree_c2()->open_iterator(t);
+        disk_it[1]         = ltable->get_tree_c1()->open_iterator(t);
+        if(ltable->get_tree_c1_mergeable()) {
+          disk_it[2]         = ltable->get_tree_c1_mergeable()->open_iterator(t);
+        } else {
+          disk_it[2] = NULL;
+        }
+        disk_it[3]         = ltable->get_tree_c2()->open_iterator(t);
 
         inner_merge_it_t * inner_merge_it =
                new inner_merge_it_t(c0_it, c0_mergeable_it, 1, NULL, TUPLE::compare_obj);
-        merge_it_ = new merge_it_t(inner_merge_it, disk_it, 3, NULL, TUPLE::compare_obj); // XXX Hardcodes comparator, and does not handle merges
+        merge_it_ = new merge_it_t(inner_merge_it, disk_it, 4, NULL, TUPLE::compare_obj); // XXX Hardcodes comparator, and does not handle merges
         if(last_returned) {
           TUPLE * junk = merge_it_->peek();
           if(junk && !TUPLE::compare(junk->key(), junk->keylen(), last_returned->key(), last_returned->keylen())) {

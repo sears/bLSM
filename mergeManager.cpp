@@ -56,6 +56,8 @@ void mergeManager::update_progress(mergeStats * s, int delta) {
     if(s->merge_level < 2 && s->mergeable_size && delta) {
       int64_t effective_max_delta = (int64_t)(UPDATE_PROGRESS_PERIOD * s->bps);
 
+      if(s->merge_level == 0) { s->base_size = ltable->tree_bytes; }
+
       if(s->mini_delta > effective_max_delta) {
         struct timeval now;
         gettimeofday(&now, 0);
@@ -92,7 +94,15 @@ void mergeManager::update_progress(mergeStats * s, int delta) {
         s->out_progress = 0.0;
       }
     }
+#ifdef NO_SNOWSHOVEL
     s->current_size = s->base_size + s->bytes_out - s->bytes_in_large;
+#else
+    if(s->merge_level == 0 && delta) {
+      s->current_size = s->bytes_out - s->bytes_in_large;
+    } else {
+      s->current_size = s->base_size + s->bytes_out - s->bytes_in_large;
+    }
+#endif
     struct timeval now;
     gettimeofday(&now, 0);
     double elapsed_delta = tv_to_double(&now) - ts_to_double(&s->last_tick);
@@ -101,14 +111,12 @@ void mergeManager::update_progress(mergeStats * s, int delta) {
     s->lifetime_consumed += s->bytes_in_small_delta;
     double tau = 60.0; // number of seconds to look back for window computation.  (this is the expected mean residence time in an exponential decay model, so the units are not so intuitive...)
     double decay = exp((0.0-elapsed_delta)/tau);
-    //    s->window_elapsed = (decay * s->window_elapsed) + elapsed_delta;
-    //    s->window_consumed = (decay * s->window_consumed) + s->bytes_in_small_delta;
 
     double_to_ts(&s->last_tick, tv_to_double(&now));
 
     double window_bps = ((double)s->bytes_in_small_delta) / (double)elapsed_delta;
 
-    s->bps = (1.0-decay) * window_bps + decay * s->bps; //s->window_consumed / s->window_elapsed;
+    s->bps = (1.0-decay) * window_bps + decay * s->bps;
 
     s->bytes_in_small_delta = 0;
 
@@ -139,13 +147,17 @@ void mergeManager::update_progress(mergeStats * s, int delta) {
  * bytes_consumed_by_merger = sum(bytes_in_small_delta)
  */
 void mergeManager::tick(mergeStats * s, bool block, bool force) {
-#define PRINT_SKIP 100
+#define PRINT_SKIP 10000
   if(block) {
     //    sleep(((double)delta)/[s+1]->bps); // XXX We currently sleep based on the past performance of the current tree.  In the limit, this is fine, but it would be better to sleep based on the past throughput of the tree component we're waiting for.  fill in the parameters
   }
   if(force || s->need_tick) {
 
-    if(block) {
+    if(block
+#ifndef NO_SNOWSHOVEL
+        && s->merge_level == 0
+#endif
+    ) {
       pthread_mutex_lock(&ltable->tick_mut);
       rwlc_readlock(ltable->header_mut);
 
@@ -154,7 +166,7 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
         pthread_cond_wait(&throttle_wokeup_cond, &ltable->tick_mut);
         rwlc_readlock(ltable->header_mut);
       }
-
+#ifdef NO_SNOWSHOVEL
       int64_t overshoot = 0;
       int64_t overshoot2 = 0;
       int64_t raw_overshoot = 0;
@@ -257,6 +269,23 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
           break;
         }
       } while(1);
+#else
+      while(/*s->current_size*/ltable->tree_bytes > ltable->max_c0_size) {
+        rwlc_unlock(ltable->header_mut);
+        printf("\nMEMORY OVERRUN!!!! SLEEP!!!!\n");
+        sleep(1);
+        rwlc_readlock(ltable->header_mut);
+      }
+      if(/*s->current_size*/ltable->tree_bytes > 0.9 * (double)ltable->max_c0_size) {
+        double slp = 0.01 + (double)(((double)ltable->tree_bytes)-0.9*(double)ltable->max_c0_size) / (double)(ltable->max_c0_size);
+        DEBUG("\nsleeping %0.6f tree_megabytes %0.3f\n", slp, ((double)ltable->tree_bytes)/(1024.0*1024.0));
+        struct timespec sleeptime;
+        double_to_ts(&sleeptime, slp);
+        rwlc_unlock(ltable->header_mut);
+        nanosleep(&sleeptime, 0);
+        rwlc_readlock(ltable->header_mut);
+      }
+#endif
       rwlc_unlock(ltable->header_mut);
       pthread_mutex_unlock(&ltable->tick_mut);
     } else {
@@ -360,8 +389,10 @@ void mergeManager::pretty_print(FILE * out) {
   double c0_c1_out_progress = 100.0 * c1->current_size / c1->target_size;
   double c1_c2_progress = 100.0 * (c2->bytes_in_large + c2->bytes_in_small) / (c1->mergeable_size + c2->base_size);
 
+#ifdef NO_SNOWSHOVEL
   assert((!c1->active) || (c0_c1_in_progress >= -1 && c0_c1_in_progress < 102));
   assert((!c2->active) || (c1_c2_progress >= -1 && c1_c2_progress < 102));
+#endif
 
   fprintf(out,"[merge progress MB/s window (lifetime)]: app [%s %6lldMB ~ %3.0f%% %6.1fsec %4.1f (%4.1f)] %s %s [%s %3.0f%% ~ %3.0f%% %4.1f (%4.1f)] %s %s [%s %3.0f%% %4.1f (%4.1f)] %s ",
       c0->active ? "RUN" : "---", (long long)(c0->lifetime_consumed / mb), c0_out_progress, c0->lifetime_elapsed, c0->bps/((double)mb), c0->lifetime_consumed/(((double)mb)*c0->lifetime_elapsed),

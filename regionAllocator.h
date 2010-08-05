@@ -12,7 +12,6 @@
 #undef try
 #undef end
 
-
 class RegionAllocator
 {
 public:

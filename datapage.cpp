@@ -108,8 +108,6 @@ void DataPage<TUPLE>::initialize_page(pageid_t pageid) {
 #else
     p = loadUninitializedPage(xid_, pageid);
 #endif
-    //XXX this is pretty obnoxious.  Perhaps stasis shouldn't check for the latch
-    writelock(p->rwlatch,0);
     
     DEBUG("\t\t\t\t\t\t->%lld\n", pageid);
 
@@ -128,28 +126,31 @@ void DataPage<TUPLE>::initialize_page(pageid_t pageid) {
     //set the page dirty
     stasis_page_lsn_write(xid_, p, alloc_->get_lsn(xid_));
 
-    //release the page
-    unlock(p->rwlatch);
     releasePage(p);
 }
 template <class TUPLE>
-size_t DataPage<TUPLE>::write_bytes(const byte * buf, ssize_t remaining) {
-	recordid chunk = calc_chunk_from_offset(write_offset_);
-	if(chunk.size > remaining) {
-		chunk.size = remaining;
-	}
-	if(chunk.page >= first_page_ + page_count_) {
-	    chunk.size = 0; // no space (should not happen)
-	} else {
-		Page *p = alloc_ ? alloc_->load_page(xid_, chunk.page) : loadPage(xid_, chunk.page);
-		memcpy(data_at_offset_ptr(p, chunk.slot), buf, chunk.size);
-		writelock(p->rwlatch,0);
-		stasis_page_lsn_write(xid_, p, alloc_->get_lsn(xid_));
-		unlock(p->rwlatch);
-		releasePage(p);
-		write_offset_ += chunk.size;
-	}
-	return chunk.size;
+size_t DataPage<TUPLE>::write_bytes(const byte * buf, ssize_t remaining, Page ** latch_p) {
+  if(latch_p) { *latch_p  = NULL; }
+  recordid chunk = calc_chunk_from_offset(write_offset_);
+  if(chunk.size > remaining) {
+    chunk.size = remaining;
+  }
+  if(chunk.page >= first_page_ + page_count_) {
+    chunk.size = 0; // no space (should not happen)
+  } else {
+    Page *p = alloc_ ? alloc_->load_page(xid_, chunk.page) : loadPage(xid_, chunk.page);
+    assert(chunk.size);
+    memcpy(data_at_offset_ptr(p, chunk.slot), buf, chunk.size);
+    stasis_page_lsn_write(xid_, p, alloc_->get_lsn(xid_));
+    if(latch_p && !*latch_p) {
+      writelock(p->rwlatch,0);
+      *latch_p = p;
+    } else {
+      releasePage(p);
+    }
+    write_offset_ += chunk.size;
+  }
+  return chunk.size;
 }
 template <class TUPLE>
 size_t DataPage<TUPLE>::read_bytes(byte * buf, off_t offset, ssize_t remaining) {
@@ -191,39 +192,64 @@ bool DataPage<TUPLE>::initialize_next_page() {
 
   Page *p = alloc_ ? alloc_->load_page(xid_, rid.page-1) : loadPage(xid_, rid.page-1);
   *is_another_page_ptr(p) = (rid.page-1 == first_page_) ? 2 : 1;
-  writelock(p->rwlatch, 0);
   stasis_page_lsn_write(xid_, p, alloc_->get_lsn(xid_));
-  unlock(p->rwlatch);
   releasePage(p);
 
   initialize_page(rid.page);
   return true;
 }
 
+template<class TUPLE>
+Page * DataPage<TUPLE>::write_data_and_latch(const byte * buf, size_t len, bool init_next, bool latch) {
+  bool first = true;
+  Page * p = 0;
+  while(1) {
+      assert(len > 0);
+//      if(latch) {
+//        if(first) { assert(!p); } else { assert(p); }
+//      } else {
+//        assert(!p);
+//      }
+      size_t written;
+      if(latch && first ) {
+        written = write_bytes(buf, len, &p);
+      } else {
+        written = write_bytes(buf, len);
+      }
+      if(written == 0) {
+          assert(!p);
+          return 0; // fail
+      }
+      if(written == len) {
+        if(latch) {
+          return p;
+        } else {
+//          assert(!p);
+          return (Page*)1;
+        }
+      }
+      if(len > PAGE_SIZE && ! first) {
+          assert(written > 4000);
+      }
+      buf += written;
+      len -= written;
+      if(init_next) {
+          if(!initialize_next_page()) {
+            if(p) {
+//              assert(latch);
+              unlock(p->rwlatch);
+              releasePage(p);
+            }
+            return 0; // fail
+          }
+      }
+      first = false;
+  }
+}
+
 template <class TUPLE>
 bool DataPage<TUPLE>::write_data(const byte * buf, size_t len, bool init_next) {
-	bool first = true;
-	while(1) {
-		assert(len > 0);
-		size_t written = write_bytes(buf, len);
-		if(written == 0) {
-			return false; // fail
-		}
-		if(written == len) {
-			return true; // success
-		}
-		if(len > PAGE_SIZE && ! first) {
-			assert(written > 4000);
-		}
-		buf += written;
-		len -= written;
-		if(init_next) {
-			if(!initialize_next_page()) {
-			  return false; // fail
-			}
-		}
-		first = false;
-	}
+  return 0 != write_data_and_latch(buf, len, init_next, false);
 }
 template <class TUPLE>
 bool DataPage<TUPLE>::read_data(byte * buf, off_t offset, size_t len) {
@@ -255,9 +281,12 @@ bool DataPage<TUPLE>::append(TUPLE const * dat)
 	byte * buf = dat->to_bytes(); // TODO could be more efficient; this does a malloc and memcpy.  The alternative couples us more strongly to datapage, but simplifies datapage.
 	len_t dat_len = dat->byte_length();
 
-	bool succ = write_data((const byte*)&dat_len, sizeof(dat_len));
-	if(succ) {
+	Page * p = write_data_and_latch((const byte*)&dat_len, sizeof(dat_len));
+	bool succ = false;
+	if(p) {
 		succ = write_data(buf, dat_len);
+		unlock(p->rwlatch);
+		releasePage(p);
 	}
 
 	free(buf);
@@ -306,13 +335,20 @@ TUPLE* DataPage<TUPLE>::iterator::getnext()
 	len_t len;
 	bool succ;
 	if(dp == NULL) { return NULL; }
+    // XXX hack: read latch the page that the record will live on.
+    // This should be handled by a read_data_in_latch function, or something...
+    Page * p = loadPage(dp->xid_, dp->calc_chunk_from_offset(read_offset_).page);
+    readlock(p->rwlatch, 0);
 	succ = dp->read_data((byte*)&len, read_offset_, sizeof(len));
 	if((!succ) || (len == 0)) { return NULL; }
 	read_offset_ += sizeof(len);
 
 	byte * buf = (byte*)malloc(len);
-
 	succ = dp->read_data(buf, read_offset_, len);
+
+	// release hacky latch
+	unlock(p->rwlatch);
+	releasePage(p);
 
 	if(!succ) { read_offset_ -= sizeof(len); free(buf); return NULL; }
 
@@ -325,19 +361,4 @@ TUPLE* DataPage<TUPLE>::iterator::getnext()
 	return ret;
 }
 
-/*template <class TUPLE>
-void DataPage<TUPLE>::RecordIterator::advance(int xid, int count)
-{
-	len_t len;
-	bool succ;
-	for(int i = 0; i < count; i++) {
-	  succ = dp->read_data(xid, (byte*)&len, read_offset_, sizeof(len));
-	  if((!succ) || (len == 0)) { return; }
-	  read_offset_ += sizeof(len);
-	  read_offset_ += len;
-	}
-}*/
-
-
 template class DataPage<datatuple>;
-

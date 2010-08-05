@@ -118,11 +118,11 @@ class mergeStats {
     struct timespec last_mini_tick;
     struct timespec last_tick;
   public: // XXX only accessed during initialization.
-    pageid_t base_size;
+    pageid_t base_size; // size of table at beginning of merge.  for c0, size of table at beginning of current c0-c1 merge round, plus data written since then.  (this minus c1->bytes_in_small is the current size)
     pageid_t mergeable_size;  // protected by mutex.
-  protected:
     pageid_t target_size;
     pageid_t current_size;
+  protected:
 
     pageid_t bytes_out_with_overhead;// How many bytes did we write (including internal tree nodes)?
   public:
