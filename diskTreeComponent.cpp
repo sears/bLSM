@@ -357,6 +357,10 @@ diskTreeComponent::internalNodes::internalNodes(int xid, recordid root, recordid
   datapage_alloc(new RegionAllocator(xid, datapage_state))
 { }
 
+diskTreeComponent::internalNodes::~internalNodes() {
+  delete internal_node_alloc;
+  delete datapage_alloc;
+}
 
 /* adding pages:
 

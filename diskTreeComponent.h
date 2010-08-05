@@ -81,7 +81,7 @@ class diskTreeComponent {
 
     internalNodes(int xid, pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size);
     internalNodes(int xid, recordid root, recordid internal_node_state, recordid datapage_state);
-
+    ~internalNodes();
     void print_tree(int xid);
 
     //returns the id of the data page that could contain the given key
