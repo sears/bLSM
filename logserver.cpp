@@ -796,6 +796,9 @@ int op_dbg_drop_database(pthread_data * data) {
 	fprintf(stderr, "...DROP DATABASE COMPLETE\n");
 	return writeoptosocket(*(data->workitem), LOGSTORE_RESPONSE_SUCCESS);
 }
+int op_dbg_noop(pthread_data * data) {
+  return writeoptosocket(*(data->workitem), LOGSTORE_RESPONSE_SUCCESS);
+}
 
 int dispatch_request(network_op_t opcode, datatuple * tuple, datatuple * tuple2, pthread_data* data) {
 	int err = 0;
@@ -840,6 +843,9 @@ int dispatch_request(network_op_t opcode, datatuple * tuple, datatuple * tuple2,
     else if(opcode == OP_DBG_DROP_DATABASE)
     {
     	err = op_dbg_drop_database(data);
+    }
+    else if(opcode == OP_DBG_NOOP) {
+      err = op_dbg_noop(data);
     }
     return err;
 }

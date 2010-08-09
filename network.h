@@ -43,9 +43,10 @@ static const network_op_t OP_STAT_PERF_REPORT    = 15;
 static const network_op_t OP_STAT_HISTOGRAM      = 16;  // Return N approximately equal size partitions (including split points + cardinalities)  N=1 estimates table cardinality.
 
 
-static const network_op_t OP_DBG_DROP_DATABASE            = 17;
+static const network_op_t OP_DBG_DROP_DATABASE        = 17;
 static const network_op_t OP_DBG_BLOCKMAP             = 18;
-static const network_op_t LOGSTORE_LAST_REQUEST_CODE  = 18;
+static const network_op_t OP_DBG_NOOP                 = 19;
+static const network_op_t LOGSTORE_LAST_REQUEST_CODE  = 19;
 
 //error codes
 static const network_op_t LOGSTORE_FIRST_ERROR  = 27;

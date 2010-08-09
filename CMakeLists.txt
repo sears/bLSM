@@ -11,7 +11,7 @@ Project(Stasis)
 
 SET(PACKAGE_VERSION 1)
 
-SUBDIRS(test util)
+SUBDIRS(test util benchmarks)
 
 # Main decisions
 SET(BUILD_SHARED_LIBS ON)
@@ -55,7 +55,7 @@ if(NOT HAVE_STASIS)
   message(STATUS "stasis not found; only building client library")
 endif(NOT HAVE_STASIS)
 
-SET(CLIENT_LIBRARIES logstore_client)
+SET(CLIENT_LIBRARIES logstore_client pthread)
 
 IF ( "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" )
   SET(COMMON_LIBRARIES logstore stasis m pthread stdc++)
