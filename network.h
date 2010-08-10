@@ -63,6 +63,23 @@ typedef enum {
   LOGSTORE_SERVER_RESPONSE
 } logstore_opcode_type;
 
+static inline int freadfromsocket(FILE * sockf, void *buf, ssize_t count) {
+  ssize_t i = fread_unlocked(buf, sizeof(byte), count, sockf);
+  if(i != count) {
+    if(feof(sockf)) {
+      errno = EOF;
+      return EOF;
+    } else if(ferror(sockf)) {
+      perror("readfromsocket failed");
+      errno = -1;
+      return -1;
+    }
+    printf("logic bug? unreported short read?\n");
+    errno = EOF;
+    return EOF;
+  }
+  return 0;
+}
 static inline int readfromsocket(int sockd, void *buf, ssize_t count)
 {
 
@@ -84,6 +101,23 @@ static inline int readfromsocket(int sockd, void *buf, ssize_t count)
 
 }
 
+static inline int fwritetosocket(FILE * sockf, const void *buf, ssize_t count) {
+  ssize_t i = fwrite_unlocked((byte*)buf, sizeof(byte), count, sockf);
+  if(i != count) {
+    if(feof(sockf)) {
+      errno = EOF;
+      return errno;
+    } else if(ferror(sockf)) {
+      perror("writetosocket failed");
+      errno = -1;
+      return -1;
+    }
+    printf("logic error? unreported short write?\n");
+    errno = EOF;
+    return EOF;
+  }
+  return 0;
+}
 static inline int writetosocket(int sockd, const void *buf, ssize_t count)
 {
 	ssize_t n = 0;
@@ -91,7 +125,7 @@ static inline int writetosocket(int sockd, const void *buf, ssize_t count)
 	while( n < count )
 	{
 		ssize_t i = write( sockd, ((byte*)buf) + n, count - n);
-		if(i == -1) {
+		if(i == -1) { // XXX not threadsafe!
 			perror("writetosocket failed");
 			return errno;
 		} else if(i == 0) {
@@ -113,6 +147,43 @@ static inline bool opisresponse(network_op_t op) {
   return (LOGSTORE_FIRST_RESPONSE_CODE <= op && op <= LOGSTORE_LAST_RESPONSE_CODE);
 }
 
+static inline network_op_t freadopfromsocket(FILE * sockf, logstore_opcode_type type) {
+  network_op_t ret;
+  ssize_t n = fread(&ret, sizeof(network_op_t), 1, sockf);
+  if(n == sizeof(network_op_t)) {
+    // done.
+  } else if(n == 0) { // EOF
+    perror("Socket closed mid request.");
+    return LOGSTORE_CONN_CLOSED_ERROR;
+  } else {
+    assert(n == -1); // sizeof(network_op_t) is 1, so short reads are impossible.
+    perror("Could not read opcode from socket");
+    return LOGSTORE_SOCKET_ERROR;
+  }
+  // sanity checking
+  switch(type) {
+  case LOGSTORE_CLIENT_REQUEST: {
+    if(!(opisrequest(ret) || opiserror(ret))) {
+      fprintf(stderr, "Read invalid request code %d\n", (int)ret);
+      if(opisresponse(ret)) {
+	fprintf(stderr, "(also, the request code is a valid response code)\n");
+      }
+      ret = LOGSTORE_PROTOCOL_ERROR;
+    }
+  } break;
+  case LOGSTORE_SERVER_RESPONSE: {
+    if(!(opisresponse(ret) || opiserror(ret))) {
+      fprintf(stderr, "Read invalid response code %d\n", (int)ret);
+      if(opisrequest(ret)) {
+	fprintf(stderr, "(also, the response code is a valid request code)\n");
+      }
+      ret = LOGSTORE_PROTOCOL_ERROR;
+    }
+
+  }
+  }
+  return ret;
+}
 static inline network_op_t readopfromsocket(int sockd, logstore_opcode_type type) {
   network_op_t ret;
   ssize_t n = read(sockd, &ret, sizeof(network_op_t));
@@ -150,6 +221,10 @@ static inline network_op_t readopfromsocket(int sockd, logstore_opcode_type type
   }
   return ret;
 }
+static inline int fwriteoptosocket(FILE * sockf, network_op_t op) {
+  assert(opiserror(op) || opisrequest(op) || opisresponse(op));
+  return fwritetosocket(sockf, &op, sizeof(network_op_t));
+}
 static inline int writeoptosocket(int sockd, network_op_t op) {
   assert(opiserror(op) || opisrequest(op) || opisresponse(op));
   return writetosocket(sockd, &op, sizeof(network_op_t));
@@ -165,6 +240,22 @@ static inline int writeoptosocket(int sockd, network_op_t op) {
 	  datatuple::DELETE
 
  */
+
+static inline datatuple* freadtuplefromsocket(FILE * sockf, int * err) {
+
+  len_t keylen, datalen, buflen;
+
+  if(( *err = freadfromsocket(sockf, &keylen, sizeof(keylen))   )) return NULL;
+  if(keylen == DELETE) return NULL; // *err is zero.
+  if(( *err = freadfromsocket(sockf, &datalen, sizeof(datalen)) )) return NULL;
+
+  buflen = datatuple::length_from_header(keylen, datalen);
+  byte*  bytes = (byte*) malloc(buflen);
+
+  if(( *err = freadfromsocket(sockf, bytes, buflen)             )) return NULL;
+
+  return datatuple::from_bytes(keylen, datalen, bytes);   // from_bytes consumes the buffer.
+}
 
 /**
     @param sockd The socket.
@@ -187,8 +278,26 @@ static inline datatuple* readtuplefromsocket(int sockd, int * err) {
 	return datatuple::from_bytes(keylen, datalen, bytes);   // from_bytes consumes the buffer.
 }
 
+static inline int fwriteendofiteratortosocket(FILE * sockf) {
+  return fwritetosocket(sockf, &DELETE, sizeof(DELETE));
+}
+
 static inline int writeendofiteratortosocket(int sockd) {
 	return writetosocket(sockd, &DELETE, sizeof(DELETE));
+}
+static inline int fwritetupletosocket(FILE * sockf, const datatuple *tup) {
+  len_t keylen, datalen;
+  int err;
+
+  if(tup == NULL) {
+    if(( err = fwriteendofiteratortosocket(sockf)                                         )) return err;
+  } else {
+    const byte* buf = tup->get_bytes(&keylen, &datalen);
+    if(( err = fwritetosocket(sockf, &keylen, sizeof(keylen))                             )) return err;
+    if(( err = fwritetosocket(sockf, &datalen, sizeof(datalen))                           )) return err;
+    if(( err = fwritetosocket(sockf, buf, datatuple::length_from_header(keylen, datalen)) )) return err;
+  }
+  return 0;
 }
 static inline int writetupletosocket(int sockd, const datatuple* tup) {
 	len_t keylen, datalen;
@@ -205,10 +314,18 @@ static inline int writetupletosocket(int sockd, const datatuple* tup) {
 	return 0;
 
 }
+static inline uint64_t freadcountfromsocket(FILE* sockf, int *err) {
+	uint64_t ret;
+	*err = freadfromsocket(sockf, &ret, sizeof(ret));
+	return ret;
+}
 static inline uint64_t readcountfromsocket(int sockd, int *err) {
 	uint64_t ret;
 	*err = readfromsocket(sockd, &ret, sizeof(ret));
 	return ret;
+}
+static inline int fwritecounttosocket(FILE* sockf, uint64_t count) {
+	return fwritetosocket(sockf, &count, sizeof(count));
 }
 static inline int writecounttosocket(int sockd, uint64_t count) {
 	return writetosocket(sockd, &count, sizeof(count));
