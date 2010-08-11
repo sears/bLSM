@@ -462,7 +462,7 @@ void * thread_work_fn( void * args)
         if(!err) { tuple2 = readtuplefromsocket(*(item->data->workitem), &err); }
 
         //step 3: process the tuple
-		if(!err) { err = dispatch_request(opcode, tuple, tuple2, item->data->ltable, *(item->data->workitem)); }
+		if(!err) { err = requestDispatch<int>::dispatch_request(opcode, tuple, tuple2, item->data->ltable, *(item->data->workitem)); }
 
         //free the tuple
         if(tuple)  datatuple::freetuple(tuple);

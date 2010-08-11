@@ -107,22 +107,22 @@ logstore_client_op_returns_many(logstore_handle_t *l,
     network_op_t err = 0;
 
     //send the opcode
-    if( !err) { err = fwritetosocket(l->server_fsocket, &opcode, sizeof(opcode));  }
+    if( !err) { err = writetosocket(l->server_fsocket, &opcode, sizeof(opcode));  }
 
     //send the first tuple
-    if( !err) { err = fwritetupletosocket(l->server_fsocket, tuple);               }
+    if( !err) { err = writetupletosocket(l->server_fsocket, tuple);               }
 
     //send the second tuple
-    if( !err) { err = fwritetupletosocket(l->server_fsocket, tuple2);              }
+    if( !err) { err = writetupletosocket(l->server_fsocket, tuple2);              }
 
     if( (!err) && (count != (uint64_t)-1) ) {
-                err = fwritecounttosocket(l->server_fsocket, count);               }
+                err = writecounttosocket(l->server_fsocket, count);               }
 
     fflush_unlocked(l->server_fsocket);
 
     network_op_t rcode = LOGSTORE_CONN_CLOSED_ERROR;
     if( !err) {
-      rcode = freadopfromsocket(l->server_fsocket,LOGSTORE_SERVER_RESPONSE);
+      rcode = readopfromsocket(l->server_fsocket,LOGSTORE_SERVER_RESPONSE);
     }
 
     if( opiserror(rcode) ) { close_conn(l); }
@@ -134,7 +134,7 @@ datatuple *
 logstore_client_next_tuple(logstore_handle_t *l) {
 	assert(l->server_fsocket != 0); // otherwise, then the client forgot to check a return value...
 	int err = 0;
-	datatuple * ret = freadtuplefromsocket(l->server_fsocket, &err);
+	datatuple * ret = readtuplefromsocket(l->server_fsocket, &err);
 	if(err) {
 		close_conn(l);
 		if(ret) {
@@ -179,7 +179,7 @@ logstore_client_op(logstore_handle_t *l,
 int logstore_client_close(logstore_handle_t* l) {
     if(l->server_fsocket)
     {
-        fwritetosocket(l->server_fsocket, (char*) &OP_DONE, sizeof(uint8_t));
+        writetosocket(l->server_fsocket, (char*) &OP_DONE, sizeof(uint8_t));
 
         fclose(l->server_fsocket);
         DEBUG("socket closed %d\n.", l->server_fsocket);

@@ -7,13 +7,15 @@
 #include "requestDispatch.h"
 #include "regionAllocator.h"
 
-static inline int op_insert(logtable<datatuple> * ltable, int fd, datatuple * tuple) {
+template<class HANDLE>
+inline int requestDispatch<HANDLE>::op_insert(logtable<datatuple> * ltable, HANDLE fd, datatuple * tuple) {
     //insert/update/delete
     ltable->insertTuple(tuple);
     //step 4: send response
     return writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
 }
-static inline int op_find(logtable<datatuple> * ltable, int fd, datatuple * tuple) {
+template<class HANDLE>
+inline int requestDispatch<HANDLE>::op_find(logtable<datatuple> * ltable, HANDLE fd, datatuple * tuple) {
     //find the tuple
     datatuple *dt = ltable->findTuple_first(-1, tuple->key(), tuple->keylen());
 
@@ -57,7 +59,8 @@ static inline int op_find(logtable<datatuple> * ltable, int fd, datatuple * tupl
     }
     return err;
 }
-static inline int op_scan(logtable<datatuple> * ltable, int fd, datatuple * tuple, datatuple * tuple2, size_t limit) {
+template<class HANDLE>
+inline int requestDispatch<HANDLE>::op_scan(logtable<datatuple> * ltable, HANDLE fd, datatuple * tuple, datatuple * tuple2, size_t limit) {
     size_t count = 0;
     int err = writeoptosocket(fd, LOGSTORE_RESPONSE_SENDING_TUPLES);
 
@@ -81,15 +84,18 @@ static inline int op_scan(logtable<datatuple> * ltable, int fd, datatuple * tupl
     if(!err) { writeendofiteratortosocket(fd); }
     return err;
 }
-static inline int op_flush(logtable<datatuple> * ltable, int fd) {
+template<class HANDLE>
+inline int requestDispatch<HANDLE>::op_flush(logtable<datatuple> * ltable, HANDLE fd) {
     ltable->flushTable();
     return writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
 }
-static inline int op_shutdown(logtable<datatuple> * ltable, int fd) {
+template<class HANDLE>
+inline int requestDispatch<HANDLE>::op_shutdown(logtable<datatuple> * ltable, HANDLE fd) {
     // XXX
     return writeoptosocket(fd, LOGSTORE_UNIMPLEMENTED_ERROR);
 }
-static inline int op_stat_space_usage(logtable<datatuple> * ltable, int fd) {
+template<class HANDLE>
+inline int requestDispatch<HANDLE>::op_stat_space_usage(logtable<datatuple> * ltable, HANDLE fd) {
 
 
     int xid = Tbegin();
@@ -186,12 +192,14 @@ static inline int op_stat_space_usage(logtable<datatuple> * ltable, int fd) {
 
     return err;
 }
-static inline int op_stat_perf_report(logtable<datatuple> * ltable, int fd) {
+template<class HANDLE>
+inline int requestDispatch<HANDLE>::op_stat_perf_report(logtable<datatuple> * ltable, HANDLE fd) {
 
 }
 
 
-static inline int op_stat_histogram(logtable<datatuple> * ltable, int fd, size_t limit) {
+template<class HANDLE>
+inline int requestDispatch<HANDLE>::op_stat_histogram(logtable<datatuple> * ltable, HANDLE fd, size_t limit) {
 
     if(limit < 3) {
         return writeoptosocket(fd, LOGSTORE_PROTOCOL_ERROR);
@@ -248,7 +256,8 @@ static inline int op_stat_histogram(logtable<datatuple> * ltable, int fd, size_t
     Tcommit(xid);
     return err;
 }
-static inline int op_dbg_blockmap(logtable<datatuple> * ltable, int fd) {
+template<class HANDLE>
+inline int requestDispatch<HANDLE>::op_dbg_blockmap(logtable<datatuple> * ltable, HANDLE fd) {
     // produce a list of stasis regions
     int xid = Tbegin();
 
@@ -351,7 +360,8 @@ static inline int op_dbg_blockmap(logtable<datatuple> * ltable, int fd) {
     return writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
 }
 
-static inline int op_dbg_drop_database(logtable<datatuple> * ltable, int fd) {
+template<class HANDLE>
+inline int requestDispatch<HANDLE>::op_dbg_drop_database(logtable<datatuple> * ltable, HANDLE fd) {
     logtable<datatuple>::iterator * itr = new logtable<datatuple>::iterator(ltable);
     datatuple * del;
     fprintf(stderr, "DROPPING DATABASE...\n");
@@ -376,11 +386,50 @@ static inline int op_dbg_drop_database(logtable<datatuple> * ltable, int fd) {
     fprintf(stderr, "...DROP DATABASE COMPLETE\n");
     return writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
 }
-static inline int op_dbg_noop(logtable<datatuple> * ltable, int fd) {
+template<class HANDLE>
+inline int requestDispatch<HANDLE>::op_dbg_noop(logtable<datatuple> * ltable, HANDLE fd) {
   return writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
 }
 
-int dispatch_request(network_op_t opcode, datatuple * tuple, datatuple * tuple2, logtable<datatuple> * ltable, int fd) {
+template<class HANDLE>
+int requestDispatch<HANDLE>::dispatch_request(HANDLE f, logtable<datatuple>*ltable) {
+  //step 1: read the opcode
+  network_op_t opcode = readopfromsocket(f, LOGSTORE_CLIENT_REQUEST);
+  if(opcode == LOGSTORE_CONN_CLOSED_ERROR) {
+      opcode = OP_DONE;
+      printf("Broken client closed connection uncleanly\n");
+  }
+
+  int err = opcode == OP_DONE || opiserror(opcode); //close the conn on failure
+
+  //step 2: read the first tuple from client
+  datatuple *tuple = 0, *tuple2 = 0;
+  if(!err) { tuple  = readtuplefromsocket(f, &err); }
+  //        read the second tuple from client
+  if(!err) { tuple2 = readtuplefromsocket(f, &err); }
+
+  //step 3: process the tuple
+  if(!err) { err = dispatch_request(opcode, tuple, tuple2, ltable, f); }
+
+  //free the tuple
+  if(tuple)  datatuple::freetuple(tuple);
+  if(tuple2) datatuple::freetuple(tuple2);
+
+  // Deal with old work_queue item by freeing it or putting it back in the queue.
+
+  if(err) {
+    if(opcode != OP_DONE) {
+      perror("network error. conn closed");
+    } else {
+//              printf("client done. conn closed. (%d, %d)\n",
+//                     *(item->data->workitem), item->data->work_queue->size());
+    }
+  }
+  return err;
+
+}
+template<class HANDLE>
+int requestDispatch<HANDLE>::dispatch_request(network_op_t opcode, datatuple * tuple, datatuple * tuple2, logtable<datatuple> * ltable, HANDLE fd) {
     int err = 0;
     if(opcode == OP_INSERT)
     {
@@ -429,3 +478,6 @@ int dispatch_request(network_op_t opcode, datatuple * tuple, datatuple * tuple2,
     }
     return err;
 }
+
+template class requestDispatch<int>;
+template class requestDispatch<FILE*>;
