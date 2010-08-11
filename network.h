@@ -149,7 +149,8 @@ static inline bool opisresponse(network_op_t op) {
 
 static inline network_op_t readopfromsocket(FILE * sockf, logstore_opcode_type type) {
   network_op_t ret;
-  ssize_t n = fread(&ret, sizeof(network_op_t), 1, sockf);
+  fflush_unlocked(sockf); // our first read after a write is always (?) a readop, so fflush the write here.
+  ssize_t n = fread_unlocked(&ret, sizeof(network_op_t), 1, sockf);
   if(n == sizeof(network_op_t)) {
     // done.
   } else if(n == 0) { // EOF

@@ -31,17 +31,21 @@ void * worker_wrap(void * arg) {
 }
 
 void * simpleServer::worker(int self) {
+  pthread_mutex_lock(&thread_mut[self]);
   while(true) {
-    pthread_mutex_lock(&thread_mut[self]);
-    thread_fd[self] = -1;
     while(thread_fd[self] == -1) {
-      if(!running) { return 0; }
+      if(!running) {
+        pthread_mutex_unlock(&thread_mut[self]);
+        return 0;
+      }
       pthread_cond_wait(&thread_cond[self], &thread_mut[self]);
     }
     pthread_mutex_unlock(&thread_mut[self]);
     FILE * f = fdopen(thread_fd[self], "a+");
     while(!requestDispatch<FILE*>::dispatch_request(f, ltable)) { }
     fclose(f);
+    pthread_mutex_lock(&thread_mut[self]);
+    thread_fd[self] = -1;
   }
 }
 
@@ -55,13 +59,9 @@ simpleServer::simpleServer(logtable<datatuple> * ltable, int max_threads, int po
   thread((pthread_t*)malloc(sizeof(*thread)*max_threads)),
   running(true) {
   for(int i = 0; i < max_threads; i++) {
-    thread_fd[i] = -1;
+    thread_fd[i] = -2;
     pthread_cond_init(&thread_cond[i], 0);
     pthread_mutex_init(&thread_mut[i], 0);
-    worker_arg * arg = (worker_arg*)malloc(sizeof(worker_arg));
-    arg->obj = this;
-    arg->self = i;
-    pthread_create(&thread[i], 0, worker_wrap, (void*)arg);
   }
 }
 
@@ -114,6 +114,14 @@ bool simpleServer::acceptLoop() {
       int i;
       for(i = 0; i < max_threads; i++) { //TODO round robin or something? (currently, we don't care if connect() is slow...)
         pthread_mutex_lock(&thread_mut[i]);
+        if(thread_fd[i] == -2) {  // lazily spawn new threads
+          thread_fd[i] = -1;
+          worker_arg * arg = (worker_arg*)malloc(sizeof(worker_arg));
+          arg->obj = this;
+          arg->self = i;
+          pthread_create(&thread[i], 0, worker_wrap, (void*)arg);
+
+        }
         if(thread_fd[i] == -1) {
           thread_fd[i] = newsockfd;
           DEBUG("connect %d\n", i);
@@ -135,7 +143,13 @@ simpleServer::~simpleServer() {
   running = false;
   for(int i = 0; i < max_threads; i++) {
     pthread_cond_signal(&thread_cond[i]);
-    pthread_join(thread[i],0);
+    pthread_mutex_lock(&thread_mut[i]);
+    if(thread_fd[i] != -2) {
+      pthread_mutex_unlock(&thread_mut[i]);
+      pthread_join(thread[i],0);
+    } else {
+      pthread_mutex_unlock(&thread_mut[i]);
+    }
     pthread_mutex_destroy(&thread_mut[i]);
     pthread_cond_destroy(&thread_cond[i]);
   }

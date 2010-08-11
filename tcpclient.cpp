@@ -118,8 +118,6 @@ logstore_client_op_returns_many(logstore_handle_t *l,
     if( (!err) && (count != (uint64_t)-1) ) {
                 err = writecounttosocket(l->server_fsocket, count);               }
 
-    fflush_unlocked(l->server_fsocket);
-
     network_op_t rcode = LOGSTORE_CONN_CLOSED_ERROR;
     if( !err) {
       rcode = readopfromsocket(l->server_fsocket,LOGSTORE_SERVER_RESPONSE);
