@@ -340,7 +340,11 @@ TUPLE* DataPage<TUPLE>::iterator::getnext()
     Page * p = loadPage(dp->xid_, dp->calc_chunk_from_offset(read_offset_).page);
     readlock(p->rwlatch, 0);
 	succ = dp->read_data((byte*)&len, read_offset_, sizeof(len));
-	if((!succ) || (len == 0)) { return NULL; }
+	if((!succ) || (len == 0)) {
+	  unlock(p->rwlatch);
+	  releasePage(p);
+	  return NULL;
+	}
 	read_offset_ += sizeof(len);
 
 	byte * buf = (byte*)malloc(len);
