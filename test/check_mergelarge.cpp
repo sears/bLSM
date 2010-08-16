@@ -24,8 +24,6 @@ void insertProbeIter(size_t NUM_ENTRIES)
     unlink("storefile.txt");
     unlink("logfile.txt");
 
-    sync();
-
     logtable<datatuple>::init_stasis();
 
     //data generation
