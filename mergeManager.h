@@ -62,8 +62,6 @@ private:
   mergeStats * c1;
   mergeStats * c2;
   pthread_mutex_t throttle_mut;
-  pthread_mutex_t dummy_throttle_mut;
-  pthread_cond_t dummy_throttle_cond;
   pthread_cond_t throttle_wokeup_cond;
   bool sleeping[3];
 

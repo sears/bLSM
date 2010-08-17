@@ -91,8 +91,8 @@ inline int requestDispatch<HANDLE>::op_flush(logtable<datatuple> * ltable, HANDL
 }
 template<class HANDLE>
 inline int requestDispatch<HANDLE>::op_shutdown(logtable<datatuple> * ltable, HANDLE fd) {
-    // XXX
-    return writeoptosocket(fd, LOGSTORE_UNIMPLEMENTED_ERROR);
+    ltable->accepting_new_requests = false;
+    return writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
 }
 template<class HANDLE>
 inline int requestDispatch<HANDLE>::op_stat_space_usage(logtable<datatuple> * ltable, HANDLE fd) {

@@ -34,7 +34,7 @@ void * simpleServer::worker(int self) {
   pthread_mutex_lock(&thread_mut[self]);
   while(true) {
     while(thread_fd[self] == -1) {
-      if(!running) {
+      if(!ltable->accepting_new_requests) {
         pthread_mutex_unlock(&thread_mut[self]);
         return 0;
       }
@@ -56,8 +56,7 @@ simpleServer::simpleServer(logtable<datatuple> * ltable, int max_threads, int po
   thread_fd((int*)malloc(sizeof(*thread_fd)*max_threads)),
   thread_cond((pthread_cond_t*)malloc(sizeof(*thread_cond)*max_threads)),
   thread_mut((pthread_mutex_t*)malloc(sizeof(*thread_mut)*max_threads)),
-  thread((pthread_t*)malloc(sizeof(*thread)*max_threads)),
-  running(true) {
+  thread((pthread_t*)malloc(sizeof(*thread)*max_threads)) {
   for(int i = 0; i < max_threads; i++) {
     thread_fd[i] = -2;
     pthread_cond_init(&thread_cond[i], 0);
@@ -95,7 +94,7 @@ bool simpleServer::acceptLoop() {
 //  *(sdata->server_socket) = sockfd;
   int flag, result;
 
-  while(true) {
+  while(ltable->accepting_new_requests) {
     socklen_t clilen = sizeof(cli_addr);
 
     newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
@@ -138,9 +137,9 @@ bool simpleServer::acceptLoop() {
       }
     }
   }
+  return true;
 }
 simpleServer::~simpleServer() {
-  running = false;
   for(int i = 0; i < max_threads; i++) {
     pthread_cond_signal(&thread_cond[i]);
     pthread_mutex_lock(&thread_mut[i]);

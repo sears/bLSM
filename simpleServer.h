@@ -26,7 +26,6 @@ private:
   pthread_cond_t * thread_cond;
   pthread_mutex_t * thread_mut;
   pthread_t * thread;
-  bool running;
 };
 
 #endif /* SIMPLESERVER_H_ */

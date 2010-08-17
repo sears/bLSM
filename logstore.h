@@ -113,6 +113,7 @@ public:
     int64_t max_c0_size;
     mergeManager * merge_mgr;
 
+    bool accepting_new_requests;
     inline bool is_still_running() { return still_running_; }
     inline void stop() {
       rwlc_writelock(header_mut);

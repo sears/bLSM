@@ -31,6 +31,8 @@ logtable<TUPLE>::logtable(pageid_t internal_region_size, pageid_t datapage_regio
     tree_c1 = NULL;
     tree_c1_mergeable = NULL;
     tree_c2 = NULL;
+    // This bool is purely for external code.
+    this->accepting_new_requests = true;
     this->still_running_ = true;
     this->merge_mgr = new mergeManager(this);
     this->mergedata = 0;
