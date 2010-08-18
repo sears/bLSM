@@ -249,11 +249,11 @@ recordid diskTreeComponent::internalNodes::appendPage(int xid,
       slotid_t numslots = stasis_record_last(xid, p).slot+1;
       recordid rid;
       rid.page = p->id;
+      // XXX writelock lc here?  no need, since it's not installed in the tree yet
       for(rid.slot = FIRST_SLOT; rid.slot < numslots; rid.slot++) {
         //read the record from the root page
         rid.size = stasis_record_length_read(xid, p, rid);
         const indexnode_rec *nr = (const indexnode_rec*)stasis_record_read_begin(xid, p, rid);
-
         recordid cnext = stasis_record_alloc_begin(xid, lc,rid.size);
 
         assert(rid.slot == cnext.slot);
@@ -288,7 +288,7 @@ recordid diskTreeComponent::internalNodes::appendPage(int xid,
       // don't overwrite key...
       nr->ptr = child;
       stasis_record_write_done(xid,p,pFirstSlot,(byte*)nr);
-
+      // XXX move this up before we insert LC into the root?  Removes write lock on lc.
       if(!depth) {
           lastLeaf = lc->id;
           pageid_t tmpid = -1;

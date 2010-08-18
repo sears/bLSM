@@ -271,9 +271,11 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
           double_to_ts(&sleep_until, sleeptime + tv_to_double(&now));
           sleeping[s->merge_level] = true;
           if(s->merge_level == 0) abort();
+          rwlc_unlock(ltable->header_mut);
           struct timespec ts;
           double_to_ts(&ts, sleeptime);
           nanosleep(&ts, 0);
+          rwlc_writelock(ltable->header_mut);
           sleeping[s->merge_level] = false;
           pthread_cond_broadcast(&throttle_wokeup_cond);
           gettimeofday(&now, 0);

@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
     }
 
     if(argc == 2 && !strcmp(argv[1], "--benchmark")) {
-      c0_size = 1024 * 1024 * 1024 * 1;
+      c0_size = 1024 * 1024 * 768 * 1;
       printf("note: running w/ 2GB c0 for benchmarking\n"); // XXX build a separate test server and deployment server?
     }
 

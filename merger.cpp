@@ -175,8 +175,10 @@ void* memMergeThread(void*arg)
         memTreeComponent<datatuple>::iterator *itrB =
             new memTreeComponent<datatuple>::iterator(ltable->get_tree_c0_mergeable());
 #else
-        memTreeComponent<datatuple>::revalidatingIterator *itrB =
-            new memTreeComponent<datatuple>::revalidatingIterator(ltable->get_tree_c0(), &ltable->rb_mut);
+//        memTreeComponent<datatuple>::revalidatingIterator *itrB =
+//            new memTreeComponent<datatuple>::revalidatingIterator(ltable->get_tree_c0(), &ltable->rb_mut);
+        memTreeComponent<datatuple>::batchedRevalidatingIterator *itrB =
+            new memTreeComponent<datatuple>::batchedRevalidatingIterator(ltable->get_tree_c0(), 100, &ltable->rb_mut);
 #endif
         
         //create a new tree
@@ -397,6 +399,37 @@ static void periodically_force(int xid, int *i, diskTreeComponent * forceMe, sta
   }
 }
 
+static int garbage_collect(logtable<datatuple> * ltable, datatuple ** garbage, int garbage_len, int next_garbage, bool force = false) {
+  if(next_garbage == garbage_len || force) {
+    pthread_mutex_lock(&ltable->rb_mut);
+    for(int i = 0; i < next_garbage; i++) {
+      datatuple * t2tmp = NULL;
+      {
+      memTreeComponent<datatuple>::rbtree_t::iterator rbitr = ltable->get_tree_c0()->find(garbage[i]);
+        if(rbitr != ltable->get_tree_c0()->end()) {
+          t2tmp = *rbitr;
+          if((t2tmp->datalen() == garbage[i]->datalen()) &&
+             !memcmp(t2tmp->data(), garbage[i]->data(), garbage[i]->datalen())) {
+            // they match, delete t2tmp
+          } else {
+            t2tmp = NULL;
+          }
+        }
+      } // close rbitr before touching the tree.
+      if(t2tmp) {
+        ltable->get_tree_c0()->erase(garbage[i]);
+        ltable->tree_bytes -= garbage[i]->byte_length();
+        datatuple::freetuple(t2tmp);
+      }
+      datatuple::freetuple(garbage[i]);
+    }
+    pthread_mutex_unlock(&ltable->rb_mut);
+    return 0;
+  } else {
+    return next_garbage;
+  }
+}
+
 template <class ITA, class ITB>
 void merge_iterators(int xid,
                         diskTreeComponent * forceMe,
@@ -412,6 +445,10 @@ void merge_iterators(int xid,
     datatuple *t1 = itrA->next_callerFrees();
     ltable->merge_mgr->read_tuple_from_large_component(stats->merge_level, t1);
     datatuple *t2 = 0;
+
+    int garbage_len = 100;
+    int next_garbage = 0;
+    datatuple ** garbage = (datatuple**)malloc(sizeof(garbage[0]) * garbage_len);
 
     int i = 0;
 
@@ -467,6 +504,12 @@ void merge_iterators(int xid,
             // cannot free any tuples here; they may still be read through a lookup
         }
 #ifndef NO_SNOWSHOVEL
+        if(stats->merge_level == 1) {
+          next_garbage = garbage_collect(ltable, garbage, garbage_len, next_garbage);
+          garbage[next_garbage] = t2;
+          next_garbage++;
+        }
+#if 0
         pthread_mutex_lock(&ltable->rb_mut);
         if(stats->merge_level == 1) {
           datatuple * t2tmp = NULL;
@@ -487,7 +530,13 @@ void merge_iterators(int xid,
         }
         pthread_mutex_unlock(&ltable->rb_mut);
 #endif
+        if(stats->merge_level != 1) {
+          datatuple::freetuple(t2);
+        }
+#else
         datatuple::freetuple(t2);
+#endif
+
     }
 
     while(t1 != 0) {// t1 is less than t2
@@ -502,6 +551,9 @@ void merge_iterators(int xid,
       periodically_force(xid, &i, forceMe, log);
     }
     DEBUG("dpages: %d\tnpages: %d\tntuples: %d\n", dpages, npages, ntuples);
+
+    next_garbage = garbage_collect(ltable, garbage, garbage_len, next_garbage, true);
+    free(garbage);
 
     scratch_tree->writes_done();
 }

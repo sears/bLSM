@@ -353,7 +353,7 @@ public:
       logtable * ltable;
       uint64_t epoch;
       typedef mergeManyIterator<
-        typename memTreeComponent<TUPLE>::revalidatingIterator,
+        typename memTreeComponent<TUPLE>::batchedRevalidatingIterator,
         typename memTreeComponent<TUPLE>::iterator> inner_merge_it_t;
       typedef mergeManyIterator<
         inner_merge_it_t,
@@ -374,7 +374,7 @@ public:
 
 
       void validate() {
-        typename memTreeComponent<TUPLE>::revalidatingIterator * c0_it;
+        typename memTreeComponent<TUPLE>::batchedRevalidatingIterator * c0_it;
         typename memTreeComponent<TUPLE>::iterator *c0_mergeable_it[1];
         diskTreeComponent::iterator * disk_it[4];
         epoch = ltable->get_epoch();
@@ -388,7 +388,7 @@ public:
           t = NULL;
         }
 
-        c0_it              = new typename memTreeComponent<TUPLE>::revalidatingIterator(ltable->get_tree_c0(), &ltable->rb_mut,  t);
+        c0_it              = new typename memTreeComponent<TUPLE>::batchedRevalidatingIterator(ltable->get_tree_c0(), 100, &ltable->rb_mut,  t);
         c0_mergeable_it[0] = new typename memTreeComponent<TUPLE>::iterator            (ltable->get_tree_c0_mergeable(),                            t);
         if(ltable->get_tree_c1_prime()) {
           disk_it[0] = ltable->get_tree_c1_prime()->open_iterator(t);
