@@ -212,7 +212,7 @@ public:
 
     ~batchedRevalidatingIterator() {
       for(int i = cur_off_; i < num_batched_; i++) {
-        TUPLE::freetuple(next_ret_[cur_off_]);
+        TUPLE::freetuple(next_ret_[i]);
       }
       free(next_ret_);
 //      if(next_ret_) TUPLE::freetuple(next_ret_);
