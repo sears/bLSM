@@ -34,6 +34,7 @@ logtable<TUPLE>::logtable(pageid_t internal_region_size, pageid_t datapage_regio
     // This bool is purely for external code.
     this->accepting_new_requests = true;
     this->still_running_ = true;
+    flushing = false;
     this->merge_mgr = new mergeManager(this);
     this->mergedata = 0;
     //tmerger = new tuplemerger(&append_merger);
@@ -180,6 +181,7 @@ void logtable<TUPLE>::flushTable()
 
     merge_mgr->finished_merge(0);
 
+    flushing = true;
     bool blocked = false;
 
     int expmcount = merge_count;
@@ -234,7 +236,7 @@ void logtable<TUPLE>::flushTable()
     } else {
       DEBUG("signaled c0-c1 merge\n");
     }
-
+    flushing = false;
 }
 
 template<class TUPLE>

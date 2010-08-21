@@ -51,10 +51,10 @@ void mergeManager::update_progress(mergeStats * s, int delta) {
   s->delta += delta;
   s->mini_delta += delta;
   {
-    if(s->merge_level < 2 && s->mergeable_size && delta) {
+    if(/*s->merge_level < 2*/ s->merge_level == 1 && s->mergeable_size && delta) {
       int64_t effective_max_delta = (int64_t)(UPDATE_PROGRESS_PERIOD * s->bps);
 
-      if(s->merge_level == 0) { s->base_size = ltable->tree_bytes; }
+//      if(s->merge_level == 0) { s->base_size = ltable->tree_bytes; }
 
       if(s->mini_delta > effective_max_delta) {
         struct timeval now;
@@ -63,9 +63,10 @@ void mergeManager::update_progress(mergeStats * s, int delta) {
         double elapsed_delta =  now_double - ts_to_double(&s->last_mini_tick);
         double slp = UPDATE_PROGRESS_PERIOD - elapsed_delta;
         if(slp > 0.001) {
-          struct timespec sleeptime;
-          double_to_ts(&sleeptime, slp);
-          nanosleep(&sleeptime, 0);
+//          struct timespec sleeptime;
+//          double_to_ts(&sleeptime, slp);
+//          nanosleep(&sleeptime, 0);
+//          printf("%d Sleep A %f\n", s->merge_level, slp);
         }
         double_to_ts(&s->last_mini_tick, now_double);
         s->mini_delta = 0;
@@ -90,7 +91,7 @@ void mergeManager::update_progress(mergeStats * s, int delta) {
       }
     } else if(s->merge_level == 1) { // C0-C1 merge (c0 is continuously growing...)
       if(s->active) {
-        s->in_progress = ((double)(s->bytes_in_large+s->bytes_in_small)) / (double)(s->base_size+ltable->max_c0_size);
+        s->in_progress = ((double)(s->bytes_in_large+s->bytes_in_small)) / (double)(s->base_size+ltable->mean_c0_effective_size);
         if(s->in_progress > 0.95) { s->in_progress = 0.95; }
         assert(s->in_progress > -0.01 && s->in_progress < 1.02);
       } else {
@@ -109,6 +110,7 @@ void mergeManager::update_progress(mergeStats * s, int delta) {
 #else
     if(s->merge_level == 0 && delta) {
       s->current_size = s->bytes_out - s->bytes_in_large;
+      s->out_progress = ((double)s->current_size) / (double)s->target_size;
     } else {
       s->current_size = s->base_size + s->bytes_out - s->bytes_in_large;
     }
@@ -165,17 +167,19 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
 
     if(block) {
       if(s->merge_level == 0) {
-        pthread_mutex_lock(&ltable->tick_mut);
-        rwlc_writelock(ltable->header_mut);
+//        pthread_mutex_lock(&ltable->tick_mut);
+        rwlc_readlock(ltable->header_mut);
 
         while(sleeping[s->merge_level]) {
+          abort();
           rwlc_unlock(ltable->header_mut);
-          pthread_cond_wait(&throttle_wokeup_cond, &ltable->tick_mut);
+//          pthread_cond_wait(&throttle_wokeup_cond, &ltable->tick_mut);
           rwlc_writelock(ltable->header_mut);
         }
       } else {
-        rwlc_writelock(ltable->header_mut);
+        rwlc_readlock(ltable->header_mut);
         while(sleeping[s->merge_level]) {
+          abort();  // if we're asleep, didn't this thread make us sleep???
           rwlc_cond_wait(&throttle_wokeup_cond, ltable->header_mut);
         }
       }
@@ -245,9 +249,6 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
           // throttle
           // it took "elapsed" seconds to process "tick_length_bytes" mb
           double sleeptime = 2.0 * fmax((double)overshoot,(double)overshoot2) / bps;
-
-          struct timespec sleep_until;
-
           double max_c0_sleep = 0.1;
           double min_c0_sleep = 0.01;
           double max_c1_sleep = 0.5;
@@ -265,20 +266,18 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
               printf("\nMerge thread %d Overshoot: raw=%lld, d=%lld eff=%lld Throttle min(1, %6f) spin %d, total_sleep %6.3f\n", s->merge_level, (long long)raw_overshoot, (long long)overshoot_fudge, (long long)overshoot, sleeptime, spin, total_sleep);
           }
 
-          struct timeval now;
-          gettimeofday(&now, 0);
-
-          double_to_ts(&sleep_until, sleeptime + tv_to_double(&now));
           sleeping[s->merge_level] = true;
           if(s->merge_level == 0) abort();
           rwlc_unlock(ltable->header_mut);
           struct timespec ts;
           double_to_ts(&ts, sleeptime);
           nanosleep(&ts, 0);
-          rwlc_writelock(ltable->header_mut);
+          printf("%d Sleep B %f\n", s->merge_level, sleeptime);
+
+          //          rwlc_writelock(ltable->header_mut);
+          rwlc_readlock(ltable->header_mut);
           sleeping[s->merge_level] = false;
           pthread_cond_broadcast(&throttle_wokeup_cond);
-          gettimeofday(&now, 0);
           if(s->merge_level == 0) { update_progress(c1, 0); }
           if(s->merge_level == 1) { update_progress(c2, 0); }
         } else {
@@ -295,29 +294,35 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
       while(/*s->current_size*/ltable->tree_bytes > ltable->max_c0_size) {
         rwlc_unlock(ltable->header_mut);
         printf("\nMEMORY OVERRUN!!!! SLEEP!!!!\n");
-        sleep(1);
+        struct timespec ts;
+        double_to_ts(&ts, 0.1);
+        nanosleep(&ts, 0);
         rwlc_readlock(ltable->header_mut);
       }
-      if(/*s->current_size*/ltable->tree_bytes > 0.9 * (double)ltable->max_c0_size) {
-        double slp = 0.01 + (double)(((double)ltable->tree_bytes)-0.9*(double)ltable->max_c0_size) / (double)(ltable->max_c0_size);
+      double delta = ((double)ltable->tree_bytes)/(0.9*(double)ltable->max_c0_size); // 0 <= delta <= 1.1111  // - (0.9 * (double)ltable->max_c0_size);
+      delta -= 1.0;
+      if(delta > 0.0005) {
+        double slp = 0.001 + delta; //delta / (double)(ltable->max_c0_size);
         DEBUG("\nsleeping %0.6f tree_megabytes %0.3f\n", slp, ((double)ltable->tree_bytes)/(1024.0*1024.0));
         struct timespec sleeptime;
         double_to_ts(&sleeptime, slp);
         rwlc_unlock(ltable->header_mut);
+        DEBUG("%d Sleep C %f\n", s->merge_level, slp);
+
         nanosleep(&sleeptime, 0);
         rwlc_readlock(ltable->header_mut);
       }
     }
       rwlc_unlock(ltable->header_mut);
-      if(s->merge_level == 0) pthread_mutex_unlock(&ltable->tick_mut); //  XXX can this even be the case?
+      //if(s->merge_level == 0) pthread_mutex_unlock(&ltable->tick_mut); //  XXX can this even be the case?
     } else {
       if(!force) {
         if(s->print_skipped == PRINT_SKIP) {
-          if(s->merge_level == 0) pthread_mutex_lock(&ltable->tick_mut);
+          //if(s->merge_level == 0) pthread_mutex_lock(&ltable->tick_mut);
           rwlc_writelock(ltable->header_mut);
           pretty_print(stdout);
           rwlc_unlock(ltable->header_mut);
-          if(s->merge_level == 0) pthread_mutex_unlock(&ltable->tick_mut);
+          //if(s->merge_level == 0) pthread_mutex_unlock(&ltable->tick_mut);
           s->print_skipped = 0;
         } else {
           s->print_skipped++;

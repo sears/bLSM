@@ -130,7 +130,9 @@ class mergeStats {
   protected:
     pageid_t num_tuples_out;       // How many tuples did we write?
     pageid_t num_datapages_out;    // How many datapages?
+  public:
     pageid_t bytes_in_small;       // How many bytes from the small input tree (for C0, we ignore tree overheads)?
+  protected:
     pageid_t bytes_in_small_delta; // How many bytes from the small input tree during this tick (for C0, we ignore tree overheads)?
     pageid_t num_tuples_in_small;  // Tuples from the small input?
     pageid_t bytes_in_large;       // Bytes from the large input?

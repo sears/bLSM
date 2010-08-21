@@ -141,17 +141,9 @@ void* memMergeThread(void*arg)
             
         }
 #else
+        // the merge iterator will wait until c0 is big enough for us to proceed.
         if(!ltable->is_still_running()) {
           done = 1;
-        }
-        while(ltable->tree_bytes < 0.5 * (double)ltable->max_c0_size && ! done) {
-          rwlc_unlock(ltable->header_mut);
-          sleep(1); // XXX fixme!
-          rwlc_writelock(ltable->header_mut);
-
-          if(!ltable->is_still_running()) {
-            done = 1;
-          }
         }
 #endif
 
@@ -177,8 +169,8 @@ void* memMergeThread(void*arg)
 #else
 //        memTreeComponent<datatuple>::revalidatingIterator *itrB =
 //            new memTreeComponent<datatuple>::revalidatingIterator(ltable->get_tree_c0(), &ltable->rb_mut);
-        memTreeComponent<datatuple>::batchedRevalidatingIterator *itrB =
-            new memTreeComponent<datatuple>::batchedRevalidatingIterator(ltable->get_tree_c0(), 100, &ltable->rb_mut);
+//        memTreeComponent<datatuple>::batchedRevalidatingIterator *itrB =
+//            new memTreeComponent<datatuple>::batchedRevalidatingIterator(ltable->get_tree_c0(), &ltable->tree_bytes, ltable->max_c0_size, &ltable->flushing, 100, &ltable->rb_mut);
 #endif
         
         //create a new tree
@@ -187,7 +179,11 @@ void* memMergeThread(void*arg)
         ltable->set_tree_c1_prime(c1_prime);
 
         rwlc_unlock(ltable->header_mut);
-
+#ifndef NO_SNOWSHOVEL
+        // needs to be past the rwlc_unlock...
+        memTreeComponent<datatuple>::batchedRevalidatingIterator *itrB =
+            new memTreeComponent<datatuple>::batchedRevalidatingIterator(ltable->get_tree_c0(), &ltable->tree_bytes, ltable->max_c0_size, &ltable->flushing, 100, &ltable->rb_mut);
+#endif
         //: do the merge
         DEBUG("mmt:\tMerging:\n");
 
@@ -235,9 +231,21 @@ void* memMergeThread(void*arg)
 
         //TODO: this is simplistic for now
         //6: if c1' is too big, signal the other merger
+
+        // update c0 effective size.
+        double frac = 1.0/(double)merge_count;
+        ltable->num_c0_mergers = merge_count;
+        ltable->mean_c0_effective_size =
+          (int64_t) (
+           ((double)ltable->mean_c0_effective_size)*(1-frac) +
+           ((double)stats->bytes_in_small*frac));
+        ltable->merge_mgr->get_merge_stats(0)->target_size = ltable->mean_c0_effective_size;
         double target_R = *ltable->R();
+
+        printf("Merge done. R = %f MemSize = %lld Mean = %lld, This = %lld, Count = %d factor %3.3fcur%3.3favg\n", target_R, (long long)ltable->max_c0_size, (long long int)ltable->mean_c0_effective_size, stats->bytes_in_small, merge_count, ((double)stats->bytes_in_small) / (double)ltable->max_c0_size, ((double)ltable->mean_c0_effective_size) / (double)ltable->max_c0_size);
+
         assert(target_R >= MIN_R);
-        bool signal_c2 = (new_c1_size / ltable->max_c0_size > target_R);
+        bool signal_c2 = (new_c1_size / ltable->mean_c0_effective_size > target_R);
         DEBUG("\nc1 size %f R %f\n", new_c1_size, target_R);
         if( signal_c2  )
         {
@@ -368,7 +376,7 @@ void *diskMergeThread(void*arg)
 
         merge_count++;        
         //update the current optimal R value
-        *(ltable->R()) = std::max(MIN_R, sqrt( ((double)stats->output_size()) / (ltable->max_c0_size) ) );
+        *(ltable->R()) = std::max(MIN_R, sqrt( ((double)stats->output_size()) / ((double)ltable->mean_c0_effective_size) ) );
         
         DEBUG("\nR = %f\n", *(ltable->R()));
 

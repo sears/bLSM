@@ -79,6 +79,8 @@ public:
     void set_tree_c0(memTreeComponent<datatuple>::rbtree_ptr_t newtree){tree_c0 = newtree;                     bump_epoch(); }
     void set_max_c0_size(int64_t max_c0_size) {
       this->max_c0_size = max_c0_size;
+      this->mean_c0_effective_size = max_c0_size;
+      this->num_c0_mergers = 0;
       merge_mgr->set_c0_size(max_c0_size);
       merge_mgr->get_merge_stats(1);
     }
@@ -111,6 +113,10 @@ public:
     pthread_mutex_t tick_mut;
     pthread_mutex_t rb_mut;
     int64_t max_c0_size;
+    // these track the effectiveness of snowshoveling
+    int64_t mean_c0_effective_size;
+    int64_t num_c0_mergers;
+
     mergeManager * merge_mgr;
 
     bool accepting_new_requests;
@@ -120,6 +126,7 @@ public:
       if(still_running_) {
         still_running_ = false;
         flushTable();
+        flushing = true;
       }
       rwlc_unlock(header_mut);
       // XXX must need to do other things! (join the threads?)
@@ -141,6 +148,7 @@ private:
     int tsize; //number of tuples
 public:
     int64_t tree_bytes; //number of bytes
+    bool flushing;
 
     //DATA PAGE SETTINGS
     pageid_t internal_region_size; // in number of pages

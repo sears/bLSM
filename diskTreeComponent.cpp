@@ -136,7 +136,6 @@ recordid diskTreeComponent::internalNodes::create(int xid) {
   recordid ret = { root, 0, 0 };
 
   Page *p = loadPage(xid, ret.page);
-  writelock(p->rwlatch,0);
 
   //initialize root node
   stasis_page_slotted_initialize_page(p);
@@ -162,7 +161,6 @@ recordid diskTreeComponent::internalNodes::create(int xid) {
 
   stasis_page_lsn_write(xid, p, internal_node_alloc->get_lsn(xid));
 
-  unlock(p->rwlatch);
   releasePage(p);
 
   root_rec = ret;
@@ -195,15 +193,15 @@ recordid diskTreeComponent::internalNodes::appendPage(int xid,
   recordid tree = root_rec;
 
   Page *p = loadPage(xid, tree.page);
-  writelock(p->rwlatch, 0);
 
   tree.slot = DEPTH;
   tree.size = 0;
 
+  readlock(p->rwlatch,0);
   const indexnode_rec *nr = (const indexnode_rec*)stasis_record_read_begin(xid, p, tree);
   int64_t depth = *((int64_t*)nr);
   stasis_record_read_done(xid, p, tree, (const byte*)nr);
-
+  unlock(p->rwlatch);
   if(lastLeaf == -1) {
     lastLeaf = findLastLeaf(xid, p, depth);
   }
@@ -212,18 +210,19 @@ recordid diskTreeComponent::internalNodes::appendPage(int xid,
 
   if(lastLeaf != tree.page) {
     lastLeafPage= loadPage(xid, lastLeaf);
-    writelock(lastLeafPage->rwlatch, 0);
   } else {
     lastLeafPage = p;
   }
+
+  writelock(lastLeafPage->rwlatch, 0);
 
   recordid ret = stasis_record_alloc_begin(xid, lastLeafPage,
                                            sizeof(indexnode_rec)+keySize);
 
   if(ret.size == INVALID_SLOT) {
-    if(lastLeafPage->id != p->id) {
+    unlock(lastLeafPage->rwlatch);
+    if(lastLeafPage->id != p->id) {  // is the root the last leaf page?
       assert(lastLeaf != tree.page);
-      unlock(lastLeafPage->rwlatch);
       releasePage(lastLeafPage); // don't need that page anymore...
       lastLeafPage = 0;
     }
@@ -239,30 +238,43 @@ recordid diskTreeComponent::internalNodes::appendPage(int xid,
       DEBUG("Need to split root; depth = %d\n", depth);
 
       pageid_t child = internal_node_alloc->alloc_extent(xid, 1);
-      Page *lc = loadPage(xid, child);
-      writelock(lc->rwlatch,0);
-
-      initializeNodePage(xid, lc);
-
-      //creates a copy of the root page records in the
-      //newly allocated child page
       slotid_t numslots = stasis_record_last(xid, p).slot+1;
-      recordid rid;
-      rid.page = p->id;
-      // XXX writelock lc here?  no need, since it's not installed in the tree yet
-      for(rid.slot = FIRST_SLOT; rid.slot < numslots; rid.slot++) {
-        //read the record from the root page
-        rid.size = stasis_record_length_read(xid, p, rid);
-        const indexnode_rec *nr = (const indexnode_rec*)stasis_record_read_begin(xid, p, rid);
-        recordid cnext = stasis_record_alloc_begin(xid, lc,rid.size);
+      {
+        Page *lc = loadPage(xid, child);
 
-        assert(rid.slot == cnext.slot);
-        assert(cnext.size != INVALID_SLOT);
+        initializeNodePage(xid, lc);
 
-        stasis_record_alloc_done(xid, lc, cnext);
-        stasis_record_write(xid, lc, cnext, (byte*)nr);
-        stasis_record_read_done(xid, p, rid, (const byte*)nr);
-      }
+        //creates a copy of the root page records in the
+        //newly allocated child page
+        recordid rid;
+        rid.page = p->id;
+        // XXX writelock lc here?  no need, since it's not installed in the tree yet
+        for(rid.slot = FIRST_SLOT; rid.slot < numslots; rid.slot++) {
+          //read the record from the root page
+          rid.size = stasis_record_length_read(xid, p, rid);
+          const indexnode_rec *nr = (const indexnode_rec*)stasis_record_read_begin(xid, p, rid);
+          recordid cnext = stasis_record_alloc_begin(xid, lc,rid.size);
+
+          assert(rid.slot == cnext.slot);
+          assert(cnext.size != INVALID_SLOT);
+
+          stasis_record_alloc_done(xid, lc, cnext);
+          stasis_record_write(xid, lc, cnext, (byte*)nr);
+          stasis_record_read_done(xid, p, rid, (const byte*)nr);
+        }
+
+        if(!depth) {
+            lastLeaf = lc->id;
+            pageid_t tmpid = -1;
+            recordid rid = { lc->id, PREV_LEAF, root_rec_size };
+            stasis_record_write(xid, lc, rid, (byte*)&tmpid);
+            rid.slot = NEXT_LEAF;
+            stasis_record_write(xid, lc, rid, (byte*)&tmpid);
+        }
+
+        stasis_page_lsn_write(xid, lc, internal_node_alloc->get_lsn(xid));
+        releasePage(lc);
+      } // lc is now out of scope.
 
       // deallocate old entries, and update pointer on parent node.
       // NOTE: stasis_record_free call goes to slottedFree in slotted.c
@@ -288,19 +300,6 @@ recordid diskTreeComponent::internalNodes::appendPage(int xid,
       // don't overwrite key...
       nr->ptr = child;
       stasis_record_write_done(xid,p,pFirstSlot,(byte*)nr);
-      // XXX move this up before we insert LC into the root?  Removes write lock on lc.
-      if(!depth) {
-          lastLeaf = lc->id;
-          pageid_t tmpid = -1;
-          recordid rid = { lc->id, PREV_LEAF, root_rec_size };
-          stasis_record_write(xid, lc, rid, (byte*)&tmpid);
-          rid.slot = NEXT_LEAF;
-          stasis_record_write(xid, lc, rid, (byte*)&tmpid);
-      }
-
-      stasis_page_lsn_write(xid, lc, internal_node_alloc->get_lsn(xid));
-      unlock(lc->rwlatch);
-      releasePage(lc);
 
       //update the depth info at the root
       depth ++;
@@ -324,21 +323,19 @@ recordid diskTreeComponent::internalNodes::appendPage(int xid,
     // write the new value to an existing page
     DEBUG("Writing %s\t%d to existing page# %lld\n", datatuple::key_to_str(key).c_str(),
           val_page, lastLeafPage->id);
-
     stasis_record_alloc_done(xid, lastLeafPage, ret);
 
     writeNodeRecord(xid, lastLeafPage, ret, key, keySize, val_page);
+    unlock(lastLeafPage->rwlatch);
 
     if(lastLeafPage->id != p->id) {
       assert(lastLeaf != tree.page);
-      unlock(lastLeafPage->rwlatch);
       releasePage(lastLeafPage);
     }
   }
 
   stasis_page_lsn_write(xid, p, internal_node_alloc->get_lsn(xid));
 
-  unlock(p->rwlatch);
   releasePage(p);
 
   return ret;
@@ -387,12 +384,14 @@ recordid diskTreeComponent::internalNodes::appendInternalNode(int xid, Page *p,
 
   if(!depth) {
     // leaf node.
+    writelock(p->rwlatch, 0);
     ret = stasis_record_alloc_begin(xid, p, sizeof(indexnode_rec)+key_len);
     if(ret.size != INVALID_SLOT) {
       stasis_record_alloc_done(xid, p, ret);
       writeNodeRecord(xid,p,ret,key,key_len,val_page);
       stasis_page_lsn_write(xid, p, internal_node_alloc->get_lsn(xid));
     }
+    unlock(p->rwlatch);
   } else {
     
     // recurse
@@ -406,11 +405,8 @@ recordid diskTreeComponent::internalNodes::appendInternalNode(int xid, Page *p,
     nr = 0;
     {
       Page *child_page = loadPage(xid, child_id);
-      writelock(child_page->rwlatch,0);
       ret = appendInternalNode(xid, child_page, depth-1, key, key_len,
                                val_page);
-
-      unlock(child_page->rwlatch);
       releasePage(child_page);
     }
 
@@ -423,9 +419,10 @@ recordid diskTreeComponent::internalNodes::appendInternalNode(int xid, Page *p,
             ret.size,
             readRecordLength(xid, p, slot));
       if(ret.size != INVALID_SLOT) {
+        writelock(p->rwlatch, 0); // XXX we hold this longer than necessary.  push latching into buildPathToLeaf().
         stasis_record_alloc_done(xid, p, ret);
         ret = buildPathToLeaf(xid, ret, p, depth, key, key_len, val_page);
-
+        unlock(p->rwlatch);
         DEBUG("split tree rooted at %lld, wrote value to {%d %d %lld}\n",
               p->id, ret.page, ret.slot, ret.size);
       } else {
@@ -452,7 +449,6 @@ recordid diskTreeComponent::internalNodes::buildPathToLeaf(int xid, recordid roo
   DEBUG("new child = %lld internal? %lld\n", child, depth-1);
 
   Page *child_p = loadPage(xid, child);
-  writelock(child_p->rwlatch,0);
   initializeNodePage(xid, child_p);
 
   recordid ret;
@@ -466,7 +462,6 @@ recordid diskTreeComponent::internalNodes::buildPathToLeaf(int xid, recordid roo
     ret = buildPathToLeaf(xid, child_rec, child_p, depth-1, key, key_len,
                           val_page);
 
-    unlock(child_p->rwlatch);
     releasePage(child_p);
 
   } else {
@@ -492,7 +487,6 @@ recordid diskTreeComponent::internalNodes::buildPathToLeaf(int xid, recordid roo
     ret = leaf_rec;
 
     stasis_page_lsn_write(xid, child_p, internal_node_alloc->get_lsn(xid));
-    unlock(child_p->rwlatch);
     releasePage(child_p);
     if(lastLeaf != -1 && lastLeaf != root_rec.page) {
       // install forward link in previous page
@@ -511,6 +505,8 @@ recordid diskTreeComponent::internalNodes::buildPathToLeaf(int xid, recordid roo
   // Crucially, this happens *after* the recursion.  Therefore, we can query the
   // tree with impunity while the leaf is being built and don't have to worry
   // about dangling pointers to pages that are in the process of being allocated.
+
+  // XXX set bool on recursive call, and only grab the write latch at the first level of recursion.
   writeNodeRecord(xid, root_p, root, key, key_len, child);
 
   return ret;
@@ -526,15 +522,16 @@ pageid_t diskTreeComponent::internalNodes::findLastLeaf(int xid, Page *root, int
     DEBUG("Found last leaf = %lld\n", root->id);
     return root->id;
   } else {
+    readlock(root->rwlatch,0);
     recordid last_rid = stasis_record_last(xid, root);
 
-    const indexnode_rec *nr = (const indexnode_rec*) stasis_record_read_begin(xid, root, last_rid);
-    Page *p = loadPage(xid, nr->ptr);
+    const indexnode_rec * nr = (const indexnode_rec*)stasis_record_read_begin(xid, root, last_rid);
+    pageid_t ptr = nr->ptr;
     stasis_record_read_done(xid, root, last_rid, (const byte*)nr);
+    unlock(root->rwlatch);
 
-    readlock(p->rwlatch,0);
+    Page *p = loadPage(xid, ptr);
     pageid_t ret = findLastLeaf(xid,p,depth-1);
-    unlock(p->rwlatch);
     releasePage(p);
 
     return ret;
@@ -551,12 +548,13 @@ pageid_t diskTreeComponent::internalNodes::findFirstLeaf(int xid, Page *root, in
     return root->id;
   } else {
     recordid rid = {root->id, FIRST_SLOT, 0};
+
+    readlock(root->rwlatch,0);
     const indexnode_rec *nr = (const indexnode_rec*)stasis_record_read_begin(xid, root, rid);
-    Page *p = loadPage(xid, nr->ptr);
-    stasis_record_read_done(xid, root, rid, (const byte*)nr);
-    readlock(p->rwlatch,0);
+    pageid_t ptr = nr->ptr;
+    unlock(root->rwlatch);
+    Page *p = loadPage(xid, ptr);
     pageid_t ret = findFirstLeaf(xid,p,depth-1);
-    unlock(p->rwlatch);
     releasePage(p);
     return ret;
   }
@@ -566,16 +564,17 @@ pageid_t diskTreeComponent::internalNodes::findFirstLeaf(int xid, Page *root, in
 pageid_t diskTreeComponent::internalNodes::findPage(int xid, const byte *key, size_t keySize) {
 
   Page *p = loadPage(xid, root_rec.page);
-  readlock(p->rwlatch,0);
 
   recordid depth_rid = {p->id, DEPTH, 0};
-  int64_t * depth = (int64_t*)stasis_record_read_begin(xid, p, depth_rid);
+  readlock(p->rwlatch,0);
+  const int64_t * depthp = (const int64_t*)stasis_record_read_begin(xid, p, depth_rid);
+  int64_t depth = *depthp;
+  stasis_record_read_done(xid, p, depth_rid, (const byte*)depthp);
+  unlock(p->rwlatch);
 
-  recordid rid = lookup(xid, p, *depth, key, keySize);
-  stasis_record_read_done(xid, p, depth_rid, (const byte*)depth);
+  recordid rid = lookup(xid, p, depth, key, keySize);
 
   pageid_t ret = lookupLeafPageFromRid(xid,rid);
-  unlock(p->rwlatch);
   releasePage(p);
 
   return ret;
@@ -603,9 +602,11 @@ recordid diskTreeComponent::internalNodes::lookup(int xid,
                             const byte *key, size_t keySize ) {
 
   //DEBUG("lookup: pid %lld\t depth %lld\n", node->id, depth);
+  readlock(node->rwlatch,0);
   slotid_t numslots = stasis_record_last(xid, node).slot + 1;
 
   if(numslots == FIRST_SLOT) {
+    unlock(node->rwlatch);
     return NULLRID;
   }
   assert(numslots > FIRST_SLOT);
@@ -637,13 +638,14 @@ recordid diskTreeComponent::internalNodes::lookup(int xid,
     pageid_t child_id = nr->ptr;
     stasis_record_read_done(xid, node, rid, (const byte*)nr);
 
+    unlock(node->rwlatch);
     Page* child_page = loadPage(xid, child_id);
-    readlock(child_page->rwlatch,0);
     recordid ret = lookup(xid,child_page,depth-1,key,keySize);
-    unlock(child_page->rwlatch);
+
     releasePage(child_page);
     return ret;
   } else {
+    unlock(node->rwlatch);
     recordid ret = {node->id, match, keySize};
     return ret;
   }
@@ -658,7 +660,7 @@ void diskTreeComponent::internalNodes::print_tree(int xid) {
   int64_t depth = depth_nr->ptr;
   stasis_record_read_done(xid,p,depth_rid,(const byte*)depth_nr);
 
-  print_tree(xid, root_rec.page, depth);
+  print_tree(xid, root_rec.page, depth); // XXX expensive latching!
 
   unlock(p->rwlatch);
   releasePage(p);
@@ -729,23 +731,23 @@ diskTreeComponent::internalNodes::iterator::iterator(int xid, RegionAllocator* r
   ro_alloc_ = ro_alloc;
   if(root.page == 0 && root.slot == 0 && root.size == -1) abort();
   p = ro_alloc_->load_page(xid,root.page);
-  readlock(p->rwlatch,0);
 
   DEBUG("ROOT_REC_SIZE %d\n", diskTreeComponent::internalNodes::root_rec_size);
   recordid rid = {p->id, diskTreeComponent::internalNodes::DEPTH, diskTreeComponent::internalNodes::root_rec_size};
+
+  readlock(p->rwlatch, 0);
   const indexnode_rec* nr = (const indexnode_rec*)stasis_record_read_begin(xid,p, rid);
 
   int64_t depth = nr->ptr;
   DEBUG("DEPTH = %lld\n", depth);
   stasis_record_read_done(xid,p,rid,(const byte*)nr);
+  unlock(p->rwlatch);
 
   pageid_t leafid = diskTreeComponent::internalNodes::findFirstLeaf(xid, p, depth);
   if(leafid != root.page) {
 
-    unlock(p->rwlatch);
     releasePage(p);
     p = ro_alloc_->load_page(xid,leafid);
-    readlock(p->rwlatch,0);
     assert(depth != 0);
   } else {
     assert(depth == 0);
@@ -763,23 +765,26 @@ diskTreeComponent::internalNodes::iterator::iterator(int xid, RegionAllocator* r
   done = false;
   t = 0;
   justOnePage = (depth == 0);
+  readlock(p->rwlatch,0);
 }
 
 diskTreeComponent::internalNodes::iterator::iterator(int xid, RegionAllocator* ro_alloc, recordid root, const byte* key, len_t keylen) {
   if(root.page == NULLRID.page && root.slot == NULLRID.slot) abort();
   ro_alloc_ = ro_alloc;
   p = ro_alloc_->load_page(xid,root.page);
-  readlock(p->rwlatch,0);
+
   recordid rid = {p->id, diskTreeComponent::internalNodes::DEPTH, diskTreeComponent::internalNodes::root_rec_size};
 
-  const indexnode_rec *nr = (const indexnode_rec*)stasis_record_read_begin(xid,p,rid);
+
+  readlock(p->rwlatch,0);
+  const indexnode_rec* nr = (const indexnode_rec*)stasis_record_read_begin(xid,p,rid);
   int64_t depth = nr->ptr;
   stasis_record_read_done(xid,p,rid,(const byte*)nr);
+  unlock(p->rwlatch);
 
   recordid lsm_entry_rid = diskTreeComponent::internalNodes::lookup(xid,p,depth,key,keylen);
 
   if(lsm_entry_rid.page == NULLRID.page && lsm_entry_rid.slot == NULLRID.slot) {
-    unlock(p->rwlatch);
     releasePage(p);
     p = NULL;
     done = true;
@@ -788,10 +793,8 @@ diskTreeComponent::internalNodes::iterator::iterator(int xid, RegionAllocator* r
 
     if(root.page != lsm_entry_rid.page)
     {
-      unlock(p->rwlatch);
       releasePage(p);
       p = ro_alloc->load_page(xid,lsm_entry_rid.page);
-      readlock(p->rwlatch,0);
     }
 
     done = false;
@@ -804,6 +807,8 @@ diskTreeComponent::internalNodes::iterator::iterator(int xid, RegionAllocator* r
 
     DEBUG("diskTreeComponentIterator: index root %lld index page %lld data page %lld key %s\n", root.page, current.page, rec->ptr, key);
     DEBUG("entry = %s key = %s\n", (char*)(rec+1), (char*)key);
+
+    readlock(p->rwlatch,0);
   }
   t = 0; // must be zero so free() doesn't croak.
 }
