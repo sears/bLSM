@@ -197,7 +197,7 @@ public:
       }
       if(mut_) pthread_mutex_unlock(mut_); */
     }
-    batchedRevalidatingIterator( rbtree_t *s, int batch_size, pthread_mutex_t * rb_mut, TUPLE *&key ) : s_(s), batch_size_(batch_size), num_batched_(batch_size), cur_off_(batch_size), mut_(rb_mut) {
+      batchedRevalidatingIterator( rbtree_t *s, int batch_size, pthread_mutex_t * rb_mut, TUPLE *&key ) : s_(s), cur_size_(0), target_size_(0), flushing_(0), batch_size_(batch_size), num_batched_(batch_size), cur_off_(batch_size), mut_(rb_mut) {
       next_ret_ = (TUPLE**)malloc(sizeof(next_ret_[0]) * batch_size_);
       populate_next_ret(key);
 /*      if(mut_) pthread_mutex_lock(mut_);

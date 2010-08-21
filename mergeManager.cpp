@@ -263,7 +263,8 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
           total_sleep += sleeptime;
 
           if((spin > 40) || (total_sleep > (max_sleep * 20.0))) {
-              printf("\nMerge thread %d Overshoot: raw=%lld, d=%lld eff=%lld Throttle min(1, %6f) spin %d, total_sleep %6.3f\n", s->merge_level, (long long)raw_overshoot, (long long)overshoot_fudge, (long long)overshoot, sleeptime, spin, total_sleep);
+            printf("\nMerge thread %d c0->out=%f c1->in=%f c1->out=%f c2->in=%f\n", s->merge_level, c0->out_progress, c1->in_progress, c1->out_progress, c2->in_progress);
+            printf("\nMerge thread %d Overshoot: raw=%lld, d=%lld eff=%lld eff2=%lld Throttle min(1, %6f) spin %d, total_sleep %6.3f\n", s->merge_level, (long long)raw_overshoot, (long long)overshoot_fudge, (long long)overshoot, (long long)overshoot2, sleeptime, spin, total_sleep);
           }
 
           sleeping[s->merge_level] = true;
@@ -272,7 +273,7 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
           struct timespec ts;
           double_to_ts(&ts, sleeptime);
           nanosleep(&ts, 0);
-          printf("%d Sleep B %f\n", s->merge_level, sleeptime);
+          //          printf("%d Sleep B %f\n", s->merge_level, sleeptime);
 
           //          rwlc_writelock(ltable->header_mut);
           rwlc_readlock(ltable->header_mut);
