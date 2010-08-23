@@ -100,7 +100,7 @@ void mergeManager::update_progress(mergeStats * s, int delta) {
     }
     if(s->merge_level != 2) {
       if(s->mergeable_size) {
-        s->out_progress = ((double)s->current_size) / (double)s->target_size;
+        s->out_progress = ((double)s->current_size + (double)s->base_size) / (double)s->target_size;
       } else {
         s->out_progress = 0.0;
       }
@@ -112,6 +112,9 @@ void mergeManager::update_progress(mergeStats * s, int delta) {
       s->current_size = s->bytes_out - s->bytes_in_large;
       s->out_progress = ((double)s->current_size) / (double)s->target_size;
     } else {
+      if(s->merge_level == 1 && s->mergeable_size) {
+        s->out_progress = ((double)s->current_size) / (double)s->target_size;
+      }
       s->current_size = s->base_size + s->bytes_out - s->bytes_in_large;
     }
 #endif
@@ -262,10 +265,10 @@ void mergeManager::tick(mergeStats * s, bool block, bool force) {
           spin ++;
           total_sleep += sleeptime;
 
-          if((spin > 40) || (total_sleep > (max_sleep * 20.0))) {
-            printf("\nMerge thread %d c0->out=%f c1->in=%f c1->out=%f c2->in=%f\n", s->merge_level, c0->out_progress, c1->in_progress, c1->out_progress, c2->in_progress);
-            printf("\nMerge thread %d Overshoot: raw=%lld, d=%lld eff=%lld eff2=%lld Throttle min(1, %6f) spin %d, total_sleep %6.3f\n", s->merge_level, (long long)raw_overshoot, (long long)overshoot_fudge, (long long)overshoot, (long long)overshoot2, sleeptime, spin, total_sleep);
-          }
+          //          if((spin > 40) || (total_sleep > (max_sleep * 20.0))) {
+          printf("\nMerge thread %d c0->out=%f c1->in=%f c1->out=%f c2->in=%f\n", s->merge_level, c0->out_progress, c1->in_progress, c1->out_progress, c2->in_progress);
+          printf("\nMerge thread %d Overshoot: raw=%lld, d=%lld eff=%lld eff2=%lld Throttle min(1, %6f) spin %d, total_sleep %6.3f\n", s->merge_level, (long long)raw_overshoot, (long long)overshoot_fudge, (long long)overshoot, (long long)overshoot2, sleeptime, spin, total_sleep);
+            //}
 
           sleeping[s->merge_level] = true;
           if(s->merge_level == 0) abort();
