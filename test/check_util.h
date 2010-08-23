@@ -34,6 +34,16 @@ void removeduplicates(std::vector<std::string> *arr)
     }
 
 }
+void scramble(std::vector<std::string> *arr) {
+  for(int i = 0; i < arr->size(); i++) {
+    int other = rand() % arr->size();
+    if(other != i) {
+      std::string s = (*arr)[i];
+      (*arr)[i] = (*arr)[other];
+      (*arr)[other] = s;
+    }
+  }
+}
 
 //must be given a sorted array
 // XXX probably don't need two copies of this function.

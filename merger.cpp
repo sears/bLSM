@@ -474,11 +474,11 @@ void merge_iterators(int xid,
             i+=t1->byte_length();
             ltable->merge_mgr->wrote_tuple(stats->merge_level, t1);
             datatuple::freetuple(t1);
+
             //advance itrA
             t1 = itrA->next_callerFrees();
-            if(t1) {
-              ltable->merge_mgr->read_tuple_from_large_component(stats->merge_level, t1);
-            }
+            ltable->merge_mgr->read_tuple_from_large_component(stats->merge_level, t1);
+
             periodically_force(xid, &i, forceMe, log);
         }
 
@@ -495,9 +495,7 @@ void merge_iterators(int xid,
             datatuple::freetuple(t1);
             ltable->merge_mgr->wrote_tuple(stats->merge_level, mtuple);
             t1 = itrA->next_callerFrees();  //advance itrA
-            if(t1) {
-              ltable->merge_mgr->read_tuple_from_large_component(stats->merge_level, t1);
-            }
+            ltable->merge_mgr->read_tuple_from_large_component(stats->merge_level, t1);
             datatuple::freetuple(mtuple);
             periodically_force(xid, &i, forceMe, log);
         }

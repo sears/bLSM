@@ -51,6 +51,7 @@ public:
   void wrote_tuple(int merge_level, datatuple * tup);
   void finished_merge(int merge_level);
   void pretty_print(FILE * out);
+  void *pretty_print_thread();
 
 private:
   logtable<datatuple>*    ltable;
@@ -64,6 +65,9 @@ private:
   pthread_mutex_t throttle_mut;
   pthread_cond_t throttle_wokeup_cond;
   bool sleeping[3];
+  bool still_running;
+  pthread_cond_t pp_cond;
+  pthread_t pp_thread;
 
 };
 #endif /* MERGEMANAGER_H_ */

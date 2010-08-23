@@ -168,7 +168,7 @@ public:
       if(cur_off_ == num_batched_) {
         if(mut_) pthread_mutex_lock(mut_);
         if(cur_size_) {
-          while(*cur_size_ < (0.7 * (double)target_size_) && ! *flushing_) {  // TODO: how to pick this threshold?  Too high, and the disk is idle.  Too low, and we waste ram.
+          while(*cur_size_ < (0.8 * (double)target_size_) && ! *flushing_) {  // TODO: how to pick this threshold?  Too high, and the disk is idle.  Too low, and we waste ram.
             pthread_mutex_unlock(mut_);
             struct timespec ts;
             mergeManager::double_to_ts(&ts, 0.1);

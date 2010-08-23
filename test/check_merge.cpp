@@ -36,6 +36,9 @@ void insertProbeIter(size_t NUM_ENTRIES)
     std::sort(key_arr->begin(), key_arr->end(), &mycmp);
 
     removeduplicates(key_arr);
+    scramble(key_arr);
+
+
     if(key_arr->size() > NUM_ENTRIES)
         key_arr->erase(key_arr->begin()+NUM_ENTRIES, key_arr->end());
     
