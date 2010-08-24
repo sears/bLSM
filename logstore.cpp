@@ -179,7 +179,9 @@ void logtable<TUPLE>::flushTable()
     gettimeofday(&start_tv,0);
     start = tv_to_double(start_tv);
 
-    merge_mgr->finished_merge(0);
+#ifdef NO_SNOWSHOVEL
+    merge_mgr->finished_merge(0);  // XXX will deadlock..
+#endif
 
     flushing = true;
     bool blocked = false;

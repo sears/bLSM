@@ -227,8 +227,6 @@ void* memMergeThread(void*arg)
         ltable->update_persistent_header(xid, 1);
         Tcommit(xid);
 
-        ltable->merge_mgr->finished_merge(1);
-
         //TODO: this is simplistic for now
         //6: if c1' is too big, signal the other merger
 
@@ -282,6 +280,8 @@ void* memMergeThread(void*arg)
         // 13
 
         rwlc_unlock(ltable->header_mut);
+
+        ltable->merge_mgr->finished_merge(1);
 //        stats->pretty_print(stdout);
 
         //TODO: get the freeing outside of the lock
@@ -390,10 +390,10 @@ void *diskMergeThread(void*arg)
         ltable->update_persistent_header(xid, 2);
         Tcommit(xid);
 
-        ltable->merge_mgr->finished_merge(2);
-
         rwlc_unlock(ltable->header_mut);
 //        stats->pretty_print(stdout);
+        ltable->merge_mgr->finished_merge(2);
+
 
     }
     return 0;

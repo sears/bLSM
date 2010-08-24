@@ -189,35 +189,10 @@ public:
     batchedRevalidatingIterator( rbtree_t *s, int64_t* cur_size, int64_t target_size, bool * flushing, int batch_size, pthread_mutex_t * rb_mut ) : s_(s), cur_size_(cur_size), target_size_(target_size), flushing_(flushing), batch_size_(batch_size), num_batched_(batch_size), cur_off_(batch_size), mut_(rb_mut) {
       next_ret_ = (TUPLE**)malloc(sizeof(next_ret_[0]) * batch_size_);
       populate_next_ret();
-/*      if(mut_) pthread_mutex_lock(mut_);
-      if(s_->begin() == s_->end()) {
-        next_ret_ = NULL;
-      } else {
-        next_ret_ = (*s_->begin())->create_copy();  // the create_copy() calls have to happen before we release mut_...
-      }
-      if(mut_) pthread_mutex_unlock(mut_); */
     }
       batchedRevalidatingIterator( rbtree_t *s, int batch_size, pthread_mutex_t * rb_mut, TUPLE *&key ) : s_(s), cur_size_(0), target_size_(0), flushing_(0), batch_size_(batch_size), num_batched_(batch_size), cur_off_(batch_size), mut_(rb_mut) {
       next_ret_ = (TUPLE**)malloc(sizeof(next_ret_[0]) * batch_size_);
       populate_next_ret(key);
-/*      if(mut_) pthread_mutex_lock(mut_);
-      if(key) {
-        if(s_->find(key) != s_->end()) {
-          next_ret_ = (*(s_->find(key)))->create_copy();
-        } else if(s_->upper_bound(key) != s_->end()) {
-          next_ret_ = (*(s_->upper_bound(key)))->create_copy();
-        } else {
-          next_ret_ = NULL;
-        }
-      } else {
-        if(s_->begin() == s_->end()) {
-          next_ret_ = NULL;
-        } else {
-          next_ret_ = (*s_->begin())->create_copy();  // the create_copy() calls have to happen before we release mut_...
-        }
-      }
-      //      DEBUG("changing mem next ret = %s key = %s\n", next_ret_ ?  (const char*)next_ret_->key() : "NONE", key ? (const char*)key->key() : "NULL");
-      if(mut_) pthread_mutex_unlock(mut_); */
     }
 
     ~batchedRevalidatingIterator() {
@@ -225,20 +200,9 @@ public:
         TUPLE::freetuple(next_ret_[i]);
       }
       free(next_ret_);
-//      if(next_ret_) TUPLE::freetuple(next_ret_);
     }
 
     TUPLE* next_callerFrees() {
-/*      if(mut_) pthread_mutex_lock(mut_);
-      TUPLE * ret = next_ret_;
-      if(next_ret_) {
-        if(s_->upper_bound(next_ret_) == s_->end()) {
-          next_ret_ = 0;
-        } else {
-          next_ret_ = (*s_->upper_bound(next_ret_))->create_copy();
-        }
-      }
-      if(mut_) pthread_mutex_unlock(mut_); */
       if(cur_off_ == num_batched_) { return NULL; } // the last thing we did is call populate_next_ret_(), which only leaves us in this state at the end of the iterator.
       TUPLE * ret = next_ret_[cur_off_];
       cur_off_++;
