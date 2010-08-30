@@ -894,9 +894,12 @@ void diskTreeComponent::iterator::init_iterators(datatuple * key1, datatuple * k
     }
   }
 
-diskTreeComponent::iterator::iterator(diskTreeComponent::internalNodes *tree) :
+diskTreeComponent::iterator::iterator(diskTreeComponent::internalNodes *tree, double* cur_progress_delta, double target_progress_delta, bool * flushing) :
     ro_alloc_(new RegionAllocator()),
-    tree_(tree ? tree->get_root_rec() : NULLRID)
+    tree_(tree ? tree->get_root_rec() : NULLRID),
+    cur_progress_delta_(cur_progress_delta),
+    target_progress_delta_(target_progress_delta),
+    flushing_(flushing)
 {
     init_iterators(NULL, NULL);
     init_helper(NULL);
@@ -904,7 +907,10 @@ diskTreeComponent::iterator::iterator(diskTreeComponent::internalNodes *tree) :
 
 diskTreeComponent::iterator::iterator(diskTreeComponent::internalNodes *tree, datatuple* key) :
     ro_alloc_(new RegionAllocator()),
-    tree_(tree ? tree->get_root_rec() : NULLRID)
+    tree_(tree ? tree->get_root_rec() : NULLRID),
+    cur_progress_delta_(NULL),
+    target_progress_delta_(0.0),
+    flushing_(NULL)
 {
     init_iterators(key,NULL);
     init_helper(key);
@@ -990,6 +996,16 @@ datatuple * diskTreeComponent::iterator::next_callerFrees()
         }
       // else readTuple is null.  We're done.
     }
+
+    if(readTuple && cur_progress_delta_) {
+      // *cur_progress_delta is how far ahead we are, as a fraction of the total merge.
+      while(*cur_progress_delta_ > target_progress_delta_ && ((!flushing_) || (! *flushing_))) {  // TODO: how to pick this threshold?
+        struct timespec ts;
+        mergeManager::double_to_ts(&ts, 0.1);
+        nanosleep(&ts, 0);
+      }
+    }
+
     return readTuple;
 }
 

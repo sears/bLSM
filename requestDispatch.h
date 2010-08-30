@@ -16,6 +16,7 @@ private:
   static inline int op_insert(logtable<datatuple> * ltable, HANDLE fd, datatuple * tuple);
   static inline int op_find(logtable<datatuple> * ltable, HANDLE fd, datatuple * tuple);
   static inline int op_scan(logtable<datatuple> * ltable, HANDLE fd, datatuple * tuple, datatuple * tuple2, size_t limit);
+  static inline int op_bulk_insert(logtable<datatuple> * ltable, HANDLE fd);
   static inline int op_flush(logtable<datatuple> * ltable, HANDLE fd);
   static inline int op_shutdown(logtable<datatuple> * ltable, HANDLE fd);
   static inline int op_stat_space_usage(logtable<datatuple> * ltable, HANDLE fd);

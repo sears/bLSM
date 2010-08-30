@@ -8,4 +8,5 @@ IF( HAVE_STASIS )
   CREATE_CHECK(check_mergetuple)
   CREATE_CHECK(check_rbtree)
   CREATE_CLIENT_EXECUTABLE(check_tcpclient)  # XXX should build this on non-stasis machines
+  CREATE_CLIENT_EXECUTABLE(check_tcpbulkinsert)  # XXX should build this on non-stasis machines
 ENDIF( HAVE_STASIS )

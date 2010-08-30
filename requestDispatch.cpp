@@ -15,6 +15,29 @@ inline int requestDispatch<HANDLE>::op_insert(logtable<datatuple> * ltable, HAND
     return writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
 }
 template<class HANDLE>
+inline int requestDispatch<HANDLE>::op_bulk_insert(logtable<datatuple> *ltable, HANDLE fd) {
+  int err = writeoptosocket(fd, LOGSTORE_RESPONSE_RECEIVING_TUPLES);
+  datatuple ** tups = (datatuple **) malloc(sizeof(tups[0]) * 100);
+  int tups_size = 100;
+  int cur_tup_count = 0;
+  while((tups[cur_tup_count] = readtuplefromsocket(fd, &err))) {
+    cur_tup_count++;
+    if(cur_tup_count == tups_size) {
+      ltable->insertManyTuples(tups, cur_tup_count);
+      for(int i = 0; i < cur_tup_count; i++) {
+        datatuple::freetuple(tups[i]);
+      }
+      cur_tup_count = 0;
+    }
+  }
+  ltable->insertManyTuples(tups, cur_tup_count);
+  for(int i = 0; i < cur_tup_count; i++) {
+    datatuple::freetuple(tups[i]);
+  }
+  if(!err) err = writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
+  return err;
+}
+template<class HANDLE>
 inline int requestDispatch<HANDLE>::op_find(logtable<datatuple> * ltable, HANDLE fd, datatuple * tuple) {
     //find the tuple
     datatuple *dt = ltable->findTuple_first(-1, tuple->key(), tuple->keylen());
@@ -443,6 +466,9 @@ int requestDispatch<HANDLE>::dispatch_request(network_op_t opcode, datatuple * t
     {
         size_t limit = readcountfromsocket(fd, &err);
         if(!err) {  err = op_scan(ltable, fd, tuple, tuple2, limit); }
+    }
+    else if(opcode == OP_BULK_INSERT) {
+        err = op_bulk_insert(ltable, fd);
     }
     else if(opcode == OP_FLUSH)
     {

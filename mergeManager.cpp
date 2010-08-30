@@ -159,6 +159,9 @@ void mergeManager::tick_based_on_merge_progress(mergeStats *s) {
   overshoot_fudge *= 2;
   overshoot_fudge2 *= 4;
 
+  if(overshoot_fudge > 0.01 * s->target_size) { overshoot_fudge   = (int64_t)(0.01 * (double)s->target_size); }
+  if(overshoot_fudge2 > 0.01 * s->target_size) { overshoot_fudge2 = (int64_t)(0.01 * (double)s->target_size); }
+
   const double max_c0_sleep = 0.1;
   const double min_c0_sleep = 0.01;
   const double max_c1_sleep = 0.5;
@@ -185,9 +188,22 @@ void mergeManager::tick_based_on_merge_progress(mergeStats *s) {
       rwlc_readlock(ltable->header_mut);
       if(s1->active && s->mergeable_size) {
         raw_overshoot = (int64_t)(((double)s->target_size) * (s->out_progress - s1->in_progress));
+        overshoot = raw_overshoot + overshoot_fudge;
+        overshoot2 = raw_overshoot + overshoot_fudge2;
+
         bps = s1->bps;
       }
       rwlc_unlock(ltable->header_mut);
+    }
+    if(s->merge_level == 1) {
+      if(s1->active && s->mergeable_size) {
+        cur_c1_c2_progress_delta = s1->in_progress - s->out_progress;
+      } else if(!s->mergeable_size) {
+        cur_c1_c2_progress_delta = 1;
+      } else {
+        // s1 is not active.
+        cur_c1_c2_progress_delta = 0;
+      }
     }
 //#define PP_THREAD_INFO
 #ifdef PP_THREAD_INFO
@@ -299,12 +315,12 @@ void mergeManager::read_tuple_from_small_component(int merge_level, datatuple * 
     tick(s);
   }
 }
-void mergeManager::read_tuple_from_large_component(int merge_level, datatuple * tup) {
-  if(tup) {
+void mergeManager::read_tuple_from_large_component(int merge_level, int tuple_count, pageid_t byte_len) {
+  if(tuple_count) {
     mergeStats * s = get_merge_stats(merge_level);
-    s->num_tuples_in_large++;
-    s->bytes_in_large += tup->byte_length();
-    update_progress(s, tup->byte_length());
+    s->num_tuples_in_large += tuple_count;
+    s->bytes_in_large += byte_len;
+    update_progress(s, byte_len);
   }
 }
 
@@ -351,6 +367,7 @@ void * merge_manager_pretty_print_thread(void * arg) {
 
 mergeManager::mergeManager(logtable<datatuple> *ltable):
   UPDATE_PROGRESS_PERIOD(0.005),
+  cur_c1_c2_progress_delta(0.0),
   ltable(ltable),
   c0(new mergeStats(0, ltable ? ltable->max_c0_size : 10000000)),
   c1(new mergeStats(1, (int64_t)(ltable ? ((double)(ltable->max_c0_size) * *ltable->R()) : 100000000.0) )),

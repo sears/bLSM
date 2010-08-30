@@ -43,7 +43,11 @@ public:
     datatuple * findTuple(int xid, const datatuple::key_t key, size_t keySize);
 
     datatuple * findTuple_first(int xid, datatuple::key_t key, size_t keySize);
-    
+
+private:
+    datatuple * insertTupleHelper(datatuple *tuple);
+public:
+    void insertManyTuples(struct datatuple **tuples, int tuple_count);
     void insertTuple(struct datatuple *tuple);
 
     //other class functions

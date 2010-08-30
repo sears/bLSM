@@ -42,8 +42,12 @@ void * simpleServer::worker(int self) {
     }
     pthread_mutex_unlock(&thread_mut[self]);
     FILE * f = fdopen(thread_fd[self], "a+");
+    int mybufsize =128*1024;
+    char * bigbuffer = (char*)malloc(mybufsize);
+    setbuffer(f, bigbuffer, mybufsize);
     while(!requestDispatch<FILE*>::dispatch_request(f, ltable)) { }
     fclose(f);
+    free(bigbuffer);
     pthread_mutex_lock(&thread_mut[self]);
     thread_fd[self] = -1;
   }

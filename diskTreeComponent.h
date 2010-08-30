@@ -45,8 +45,8 @@ class diskTreeComponent {
   void writes_done();
 
 
-  iterator * open_iterator() {
-    return new iterator(ltree);
+  iterator * open_iterator(double* cur_size = NULL, double target_size = 0, bool * flushing = NULL) {
+    return new iterator(ltree, cur_size, target_size, flushing);
   }
   iterator * open_iterator(datatuple * key) {
     if(key != NULL) {
@@ -179,7 +179,7 @@ class diskTreeComponent {
   {
 
   public:
-      explicit iterator(diskTreeComponent::internalNodes *tree);
+      explicit iterator(diskTreeComponent::internalNodes *tree, double* cur_size = NULL, double target_size = 0, bool * flushing = NULL);
 
       explicit iterator(diskTreeComponent::internalNodes *tree,datatuple *key);
 
@@ -188,16 +188,18 @@ class diskTreeComponent {
       datatuple * next_callerFrees();
 
   private:
-      void init_iterators(datatuple * key1, datatuple * key2);
-      inline void init_helper(datatuple * key1);
+    void init_iterators(datatuple * key1, datatuple * key2);
+    inline void init_helper(datatuple * key1);
 
     explicit iterator() { abort(); }
     void operator=(iterator & t) { abort(); }
     int operator-(iterator & t) { abort(); }
 
-  private:
     RegionAllocator * ro_alloc_;  // has a filehandle that we use to optimize sequential scans.
     recordid tree_; //root of the tree
+    double * cur_progress_delta_;
+    double   target_progress_delta_;
+    bool * flushing_;
 
     diskTreeComponent::internalNodes::iterator* lsmIterator_;
 

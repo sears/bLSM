@@ -49,12 +49,18 @@ public:
   void tick_based_on_merge_progress(mergeStats * s);
   mergeStats* get_merge_stats(int mergeLevel);
   void read_tuple_from_small_component(int merge_level, datatuple * tup);
-  void read_tuple_from_large_component(int merge_level, datatuple * tup);
+  void read_tuple_from_large_component(int merge_level, datatuple * tup) {
+    if(tup)
+      read_tuple_from_large_component(merge_level, 1, tup->byte_length());
+  }
+  void read_tuple_from_large_component(int merge_level, int tuple_count, pageid_t byte_len);
+
   void wrote_tuple(int merge_level, datatuple * tup);
   void finished_merge(int merge_level);
   void pretty_print(FILE * out);
   void *pretty_print_thread();
 
+  double cur_c1_c2_progress_delta;
 private:
   logtable<datatuple>*    ltable;
   double throttle_seconds;

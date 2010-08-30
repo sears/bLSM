@@ -128,6 +128,26 @@ logstore_client_op_returns_many(logstore_handle_t *l,
     return rcode;
 
 }
+network_op_t
+logstore_client_send_tuple(logstore_handle_t *l, datatuple *t) {
+  assert(l->server_fsocket != 0);
+  network_op_t rcode = LOGSTORE_RESPONSE_SUCCESS;
+  int err;
+  if(t) {
+    err =  writetupletosocket(l->server_fsocket, t);
+  } else {
+    err = writeendofiteratortosocket(l->server_fsocket);
+    if(!err) {
+      rcode = readopfromsocket(l->server_fsocket, LOGSTORE_SERVER_RESPONSE);
+    }
+  }
+  if(err) {
+    close_conn(l);
+    rcode = LOGSTORE_CONN_CLOSED_ERROR;
+  }
+  return rcode;
+}
+
 datatuple *
 logstore_client_next_tuple(logstore_handle_t *l) {
 	assert(l->server_fsocket != 0); // otherwise, then the client forgot to check a return value...

@@ -28,25 +28,27 @@ static const network_op_t LOGSTORE_FIRST_RESPONSE_CODE = 1;
 static const network_op_t LOGSTORE_RESPONSE_SUCCESS = 1;
 static const network_op_t LOGSTORE_RESPONSE_FAIL = 2;
 static const network_op_t LOGSTORE_RESPONSE_SENDING_TUPLES = 3;
-static const network_op_t LOGSTORE_LAST_RESPONSE_CODE = 3;
+static const network_op_t LOGSTORE_RESPONSE_RECEIVING_TUPLES = 3;
+static const network_op_t LOGSTORE_LAST_RESPONSE_CODE = 4;
 
 //client codes
 static const network_op_t LOGSTORE_FIRST_REQUEST_CODE  = 8;
 static const network_op_t OP_INSERT              = 8;   // Create, Update, Delete
 static const network_op_t OP_FIND                = 9;   // Read
 static const network_op_t OP_SCAN                = 10;
-static const network_op_t OP_DONE                = 11;  // Please close the connection.
-static const network_op_t OP_FLUSH               = 12;
-static const network_op_t OP_SHUTDOWN            = 13;
-static const network_op_t OP_STAT_SPACE_USAGE    = 14;
-static const network_op_t OP_STAT_PERF_REPORT    = 15;
-static const network_op_t OP_STAT_HISTOGRAM      = 16;  // Return N approximately equal size partitions (including split points + cardinalities)  N=1 estimates table cardinality.
+static const network_op_t OP_BULK_INSERT         = 11;
+static const network_op_t OP_DONE                = 12;  // Please close the connection.
+static const network_op_t OP_FLUSH               = 13;
+static const network_op_t OP_SHUTDOWN            = 14;
+static const network_op_t OP_STAT_SPACE_USAGE    = 15;
+static const network_op_t OP_STAT_PERF_REPORT    = 16;
+static const network_op_t OP_STAT_HISTOGRAM      = 17;  // Return N approximately equal size partitions (including split points + cardinalities)  N=1 estimates table cardinality.
 
 
-static const network_op_t OP_DBG_DROP_DATABASE        = 17;
-static const network_op_t OP_DBG_BLOCKMAP             = 18;
-static const network_op_t OP_DBG_NOOP                 = 19;
-static const network_op_t LOGSTORE_LAST_REQUEST_CODE  = 19;
+static const network_op_t OP_DBG_DROP_DATABASE        = 18;
+static const network_op_t OP_DBG_BLOCKMAP             = 19;
+static const network_op_t OP_DBG_NOOP                 = 20;
+static const network_op_t LOGSTORE_LAST_REQUEST_CODE  = 20;
 
 //error codes
 static const network_op_t LOGSTORE_FIRST_ERROR  = 27;
@@ -66,10 +68,10 @@ typedef enum {
 static inline int readfromsocket(FILE * sockf, void *buf, ssize_t count) {
   ssize_t i = fread_unlocked(buf, sizeof(byte), count, sockf);
   if(i != count) {
-    if(feof(sockf)) {
+    if(feof_unlocked(sockf)) {
       errno = EOF;
       return EOF;
-    } else if(ferror(sockf)) {
+    } else if(ferror_unlocked(sockf)) {
       perror("readfromsocket failed");
       errno = -1;
       return -1;
@@ -104,10 +106,10 @@ static inline int readfromsocket(int sockd, void *buf, ssize_t count)
 static inline int writetosocket(FILE * sockf, const void *buf, ssize_t count) {
   ssize_t i = fwrite_unlocked((byte*)buf, sizeof(byte), count, sockf);
   if(i != count) {
-    if(feof(sockf)) {
+    if(feof_unlocked(sockf)) {
       errno = EOF;
       return errno;
-    } else if(ferror(sockf)) {
+    } else if(ferror_unlocked(sockf)) {
       perror("writetosocket failed");
       errno = -1;
       return -1;
@@ -167,7 +169,7 @@ static inline network_op_t readopfromsocket(FILE * sockf, logstore_opcode_type t
     if(!(opisrequest(ret) || opiserror(ret))) {
       fprintf(stderr, "Read invalid request code %d\n", (int)ret);
       if(opisresponse(ret)) {
-	fprintf(stderr, "(also, the request code is a valid response code)\n");
+        fprintf(stderr, "(also, the request code is a valid response code)\n");
       }
       ret = LOGSTORE_PROTOCOL_ERROR;
     }
@@ -176,7 +178,7 @@ static inline network_op_t readopfromsocket(FILE * sockf, logstore_opcode_type t
     if(!(opisresponse(ret) || opiserror(ret))) {
       fprintf(stderr, "Read invalid response code %d\n", (int)ret);
       if(opisrequest(ret)) {
-	fprintf(stderr, "(also, the response code is a valid request code)\n");
+        fprintf(stderr, "(also, the response code is a valid request code)\n");
       }
       ret = LOGSTORE_PROTOCOL_ERROR;
     }
@@ -204,7 +206,7 @@ static inline network_op_t readopfromsocket(int sockd, logstore_opcode_type type
     if(!(opisrequest(ret) || opiserror(ret))) {
       fprintf(stderr, "Read invalid request code %d\n", (int)ret);
       if(opisresponse(ret)) {
-	fprintf(stderr, "(also, the request code is a valid response code)\n");
+        fprintf(stderr, "(also, the request code is a valid response code)\n");
       }
       ret = LOGSTORE_PROTOCOL_ERROR;
     }
@@ -213,7 +215,7 @@ static inline network_op_t readopfromsocket(int sockd, logstore_opcode_type type
     if(!(opisresponse(ret) || opiserror(ret))) {
       fprintf(stderr, "Read invalid response code %d\n", (int)ret);
       if(opisrequest(ret)) {
-	fprintf(stderr, "(also, the response code is a valid request code)\n");
+        fprintf(stderr, "(also, the response code is a valid request code)\n");
       }
       ret = LOGSTORE_PROTOCOL_ERROR;
     }
@@ -224,7 +226,8 @@ static inline network_op_t readopfromsocket(int sockd, logstore_opcode_type type
 }
 static inline int writeoptosocket(FILE * sockf, network_op_t op) {
   assert(opiserror(op) || opisrequest(op) || opisresponse(op));
-  return writetosocket(sockf, &op, sizeof(network_op_t));
+  int ret = writetosocket(sockf, &op, sizeof(network_op_t));
+  return ret;
 }
 static inline int writeoptosocket(int sockd, network_op_t op) {
   assert(opiserror(op) || opisrequest(op) || opisresponse(op));

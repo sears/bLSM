@@ -340,7 +340,11 @@ void *diskMergeThread(void*arg)
         // 4: do the merge.
         //create the iterators
         diskTreeComponent::iterator *itrA = ltable->get_tree_c2()->open_iterator();
+#ifdef NO_SNOWSHOVEL
         diskTreeComponent::iterator *itrB = ltable->get_tree_c1_mergeable()->open_iterator();
+#else
+        diskTreeComponent::iterator *itrB = ltable->get_tree_c1_mergeable()->open_iterator(&ltable->merge_mgr->cur_c1_c2_progress_delta, 0.05, 0 /*XXX*/);
+#endif
 
         //create a new tree
         diskTreeComponent * c2_prime = new diskTreeComponent(xid, ltable->internal_region_size, ltable->datapage_region_size, ltable->datapage_size, stats);

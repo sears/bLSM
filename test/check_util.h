@@ -35,8 +35,8 @@ void removeduplicates(std::vector<std::string> *arr)
 
 }
 void scramble(std::vector<std::string> *arr) {
-  for(int i = 0; i < arr->size(); i++) {
-    int other = rand() % arr->size();
+  for(unsigned int i = 0; i < arr->size(); i++) {
+    unsigned int other = rand() % arr->size();
     if(other != i) {
       std::string s = (*arr)[i];
       (*arr)[i] = (*arr)[other];

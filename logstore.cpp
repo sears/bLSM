@@ -87,7 +87,7 @@ void logtable<TUPLE>::init_stasis() {
   DataPage<datatuple>::register_stasis_page_impl();
   // XXX Workaround Stasis' (still broken) default concurrent buffer manager
   stasis_buffer_manager_size = 1024 * 1024; // 4GB = 2^10 pages:
-  //  stasis_buffer_manager_factory = stasis_buffer_manager_hash_factory;
+  stasis_buffer_manager_factory = stasis_buffer_manager_hash_factory;
 
   Tinit();
 
@@ -506,6 +506,82 @@ datatuple * logtable<TUPLE>::findTuple_first(int xid, datatuple::key_t key, size
 
 }
 
+
+template<class TUPLE>
+datatuple * logtable<TUPLE>::insertTupleHelper(datatuple *tuple)
+{
+  //find the previous tuple with same key in the memtree if exists
+  memTreeComponent<datatuple>::rbtree_t::iterator rbitr = tree_c0->find(tuple);
+  datatuple * t  = 0;
+  datatuple * pre_t = 0;
+  if(rbitr != tree_c0->end())
+  {
+      pre_t = *rbitr;
+      //do the merging
+      datatuple *new_t = tmerger->merge(pre_t, tuple);
+      c0_stats->merged_tuples(new_t, tuple, pre_t);
+      t = new_t;
+      tree_c0->erase(pre_t); //remove the previous tuple
+
+      tree_c0->insert(new_t); //insert the new tuple
+
+      //update the tree size (+ new_t size - pre_t size)
+      tree_bytes += ((int64_t)new_t->byte_length() - (int64_t)pre_t->byte_length());
+
+  }
+  else //no tuple with same key exists in mem-tree
+  {
+
+      t = tuple->create_copy();
+
+      //insert tuple into the rbtree
+      tree_c0->insert(t);
+
+      tsize++;
+      tree_bytes += t->byte_length();// + RB_TREE_OVERHEAD;
+
+  }
+  merge_mgr->wrote_tuple(0, t);  // needs to be here; doesn't grab a mutex.
+
+#ifdef NO_SNOWSHOVEL
+  //flushing logic
+  if(tree_bytes >= max_c0_size )
+  {
+    DEBUG("tree size before merge %d tuples %lld bytes.\n", tsize, tree_bytes);
+
+    // NOTE: we hold rb_mut across the (blocking on merge) flushTable.  Therefore:
+    //  *** Blocking in flushTable is REALLY BAD ***
+    // Because it blocks readers and writers.
+    // The merge policy does its best to make sure flushTable does not block.
+    rwlc_writelock(header_mut);
+    // the test of tree size needs to be atomic with the flushTable, and flushTable needs a writelock.
+    if(tree_bytes >= max_c0_size) {
+      flushTable();  // this needs to hold rb_mut if snowshoveling is disabled, but can't hold rb_mut if snowshoveling is enabled.
+  }
+  rwlc_unlock(header_mut);
+#endif
+  return pre_t;
+}
+template<class TUPLE>
+void logtable<TUPLE>::insertManyTuples(datatuple ** tuples, int tuple_count) {
+  for(int i = 0; i < tuple_count; i++) {
+    merge_mgr->read_tuple_from_small_component(0, tuples[i]);
+  }
+  pthread_mutex_lock(&rb_mut);
+  int num_old_tups = 0;
+  pageid_t sum_old_tup_lens = 0;
+  for(int i = 0; i < tuple_count; i++) {
+    datatuple * old_tup = insertTupleHelper(tuples[i]);
+    if(old_tup) {
+      num_old_tups++;
+      sum_old_tup_lens += old_tup->byte_length();
+      datatuple::freetuple(old_tup);
+    }
+  }
+  pthread_mutex_unlock(&rb_mut);
+  merge_mgr->read_tuple_from_large_component(0, num_old_tups, sum_old_tup_lens);
+}
+
 template<class TUPLE>
 void logtable<TUPLE>::insertTuple(datatuple *tuple)
 {
@@ -514,55 +590,7 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
     datatuple * pre_t = 0; // this is a pointer to any data tuples that we'll be deleting below.  We need to update the merge_mgr statistics with it, but have to do so outside of the rb_mut region.
 
     pthread_mutex_lock(&rb_mut);
-    //find the previous tuple with same key in the memtree if exists
-    memTreeComponent<datatuple>::rbtree_t::iterator rbitr = tree_c0->find(tuple);
-    datatuple * t  = 0;
-    if(rbitr != tree_c0->end())
-    {        
-        pre_t = *rbitr;
-        //do the merging
-        datatuple *new_t = tmerger->merge(pre_t, tuple);
-        c0_stats->merged_tuples(new_t, tuple, pre_t);
-        t = new_t;
-        tree_c0->erase(pre_t); //remove the previous tuple        
-
-        tree_c0->insert(new_t); //insert the new tuple
-
-        //update the tree size (+ new_t size - pre_t size)
-        tree_bytes += ((int64_t)new_t->byte_length() - (int64_t)pre_t->byte_length());
-
-    }
-    else //no tuple with same key exists in mem-tree
-    {
-
-        t = tuple->create_copy();
-
-        //insert tuple into the rbtree        
-        tree_c0->insert(t);
-
-        tsize++;
-        tree_bytes += t->byte_length();// + RB_TREE_OVERHEAD;
-
-    }
-    merge_mgr->wrote_tuple(0, t);  // needs to be here; doesn't grab a mutex.
-
-#ifdef NO_SNOWSHOVEL
-    //flushing logic
-    if(tree_bytes >= max_c0_size )
-    {
-      DEBUG("tree size before merge %d tuples %lld bytes.\n", tsize, tree_bytes);
-
-      // NOTE: we hold rb_mut across the (blocking on merge) flushTable.  Therefore:
-      //  *** Blocking in flushTable is REALLY BAD ***
-      // Because it blocks readers and writers.
-      // The merge policy does its best to make sure flushTable does not block.
-      rwlc_writelock(header_mut);
-      // the test of tree size needs to be atomic with the flushTable, and flushTable needs a writelock.
-      if(tree_bytes >= max_c0_size) {
-        flushTable();  // this needs to hold rb_mut if snowshoveling is disabled, but can't hold rb_mut if snowshoveling is enabled.
-      }
-      rwlc_unlock(header_mut);
-#endif
+    pre_t = insertTupleHelper(tuple);
     pthread_mutex_unlock(&rb_mut);
 
     //  XXX is it OK to move this after the NO_SNOWSHOVEL block?

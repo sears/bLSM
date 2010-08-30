@@ -25,7 +25,7 @@ uint8_t logstore_client_op_returns_many(logstore_handle_t *l,
 					uint64_t count = (uint64_t)-1);
 
 datatuple * logstore_client_next_tuple(logstore_handle_t *l);
-
+uint8_t logstore_client_send_tuple(logstore_handle_t *l, datatuple *tuple = NULL);
 int logstore_client_close(logstore_handle_t* l);
 
 
