@@ -23,17 +23,18 @@ inline int requestDispatch<HANDLE>::op_bulk_insert(logtable<datatuple> *ltable, 
   while((tups[cur_tup_count] = readtuplefromsocket(fd, &err))) {
     cur_tup_count++;
     if(cur_tup_count == tups_size) {
-      ltable->insertManyTuples(tups, cur_tup_count);
+//      ltable->insertManyTuples(tups, cur_tup_count);
       for(int i = 0; i < cur_tup_count; i++) {
         datatuple::freetuple(tups[i]);
       }
       cur_tup_count = 0;
     }
   }
-  ltable->insertManyTuples(tups, cur_tup_count);
+//  ltable->insertManyTuples(tups, cur_tup_count);
   for(int i = 0; i < cur_tup_count; i++) {
     datatuple::freetuple(tups[i]);
   }
+  free(tups);
   if(!err) err = writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
   return err;
 }
