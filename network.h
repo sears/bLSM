@@ -227,6 +227,9 @@ static inline network_op_t readopfromsocket(int sockd, logstore_opcode_type type
 static inline int writeoptosocket(FILE * sockf, network_op_t op) {
   assert(opiserror(op) || opisrequest(op) || opisresponse(op));
   int ret = writetosocket(sockf, &op, sizeof(network_op_t));
+  if(op == LOGSTORE_RESPONSE_RECEIVING_TUPLES) {
+    fflush_unlocked(sockf);
+  }
   return ret;
 }
 static inline int writeoptosocket(int sockd, network_op_t op) {
@@ -256,7 +259,7 @@ static inline datatuple* readtuplefromsocket(FILE * sockf, int * err) {
   buflen = datatuple::length_from_header(keylen, datalen);
   byte*  bytes = (byte*) malloc(buflen);
 
-  if(( *err = readfromsocket(sockf, bytes, buflen)             )) return NULL;
+  if(( *err = readfromsocket(sockf, bytes, buflen)             )) { free(bytes); return NULL; }
 
   return datatuple::from_bytes(keylen, datalen, bytes);   // from_bytes consumes the buffer.
 }
