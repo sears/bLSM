@@ -11,7 +11,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
-
+#include <string.h>
+#include <vector>
+#include <string>
 bool mycmp(const std::string & k1,const std::string & k2)
 {
     //for char* ending with \0
