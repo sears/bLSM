@@ -81,6 +81,7 @@ logstore_client_op_returns_many(logstore_handle_t *l,
 			return 0;
         }
 
+#ifdef LOGSTORE_NODELAY
         int flag = 1;
         int result = setsockopt(l->server_socket,            /* socket affected */
                                 IPPROTO_TCP,     /* set option at TCP level */
@@ -93,7 +94,7 @@ logstore_client_op_returns_many(logstore_handle_t *l,
             perror("ERROR on setting socket option TCP_NODELAY.\n");
             return 0;
         }
-
+#endif
         /* connect: create a connection with the server */
         if (connect(l->server_socket, (sockaddr*) &(l->serveraddr), sizeof(l->serveraddr)) < 0)
         {

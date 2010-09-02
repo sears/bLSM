@@ -96,7 +96,6 @@ bool simpleServer::acceptLoop() {
   printf("LSM Server listening....\n");
 
 //  *(sdata->server_socket) = sockfd;
-  int flag, result;
 
   while(ltable->accepting_new_requests) {
     socklen_t clilen = sizeof(cli_addr);
@@ -105,12 +104,17 @@ bool simpleServer::acceptLoop() {
     if(newsockfd == -1) {
       perror("ERROR on accept");
     } else {
+
+#ifdef LOGSTORE_NODELAY
+      int flag, result;
+
       flag = 1;
       result = setsockopt(newsockfd, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(int));
       if(result == -1) {
         perror("ERROR on setting socket option TCP_NODELAY");
         // ignore the error.
       }
+#endif
       //      char clientip[20];
       //      inet_ntop(AF_INET, (void*) &(cli_addr.sin_addr), clientip, 20);
       //      printf("Connection from %s\n", clientip);
