@@ -63,7 +63,7 @@ int main(int argc, char * argv[]) {
         struct timeval line_stop_time;
         gettimeofday(&line_stop_time,0);
         double seconds = tv_to_double(line_stop_time) - tv_to_double(load_start_time);
-        printf(" %6.1f s %6.2f mb/s %6.2f tuples/s\n", seconds, (double)size_copied/(1024.0 * 1024.0 * seconds), (double)num_tuples/seconds);
+        printf("%6lldMB %6.1f s %6.2f mb/s %6.2f tuples/s\n", size_copied / 1024*1024, seconds, (double)size_copied/(1024.0 * 1024.0 * seconds), (double)num_tuples/seconds);
       }
     }
   }
