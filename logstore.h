@@ -278,13 +278,14 @@ public:
         merge_it_(NULL),
         last_returned(NULL),
         key(NULL),
-        valid(false) {
+        valid(false),
+        reval_count(0) {
         rwlc_readlock(ltable->header_mut);
         pthread_mutex_lock(&ltable->rb_mut);
         ltable->registerIterator(this);
         pthread_mutex_unlock(&ltable->rb_mut);
         validate();
-        rwlc_unlock(ltable->header_mut);
+        //        rwlc_unlock(ltable->header_mut);
       }
 
       explicit iterator(logtable* ltable,TUPLE *key)
@@ -293,18 +294,19 @@ public:
         merge_it_(NULL),
         last_returned(NULL),
         key(key),
-        valid(false)
+        valid(false),
+        reval_count(0)
       {
         rwlc_readlock(ltable->header_mut);
         pthread_mutex_lock(&ltable->rb_mut);
         ltable->registerIterator(this);
         pthread_mutex_unlock(&ltable->rb_mut);
         validate();
-        rwlc_unlock(ltable->header_mut);
+        //        rwlc_unlock(ltable->header_mut);
       }
 
       ~iterator() {
-        rwlc_readlock(ltable->header_mut);
+        //        rwlc_readlock(ltable->header_mut);
         pthread_mutex_lock(&ltable->rb_mut);
         ltable->forgetIterator(this);
         invalidate();
@@ -314,31 +316,28 @@ public:
       }
   private:
       TUPLE * getnextHelper() {
+        //          rwlc_readlock(ltable->header_mut);
+          revalidate();
           TUPLE * tmp = merge_it_->next_callerFrees();
           if(last_returned && tmp) {
               assert(TUPLE::compare(last_returned->key(), last_returned->keylen(), tmp->key(), tmp->keylen()) < 0);
               TUPLE::freetuple(last_returned);
           }
           last_returned = tmp;
+          //          rwlc_unlock(ltable->header_mut);
           return last_returned;
       }
   public:
       TUPLE * getnextIncludingTombstones() {
-          rwlc_readlock(ltable->header_mut);
-          revalidate();
           TUPLE * ret = getnextHelper();
           ret = ret ? ret->create_copy() : NULL;
-          rwlc_unlock(ltable->header_mut);
           return ret;
       }
 
       TUPLE * getnext() {
-          rwlc_readlock(ltable->header_mut);
-          revalidate();
           TUPLE * ret;
           while((ret = getnextHelper()) && ret->isDelete()) { }  // getNextHelper handles its own memory.
           ret = ret ? ret->create_copy() : NULL; // XXX hate making copy!  Caller should not manage our memory.
-          rwlc_unlock(ltable->header_mut);
           return ret;
       }
 
@@ -376,7 +375,16 @@ public:
       TUPLE * last_returned;
       TUPLE * key;
       bool valid;
+      int reval_count;
+      static const int reval_period = 100;
       void revalidate() {
+        if(reval_count == reval_period) {
+          rwlc_unlock(ltable->header_mut);
+          reval_count = 0;
+          rwlc_readlock(ltable->header_mut);
+        } else {
+          reval_count++;
+        }
         if(!valid) {
           validate();
         } else {
