@@ -176,6 +176,7 @@ private:
     void buf_metadata(unsigned char ** buf, size_t *len, const TabletMetadata &m);
 protected:
     logstore_handle_t * l_;
+    logstore_handle_t * scan_l_; // XXX make sure that one scan handle per process suffices.
 
 };
 

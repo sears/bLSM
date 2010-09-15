@@ -75,10 +75,16 @@ public:
     std::string dbg2((char*)end_key, end_key_len - 1);
     lsmImpl->filestr << "end lsm key = " << dbg2 << std::endl;
 
-    logstore_client_op_returns_many(lsmImpl->l_, OP_SCAN, starttup, endtup, scanLimit);
+    uint8_t rc = logstore_client_op_returns_many(lsmImpl->scan_l_, OP_SCAN, starttup, endtup, scanLimit);
 
     datatuple::freetuple(starttup);
     datatuple::freetuple(endtup);
+
+    if(rc != LOGSTORE_RESPONSE_SENDING_TUPLES) {
+      this->error = rc;
+    } else {
+      this->error = 0;
+    }
 
     this->data = new StorageRecord();
   }
@@ -93,7 +99,9 @@ public:
   SuCode::ResponseCode next() {
     datatuple * tup;
     lsmImpl->filestr << "next called" << std::endl;
-    if((tup = logstore_client_next_tuple(lsmImpl->l_))) {
+    if(error) { // only catches errors during scan setup.
+      return SuCode::PStoreUnexpectedError;
+    } else if((tup = logstore_client_next_tuple(lsmImpl->scan_l_))) {
       lsmImpl->filestr << "found tuple, key = " << tup->key() << " datalen = " << tup->datalen() <<  std::endl;
       SuCode::ResponseCode rc = lsmImpl->tup_buf(*(this->data), tup);
       datatuple::freetuple(tup);
@@ -107,6 +115,7 @@ public:
   }
 private:
   LSMPersistentStoreImpl * lsmImpl;
+  uint8_t error;
 };
 
 // Initialize the logger
@@ -315,9 +324,10 @@ LSMPersistentStoreImpl::val_buf(StorageRecord& ret,
   return SuCode::SuOk;
 }
 LSMPersistentStoreImpl::
-LSMPersistentStoreImpl(bool isOrdered) : isOrdered_(isOrdered), l_(NULL) {
+LSMPersistentStoreImpl(bool isOrdered) : isOrdered_(isOrdered), l_(NULL), scan_l_(NULL) {
   filestr.open(isOrdered? "/tmp/lsm-log" : "/tmp/lsm-log-hashed", std::fstream::out | std::fstream::app);
   l_ = logstore_client_open("localhost", 32432, 60);  // XXX hardcode none of these values
+  scan_l_ = logstore_client_open("localhost", 32432, 60);  // XXX hardcode none of these values
   filestr << "LSMP constructor called" << std::endl;
 }
 
@@ -326,6 +336,7 @@ LSMPersistentStoreImpl::
 {
   filestr << "LSMP destructor called" << std::endl;
   logstore_client_close(l_);
+  logstore_client_close(scan_l_);
 }
 
 SuCode::ResponseCode LSMPersistentStoreImpl::initMetadataMetadata(TabletMetadata& m) {
@@ -621,7 +632,7 @@ scan(const TabletMetadata& tabletMeta, const ScanContinuation& continuation,
 					    selector, /*getMetadataOnly,*/
 					    expiryTime, scanLimit, byteLimit);
 
-  filestr << "LSMP scan returns" << std::endl;
+  filestr << "LSMP scan returns.  Error = " << iter->error << std::endl;
   return StorageRecordIterator(iter);
 
 }
