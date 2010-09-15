@@ -106,7 +106,7 @@ public:
 
 
     static datatuple* create(const void* key, len_t keylen) {
-      return create(key, keylen, 0, DELETE)->sanity_check();
+      return create(key, keylen, 0, DELETE);
     }
     static datatuple* create(const void* key, len_t keylen, const void* data, len_t datalen) {
     	datatuple *ret = (datatuple*)malloc(sizeof(datatuple));

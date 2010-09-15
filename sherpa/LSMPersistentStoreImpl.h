@@ -9,30 +9,47 @@
 #ifndef LSM_PSTORE_IMPL_H
 #define LSM_PSTORE_IMPL_H
 
+#include <fstream>
+#include <iostream>
+
 #include "PersistentStore.h"
+#include "datatuple.h"
 //#include "LSMCoreImpl.h"
 
 struct logstore_handle_t;
 
+class LSMIterator;
+
 class LSMPersistentStoreImpl : public PersistentStore
 {
-
-private:
+friend class LSMIterator;
+friend class LSMPersistentParent;
+protected:
   //    LSMCoreImpl& mySQLCoreImpl_;
-  //    bool isOrdered_;
+  bool isOrdered_;
   unsigned char * my_strcat(const std::string& table,
 			    const std::string& tablet,
 			    const std::string& key,
 			    size_t * len);
+  void my_strtok(const unsigned char* in, size_t len, std::string& table, std::string& tablet, std::string& key);
   unsigned char * buf_key(const TabletMetadata& m, const RecordKey& r,
 			  size_t * len);
+  unsigned char * buf_key(const TabletMetadata& m, const std::string s,
+              size_t * len);
   unsigned char * buf_val(const StorageRecord &val,
 			  size_t * len);
+  SuCode::ResponseCode tup_buf(StorageRecord &ret, datatuple * tup);
+  SuCode::ResponseCode key_buf(StorageRecord &ret,
+           const unsigned char * buf, size_t buf_len);
   SuCode::ResponseCode val_buf(StorageRecord &ret,
 	       const unsigned char * buf, size_t buf_len);
  public:
-    LSMPersistentStoreImpl(bool ordered);
+  std::fstream filestr;
+
+  LSMPersistentStoreImpl(bool ordered);
     virtual ~LSMPersistentStoreImpl();
+
+    SuCode::ResponseCode initMetadataMetadata(TabletMetadata& m);
 
     /**
      * See PersistentStore API
@@ -59,6 +76,15 @@ private:
      */
     SuCode::ResponseCode clearTabletRange(TabletMetadata& tabletMeta,
                                           uint32_t removalLimit);
+
+    /**
+       Not part of PersistentStore api.  PersistentParent needs to
+       provide this method as well, but it gets a string instead of a
+       TabletMetadata...
+    */
+    SuCode::ResponseCode getApproximateTableSize(std::string tabletMeta,
+                              int64_t& tableSize,
+                              int64_t & rowCount);
 
     /**
      * See PersistentStore API
@@ -89,13 +115,17 @@ private:
      */
     SuCode::ResponseCode remove(const TabletMetadata& tabletMeta,
                                 const RecordKey& recordKey);
+    /**
+     * Not part of PersistentStore API. However, PersistentParent needs to implement ping
+     */
+    bool ping();
 
     /**
      * See PersistentStore API
      */
-    StorageRecordIterator 
-    scan(const TabletMetadata& tabletMeta, const ScanContinuation& continuation, 
-         bool getMetadataOnly, const uint64_t expiryTime, unsigned int scanLimit);
+    StorageRecordIterator
+    scan(const TabletMetadata& tabletMeta, const ScanContinuation& continuation,
+         ScanSelect::Selector selector, const uint64_t expiryTime, unsigned int scanLimit, size_t byteLimit);
 
     /**
      * See PersistentStore API
@@ -139,6 +169,12 @@ private:
     LSMPersistentStoreImpl(LSMPersistentStoreImpl &);
     LSMPersistentStoreImpl operator=(LSMPersistentStoreImpl &);
 
+//    unsigned char* TabletMetadataToString(const TabletMetadata&m, size_t* keylen);
+//    unsigned char* TabletMetadataToKey(const TabletMetadata&m, size_t *key_len);
+
+    void metadata_buf(TabletMetadata &m, const unsigned char * buf, size_t len);
+    void buf_metadata(unsigned char ** buf, size_t *len, const TabletMetadata &m);
+protected:
     logstore_handle_t * l_;
 
 };
