@@ -122,27 +122,6 @@ private:
 //static log4cpp::Category &log =
 //       log4cpp::Category::getInstance("dht.su."__FILE__);
 
-//unsigned char* LSMPersistentStoreImpl::TabletMetadataToString(const TabletMetadata&m, size_t* len) {
-//  return my_strcat(m.table(), m.tablet(), "", len);
-//}
-//unsigned char* LSMPersistentStoreImpl::TabletMetadataToKey(const TabletMetadata&m, size_t* keylen) {
-//
-//  std::string metadata_table = std::string("ydht_metadata_table");
-//  std::string metadata_tablet= std::string("0");
-//
-//  size_t len;
-//  // note: we could call getTabletId instead, but might have to adjust the callers...
-//  const char * tablet_name =  (const char*)TabletMetadataToString(m, &len);
-//  // XXX memory leak?
-//  std::string keystr =  std::string(tablet_name, len);
-//
-//  unsigned char * ret = my_strcat(metadata_table, metadata_tablet, tablet_name, keylen);
-//
-//  filestr << "TabletMetadataToKey returns " << (char *) ret << std::endl;
-//
-//  return ret;
-//
-//}
 void LSMPersistentStoreImpl::buf_metadata(unsigned char ** buf, size_t *len, const TabletMetadata &m) {
   std::string ydht_metadata_table = std::string("ydht_metadata_table");
   std::string zero = std::string("0");
@@ -155,7 +134,6 @@ void LSMPersistentStoreImpl::buf_metadata(unsigned char ** buf, size_t *len, con
 
 void LSMPersistentStoreImpl::metadata_buf(TabletMetadata &m, const unsigned char * buf, size_t len) {
   // Metadata table key format:
-
   // ydht_metadata_table[low_eos]0[low_eos]table[low_eos]tablet[low_eos][low_eos]
 
   std::string ydht_metadata_table, zero, tmp, table, tablet, empty;
@@ -298,10 +276,6 @@ LSMPersistentStoreImpl::val_buf(StorageRecord& ret,
   memcpy(&metadata_len, buf, sizeof(metadata_len));  buf += sizeof(metadata_len);
   memcpy(&dataBlob_len, buf, sizeof(dataBlob_len));  buf += sizeof(dataBlob_len);
 
-//  DHT_DEBUG_STREAM() << "read storage record buf_len " << buf_len << " expiryTime " << expiryTime << " metadata len " << metadata_len << " datalen " << dataBlob_len << " sum " << (sizeof(expiryTime) + sizeof(dataBlob_len) + sizeof(metadata_len) + metadata_len + dataBlob_len) << std::endl;
-//
-//  DHT_DEBUG_STREAM() << " buffer contents " << buf << std::endl;
-
   // Is there room in ret?
 
   assert(buf_len >= sizeof(expiryTime) + sizeof(dataBlob_len) + sizeof(metadata_len) + metadata_len + dataBlob_len);
@@ -309,7 +283,7 @@ LSMPersistentStoreImpl::val_buf(StorageRecord& ret,
   if(ret.metadata().bufSize() < metadata_len ||
      ret.dataBlob().bufSize() < dataBlob_len) {
     return SuCode::PStoreDataTruncated; // RCS: This is what the mysql implementation does.
-                                        // it's someewhat misleading, as we don't truncate anything.
+                                        // it's somewhat misleading, as we don't truncate anything.
   }
 
   // Copy the data into ret.
@@ -326,8 +300,6 @@ LSMPersistentStoreImpl::val_buf(StorageRecord& ret,
 LSMPersistentStoreImpl::
 LSMPersistentStoreImpl(bool isOrdered) : isOrdered_(isOrdered), l_(NULL), scan_l_(NULL) {
   filestr.open(isOrdered? "/tmp/lsm-log" : "/tmp/lsm-log-hashed", std::fstream::out | std::fstream::app);
-  l_ = logstore_client_open("localhost", 32432, 60);  // XXX hardcode none of these values
-  scan_l_ = logstore_client_open("localhost", 32432, 60);  // XXX hardcode none of these values
   filestr << "LSMP constructor called" << std::endl;
 }
 
@@ -335,8 +307,8 @@ LSMPersistentStoreImpl::
 ~LSMPersistentStoreImpl()
 {
   filestr << "LSMP destructor called" << std::endl;
-  logstore_client_close(l_);
-  logstore_client_close(scan_l_);
+  if(l_)      logstore_client_close(l_);
+  if(scan_l_) logstore_client_close(scan_l_);
 }
 
 SuCode::ResponseCode LSMPersistentStoreImpl::initMetadataMetadata(TabletMetadata& m) {
@@ -356,7 +328,10 @@ SuCode::ResponseCode LSMPersistentStoreImpl::
 init(const SectionConfig &config)
 {
   filestr << "LSMP init called" << std::endl;
-//  if(!l_) // workaround bug 2870547
+  if(!l_) { // workaround bug 2870547
+    l_ = logstore_client_open("localhost", 32432, 60);  // XXX hardcode none of these values
+    scan_l_ = logstore_client_open("localhost", 32432, 60);  // XXX hardcode none of these values
+  }
   return l_ ? SuCode::SuOk : FwCode::NotFound;
 }
 
@@ -385,46 +360,6 @@ addEmptyTablet(TabletMetadata& tabletMeta)
       return SuCode::SuOk;
     }
   }
-
-//  size_t keylen;
-//  unsigned char * key;
-//  buf_metadata(&key, &keylen, tabletMeta);
-//  //unsigned char * key = TabletMetadataToKey(tabletMeta, &keylen);
-//  std::string tmp((char*)key, keylen-1);
-//  filestr << "add tablet [" << tmp << "]" << std::endl;
-//  datatuple * tup = datatuple::create(key, keylen, "", 1);
-//  // XXX lookup tuple, if it exists, return SuCode::PStoreTabletAlreadyExists
-//  datatuple * result = logstore_client_op(l_, OP_INSERT, tup);
-//  datatuple::freetuple(tup);
-//
-//  if(!result) {
-//    datatuple::freetuple(result);
-//    filestr << "ERROR inserting tuple in addEmptyTablet";
-//    abort();
-//    free(key);
-//    return SuCode::PStoreUnexpectedError;
-//  } else {
-//    metadata_buf(tabletMeta, key, keylen);
-//    std::string s((char*)key, keylen - 1);
-//    free(key);
-//    filestr << "Tablet " << s << " added" << std::endl;
-//    return SuCode::SuOk;
-//  }
-  /*
-    std::string newLSMTableName;
-
-    SuCode::ResponseCode rc;
-    if ((rc = mySQLCoreImpl_.addEmptyTablet(tabletMeta.table(),
-					    tabletMeta.tablet(),
-					    newLSMTableName,
-					    isOrdered_)) !=
-	      SuCode::SuOk) {
-
-	return rc;
-    }
-
-    //Save the mysql table name back in TabletMetadata
-    tabletMeta.setTabletId(newLSMTableName); */
 }
 
 SuCode::ResponseCode LSMPersistentStoreImpl::
@@ -453,16 +388,6 @@ dropTablet(TabletMetadata& tabletMeta)
     ret = SuCode::SuOk;
   }
   return ret;
-  /*    SuCode::ResponseCode rc;
-    const std::string& mySQLTableName = tabletMeta.getTabletId();
-
-    if ((rc = mySQLCoreImpl_.cleanupTablet(mySQLTableName)) != SuCode::SuOk) {
-	return SuCode::PStoreTabletCleanupFailed;
-    }
-
-    tabletMeta.setTabletId("");
-
-    DHT_DEBUG_STREAM() << "successfully dropped table from mysql"; */
 }
 
 // alternate to dropTablet() for when a tablet has been split and the underlying
@@ -473,11 +398,8 @@ clearTabletRange(TabletMetadata& tabletMeta, uint32_t removalLimit)
 {
   filestr << "LSMP clearTabletRange called" << std::endl;
   DHT_DEBUG_STREAM() << "clear tablet range is unimplemented.  ignoring request";
-  //    const std::string& mySQLTableName = tabletMeta.getTabletId();
-  //  return mySQLCoreImpl_.deleteRange(mySQLTableName, tabletMeta.tablet(), removalLimit);
   return SuCode::SuOk;
 }
-
 
 SuCode::ResponseCode LSMPersistentStoreImpl::
 getApproximateTableSize(std::string tabletMeta,
@@ -487,8 +409,6 @@ getApproximateTableSize(std::string tabletMeta,
   DHT_DEBUG_STREAM() << "get approximate table size is unimplemented.  returning dummy values";
   tableSize = 1024 * 1024 * 1024;
   rowCount = 1024 * 1024;
-  //  const std::string& mySQLTableName = tabletMeta.getTabletId();
-  //    return mySQLCoreImpl_.getApproximateTableSize(mySQLTableName, tableSize, rowCount);
   return SuCode::SuOk;
 }
 SuCode::ResponseCode LSMPersistentStoreImpl::
@@ -692,8 +612,10 @@ getIncomingCopyProgress(const TabletMetadata& metadata,
     //This will be a problem when we have more than 1
     //exporter/importer type. We will have to store the
     //snapshot version somewhere in tablet metadata
-  /*    const std::string& mySQLTableName = metadata.getTabletId();
+  current = 1024*1024*1024;
+  estimated = 1024*1024*1024;
 
+  /*    const std::string& mySQLTableName = metadata.getTabletId();
     return LSMSnapshotExporter::
 		       getIncomingCopyProgress(mySQLTableName,
 						   snapshotId,
@@ -710,7 +632,9 @@ getOutgoingCopyProgress(const TabletMetadata& metadata,
 {
   *const_cast<std::fstream*>(&filestr) << "LSMP getOutgoingCopyProgress called" << std::endl;
   fprintf(stderr, "unsupported method getOutgoingCopyProgrees called\n");
-  return 1;
+  current = 1024*1024*1024;
+  estimated = 1024*1024*1024;
+  return SuCode::SuOk;
   //    return LSMSnapshotExporter::
   //                        getOutgoingCopyProgress(snapshotId,
   //                                                   current,

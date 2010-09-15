@@ -169,9 +169,6 @@ private:
     LSMPersistentStoreImpl(LSMPersistentStoreImpl &);
     LSMPersistentStoreImpl operator=(LSMPersistentStoreImpl &);
 
-//    unsigned char* TabletMetadataToString(const TabletMetadata&m, size_t* keylen);
-//    unsigned char* TabletMetadataToKey(const TabletMetadata&m, size_t *key_len);
-
     void metadata_buf(TabletMetadata &m, const unsigned char * buf, size_t len);
     void buf_metadata(unsigned char ** buf, size_t *len, const TabletMetadata &m);
 protected:

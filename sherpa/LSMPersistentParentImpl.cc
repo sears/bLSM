@@ -3,10 +3,6 @@
 #include "TabletMetadata.h"
 #include "tcpclient.h"
 
-// XXX for getpid...
-#include <sys/types.h>
-#include <unistd.h>
-
 #include <fstream>
 #include <iostream>
 
@@ -81,7 +77,6 @@ public:
     free(start_tup);
     free(end_tup);
     ordered.filestr << "getTabletMappingList B conn = " << ordered.l_ << std::endl;
-    pid_t pid = getpid();
 
     uint8_t rcode = logstore_client_op_returns_many(ordered.l_, OP_SCAN, starttup, endtup, 0); // 0 = no limit.
     ordered.filestr << "getTabletMappingList A'" << std::endl;
