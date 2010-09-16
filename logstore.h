@@ -49,6 +49,12 @@ private:
 public:
     void insertManyTuples(struct datatuple **tuples, int tuple_count);
     void insertTuple(struct datatuple *tuple);
+    /** This test and set has strange semantics on two fronts:
+     *
+     * 1) It is not atomic with respect to non-testAndSet operations (which is fine in theory, since they have no barrier semantics, and we don't have a use case to support the extra overhead)
+     * 2) If tuple2 is not null, it looks at tuple2's key instead of tuple's key.  This means you can atomically set the value of one key based on the value of another (if you want to...)
+     */
+    bool testAndSetTuple(struct datatuple *tuple, struct datatuple *tuple2);
 
     //other class functions
     recordid allocTable(int xid);

@@ -36,21 +36,22 @@ static const network_op_t LOGSTORE_LAST_RESPONSE_CODE = 4;
 //client codes
 static const network_op_t LOGSTORE_FIRST_REQUEST_CODE  = 8;
 static const network_op_t OP_INSERT              = 8;   // Create, Update, Delete
-static const network_op_t OP_FIND                = 9;   // Read
-static const network_op_t OP_SCAN                = 10;
-static const network_op_t OP_BULK_INSERT         = 11;
-static const network_op_t OP_DONE                = 12;  // Please close the connection.
-static const network_op_t OP_FLUSH               = 13;
-static const network_op_t OP_SHUTDOWN            = 14;
-static const network_op_t OP_STAT_SPACE_USAGE    = 15;
-static const network_op_t OP_STAT_PERF_REPORT    = 16;
-static const network_op_t OP_STAT_HISTOGRAM      = 17;  // Return N approximately equal size partitions (including split points + cardinalities)  N=1 estimates table cardinality.
+static const network_op_t OP_TEST_AND_SET        = 9;   // Create, Update, Delete iff the datatuple matches the second tuple passed in.  (or if it doesn't exist, and isDelete() == true.
+static const network_op_t OP_FIND                = 10;  // Read
+static const network_op_t OP_SCAN                = 11;
+static const network_op_t OP_BULK_INSERT         = 12;
+static const network_op_t OP_DONE                = 13;  // Please close the connection.
+static const network_op_t OP_FLUSH               = 14;
+static const network_op_t OP_SHUTDOWN            = 15;
+static const network_op_t OP_STAT_SPACE_USAGE    = 16;
+static const network_op_t OP_STAT_PERF_REPORT    = 17;
+static const network_op_t OP_STAT_HISTOGRAM      = 18;  // Return N approximately equal size partitions (including split points + cardinalities)  N=1 estimates table cardinality.
 
 
-static const network_op_t OP_DBG_DROP_DATABASE        = 18;
-static const network_op_t OP_DBG_BLOCKMAP             = 19;
-static const network_op_t OP_DBG_NOOP                 = 20;
-static const network_op_t LOGSTORE_LAST_REQUEST_CODE  = 20;
+static const network_op_t OP_DBG_DROP_DATABASE        = 19;
+static const network_op_t OP_DBG_BLOCKMAP             = 20;
+static const network_op_t OP_DBG_NOOP                 = 21;
+static const network_op_t LOGSTORE_LAST_REQUEST_CODE  = 21;
 
 //error codes
 static const network_op_t LOGSTORE_FIRST_ERROR  = 27;

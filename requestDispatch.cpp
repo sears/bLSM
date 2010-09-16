@@ -15,6 +15,13 @@ inline int requestDispatch<HANDLE>::op_insert(logtable<datatuple> * ltable, HAND
     return writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
 }
 template<class HANDLE>
+inline int requestDispatch<HANDLE>::op_test_and_set(logtable<datatuple> * ltable, HANDLE fd, datatuple * tuple, datatuple * tuple2) {
+    //insert/update/delete
+    bool succ = ltable->testAndSetTuple(tuple, tuple2);
+    //step 4: send response
+    return writeoptosocket(fd, succ ? LOGSTORE_RESPONSE_SUCCESS : LOGSTORE_RESPONSE_FAIL);
+}
+template<class HANDLE>
 inline int requestDispatch<HANDLE>::op_bulk_insert(logtable<datatuple> *ltable, HANDLE fd) {
   int err = writeoptosocket(fd, LOGSTORE_RESPONSE_RECEIVING_TUPLES);
   datatuple ** tups = (datatuple **) malloc(sizeof(tups[0]) * 100);
@@ -458,6 +465,10 @@ int requestDispatch<HANDLE>::dispatch_request(network_op_t opcode, datatuple * t
     if(opcode == OP_INSERT)
     {
         err = op_insert(ltable, fd, tuple);
+    }
+    else if(opcode == OP_TEST_AND_SET)
+    {
+        err = op_test_and_set(ltable, fd, tuple, tuple2);
     }
     else if(opcode == OP_FIND)
     {

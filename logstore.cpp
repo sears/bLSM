@@ -604,6 +604,35 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
 }
 
 template<class TUPLE>
+bool logtable<TUPLE>::testAndSetTuple(datatuple *tuple, datatuple *tuple2)
+{
+    bool succ = false;
+    static pthread_mutex_t test_and_set_mut = PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutex_lock(&test_and_set_mut);
+
+    datatuple * exists = findTuple_first(-1, tuple2 ? tuple2->key() : tuple->key(), tuple2 ? tuple2->keylen() : tuple->keylen());
+
+    if(!tuple2 || tuple2->isDelete()) {
+      if(!exists || exists->isDelete()) {
+        succ = true;
+      } else {
+        succ = false;
+      }
+    } else {
+      if(tuple2->datalen() == exists->datalen() && !memcmp(tuple2->data(), exists->data(), tuple2->datalen())) {
+        succ = true;
+      } else {
+        succ = false;
+      }
+    }
+    if(exists) datatuple::freetuple(exists);
+    if(succ) insertTuple(tuple);
+
+    pthread_mutex_unlock(&test_and_set_mut);
+    return succ;
+}
+
+template<class TUPLE>
 void logtable<TUPLE>::registerIterator(iterator * it) {
   its.push_back(it);
 }

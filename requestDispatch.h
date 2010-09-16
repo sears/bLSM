@@ -14,6 +14,7 @@ template<class HANDLE>
 class requestDispatch {
 private:
   static inline int op_insert(logtable<datatuple> * ltable, HANDLE fd, datatuple * tuple);
+  static inline int op_test_and_set(logtable<datatuple> * ltable, HANDLE fd, datatuple * tuple, datatuple * tuple2);
   static inline int op_find(logtable<datatuple> * ltable, HANDLE fd, datatuple * tuple);
   static inline int op_scan(logtable<datatuple> * ltable, HANDLE fd, datatuple * tuple, datatuple * tuple2, size_t limit);
   static inline int op_bulk_insert(logtable<datatuple> * ltable, HANDLE fd);
