@@ -85,10 +85,10 @@ template<class TUPLE>
 void logtable<TUPLE>::init_stasis() {
 
   DataPage<datatuple>::register_stasis_page_impl();
+  stasis_buffer_manager_size = 768 * 1024; // 4GB = 2^10 pages:
   // XXX Workaround Stasis' (still broken) default concurrent buffer manager
-  stasis_buffer_manager_size = 1024 * 1024; // 4GB = 2^10 pages:
   //stasis_buffer_manager_factory = stasis_buffer_manager_hash_factory;
-
+  stasis_buffer_manager_hint_writes_are_sequential = 1;
   Tinit();
 
 }

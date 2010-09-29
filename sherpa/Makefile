@@ -19,4 +19,4 @@ tcpclient.cpp : ../tcpclient.cpp
 	ln -s ../tcpclient.cpp
 
 clean:
-	rm -f LSMPersistentStoreImpl.o tcpclient.o libsherpalogstore.so
+	rm -f LSMPersistentStoreImpl.o tcpclient.o libsherpalogstore.so LSMPersistentParentImpl.o

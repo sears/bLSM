@@ -9,9 +9,6 @@
 #ifndef LSM_PSTORE_IMPL_H
 #define LSM_PSTORE_IMPL_H
 
-#include <fstream>
-#include <iostream>
-
 #include "PersistentStore.h"
 #include "datatuple.h"
 //#include "LSMCoreImpl.h"
@@ -25,6 +22,7 @@ class LSMPersistentStoreImpl : public PersistentStore
 friend class LSMIterator;
 friend class LSMPersistentParent;
 protected:
+
   //    LSMCoreImpl& mySQLCoreImpl_;
   bool isOrdered_;
   unsigned char * my_strcat(const std::string& table,
@@ -44,7 +42,6 @@ protected:
   SuCode::ResponseCode val_buf(StorageRecord &ret,
 	       const unsigned char * buf, size_t buf_len);
  public:
-  std::fstream filestr;
 
   LSMPersistentStoreImpl(bool ordered);
     virtual ~LSMPersistentStoreImpl();

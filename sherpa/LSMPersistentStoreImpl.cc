@@ -12,15 +12,20 @@
 #include "SuLimits.h"
 #include "dht/UtilityBuffer.h"
 
-//#include <dht/LogUtils.h>
-#define DHT_DEBUG_STREAM() std::cerr
-#define RESPONSE_ERROR_STREAM(x) std::cerr
+#include <dht/LogUtils.h>
+
 #include "LSMPersistentStoreImpl.h"
 
 #include <tcpclient.h>
 
+
+// Initialize the logger
+static log4cpp::Category &log =
+       log4cpp::Category::getInstance("dht.su."__FILE__);
+
 class LSMIterator : public TabletIterator<StorageRecord> {
   friend class LSMPersistentStoreImpl;
+
 public:
 //  StorageRecord * data; //  <- defined in parent class.  next() updates it.
 
@@ -52,17 +57,17 @@ public:
       } else {
         end_key = lsmImpl->buf_key(tabletMeta, "", &end_key_len);
         if(end_key[end_key_len-2] != low_eos) {
-          lsmImpl->filestr << "ERROR CORRUPT lsm tablet key = " << (char*)end_key << std::endl;
+          DHT_ERROR_STREAM() << "CORRUPT lsm tablet key = " << (char*)end_key;
         } else {
           end_key[end_key_len-2] = high_eos;
         }
       }
     } else {
-      lsmImpl->filestr << "WARNING: Scanning hash table, but ignoring contiunation range!" << std::endl;
+      DHT_WARN_STREAM() << "Scanning hash table, but ignoring contiunation range!";
       start_key = lsmImpl->buf_key(tabletMeta, "", &start_key_len);
       end_key = lsmImpl->buf_key(tabletMeta, "", &end_key_len);
       if(end_key[end_key_len-2] != low_eos) {
-        lsmImpl->filestr << "ERROR CORRUPT lsm tablet key = " << (char*)end_key << std::endl;
+        DHT_ERROR_STREAM() << "CORRUPT lsm tablet key = " << (char*)end_key;
       } else {
         end_key[end_key_len-2] = high_eos;
       }
@@ -70,11 +75,11 @@ public:
 
     starttup = datatuple::create(start_key, start_key_len);
     std::string dbg((char*)start_key, start_key_len - 1);
-    lsmImpl->filestr << "start lsm key = " << dbg << std::endl;
+    DHT_DEBUG_STREAM() << "start lsm key = " << dbg;
 
     endtup = datatuple::create(end_key, end_key_len);
     std::string dbg2((char*)end_key, end_key_len - 1);
-    lsmImpl->filestr << "end lsm key = " << dbg2 << std::endl;
+    DHT_DEBUG_STREAM() << "end lsm key = " << dbg2;
 
     uint8_t rc = logstore_client_op_returns_many(lsmImpl->scan_l_, OP_SCAN, starttup, endtup, scanLimit);
 
@@ -90,25 +95,25 @@ public:
     this->data = new StorageRecord();
   }
   ~LSMIterator() {
-    lsmImpl->filestr << "close iterator called" << std::endl;
+    DHT_DEBUG_STREAM() << "close iterator called";
     // close iterator by running to the end of it...  TODO devise a better way to close iterators early?
     while(this->data) {
       next();
     }
-    lsmImpl->filestr << "close iterator done" << std::endl;
+    DHT_DEBUG_STREAM() << "close iterator done";
   }
   SuCode::ResponseCode next() {
     datatuple * tup;
-    lsmImpl->filestr << "next called" << std::endl;
+    DHT_DEBUG_STREAM() <<  "next called";
     if(error) { // only catches errors during scan setup.
       return SuCode::PStoreUnexpectedError;
     } else if((tup = logstore_client_next_tuple(lsmImpl->scan_l_))) {
-      lsmImpl->filestr << "found tuple, key = " << tup->key() << " datalen = " << tup->datalen() <<  std::endl;
+      DHT_DEBUG_STREAM() << "found tuple, key = " << tup->key() << " datalen = " << tup->datalen();
       SuCode::ResponseCode rc = lsmImpl->tup_buf(*(this->data), tup);
       datatuple::freetuple(tup);
       return rc;
     } else {
-      lsmImpl->filestr << "no tuple" << std::endl;
+      DHT_DEBUG_STREAM() << "no tuple";
       delete this->data;
       this->data = NULL;
       return SuCode::PStoreScanEnd; // XXX need to differentiate between end of scan and failure
@@ -118,10 +123,6 @@ private:
   LSMPersistentStoreImpl * lsmImpl;
   uint8_t error;
 };
-
-// Initialize the logger
-//static log4cpp::Category &log =
-//       log4cpp::Category::getInstance("dht.su."__FILE__);
 
 void LSMPersistentStoreImpl::buf_metadata(unsigned char ** buf, size_t *len, const TabletMetadata &m) {
   std::string ydht_metadata_table = std::string("ydht_metadata_table");
@@ -137,11 +138,13 @@ void LSMPersistentStoreImpl::metadata_buf(TabletMetadata &m, const unsigned char
   // Metadata table key format:
   // ydht_metadata_table[low_eos]0[low_eos]table[low_eos]tablet[low_eos][low_eos]
 
+  assert(buf);
   std::string ydht_metadata_table, zero, tmp, table, tablet, empty;
   my_strtok(buf, len, ydht_metadata_table, zero, tmp);
+  assert(tmp.c_str());
   my_strtok((const unsigned char*)tmp.c_str(), tmp.length(), table, tablet, empty);
 
-  filestr << "Parsed metadata: [" << table << "] [" << tablet << "] [" << empty << "](empty)" << std::endl;
+  DHT_DEBUG_STREAM() << "Parsed metadata: [" << table << "] [" << tablet << "] [" << empty << "](empty)";
   m.setTable(table);
   m.setTablet(tablet);
   m.setTabletId(tmp.substr(0, tmp.length() - 1));
@@ -258,7 +261,7 @@ LSMPersistentStoreImpl::key_buf(StorageRecord& ret,
                 const unsigned char * buf, size_t buf_len) {
   std::string table, tablet, key;
   my_strtok(buf, buf_len, table, tablet, key);
-  filestr << "key_buf parsed datatuple key: table = [" << table <<  "] tablet = [" << tablet <<  "] key = [" << key << "]" << std::endl;
+  DHT_DEBUG_STREAM() << "key_buf parsed datatuple key: table = [" << table <<  "] tablet = [" << tablet <<  "] key = [" << key << "]";
   ret.recordKey().setName(key);
   return SuCode::SuOk;
 }
@@ -298,22 +301,24 @@ LSMPersistentStoreImpl::val_buf(StorageRecord& ret,
   ret.dataBlob().setDataSize(dataBlob_len);
   return SuCode::SuOk;
 }
+
 LSMPersistentStoreImpl::
 LSMPersistentStoreImpl(bool isOrdered) : isOrdered_(isOrdered), l_(NULL), scan_l_(NULL) {
-  filestr.open(isOrdered? "/tmp/lsm-log" : "/tmp/lsm-log-hashed", std::fstream::out | std::fstream::app);
-  filestr << "LSMP constructor called" << std::endl;
+  //  filestr.open(isOrdered? "/tmp/lsm-log" : "/tmp/lsm-log-hashed", std::fstream::out | std::fstream::app);
+  // It would be unsafe to call the following, since we're statically initialized:  DHT_DEBUG_STREAM() << "LSMP constructor called";
 }
 
 LSMPersistentStoreImpl::
 ~LSMPersistentStoreImpl()
 {
-  filestr << "LSMP destructor called" << std::endl;
+  DHT_DEBUG_STREAM() << "LSMP destructor called";
   if(l_)      logstore_client_close(l_);
   if(scan_l_) logstore_client_close(scan_l_);
+  DHT_DEBUG_STREAM() << "LSMP destructor cleanly closed connections";
 }
 
 SuCode::ResponseCode LSMPersistentStoreImpl::initMetadataMetadata(TabletMetadata& m) {
-  filestr << "LSMP initMetadataMetadata called [" << m << "] " << std::endl;
+  DHT_DEBUG_STREAM() << "LSMP initMetadataMetadata called";
 
   std::string metadata_table = std::string("ydht_metadata_table");
   std::string metadata_tablet= std::string("0");
@@ -328,7 +333,7 @@ SuCode::ResponseCode LSMPersistentStoreImpl::initMetadataMetadata(TabletMetadata
 SuCode::ResponseCode LSMPersistentStoreImpl::
 init(const SectionConfig &config)
 {
-  filestr << "LSMP init called" << std::endl;
+  DHT_DEBUG_STREAM() << "LSMP init called";
   if(!l_) { // workaround bug 2870547
     l_ = logstore_client_open("localhost", 32432, 60);  // XXX hardcode none of these values
     scan_l_ = logstore_client_open("localhost", 32432, 60);  // XXX hardcode none of these values
@@ -338,14 +343,14 @@ init(const SectionConfig &config)
 
 bool LSMPersistentStoreImpl::
 isOrdered(){
-  filestr << "LSMP isOrdered called" << std::endl;
+  DHT_DEBUG_STREAM() << "LSMP isOrdered called";
   return isOrdered_;
 }
 
 SuCode::ResponseCode LSMPersistentStoreImpl::
 addEmptyTablet(TabletMetadata& tabletMeta)
 {
-  filestr << "LSMP addEmptyTablet called" << std::endl;
+  DHT_DEBUG_STREAM() << "LSMP addEmptyTablet called";
   // This is a no-op; we'll simply prepend the tablet string to each record.
   {
     // Is table name too long?
@@ -357,7 +362,7 @@ addEmptyTablet(TabletMetadata& tabletMeta)
 
 
     if (mySQLTableName!=""){
-      filestr << "Tablet " << mySQLTableName << " already exists!" << std::endl;
+      DHT_INFO_STREAM() << "Tablet " << mySQLTableName << " already exists!";
       return SuCode::PStoreTabletAlreadyExists;
     } else {
       size_t keylen; unsigned char * key;
@@ -372,8 +377,7 @@ addEmptyTablet(TabletMetadata& tabletMeta)
 SuCode::ResponseCode LSMPersistentStoreImpl::
 dropTablet(TabletMetadata& tabletMeta)
 {
-  filestr << "LSMP dropTablet called" << std::endl;
-  DHT_DEBUG_STREAM() << "dropTablet called.  Falling back on clearTabletRange()";
+  DHT_INFO_STREAM() << "dropTablet called.  Falling back on clearTabletRange()";
   SuCode::ResponseCode ret =  clearTabletRange(tabletMeta, 0);
 
   size_t keylen;
@@ -388,10 +392,10 @@ dropTablet(TabletMetadata& tabletMeta)
   tabletMeta.setTabletId("");
 
   if(!result) {
-    filestr << "LSMP dropTablet fails" << std::endl;
+    DHT_WARN_STREAM() << "LSMP dropTablet fails";
     ret = SuCode::PStoreTabletCleanupFailed;
   } else {
-    filestr << "LSMP dropTablet succeeds" << std::endl;
+    DHT_INFO_STREAM() << "LSMP dropTablet succeeds";
     ret = SuCode::SuOk;
   }
   return ret;
@@ -403,8 +407,7 @@ dropTablet(TabletMetadata& tabletMeta)
 SuCode::ResponseCode LSMPersistentStoreImpl::
 clearTabletRange(TabletMetadata& tabletMeta, uint32_t removalLimit)
 {
-  filestr << "LSMP clearTabletRange called" << std::endl;
-  DHT_DEBUG_STREAM() << "clear tablet range is unimplemented.  ignoring request";
+  DHT_WARN_STREAM() << "clear tablet range is unimplemented.  ignoring request";
   return SuCode::SuOk;
 }
 
@@ -412,8 +415,7 @@ SuCode::ResponseCode LSMPersistentStoreImpl::
 getApproximateTableSize(std::string tabletMeta,
 			int64_t& tableSize,
 			int64_t & rowCount) {
-  filestr << "LSMP getApproximateTableSize called" << std::endl;
-  DHT_DEBUG_STREAM() << "get approximate table size is unimplemented.  returning dummy values";
+  DHT_WARN_STREAM() << "get approximate table size is unimplemented.  returning dummy values";
   tableSize = 1024 * 1024 * 1024;
   rowCount = 1024 * 1024;
   return SuCode::SuOk;
@@ -423,7 +425,7 @@ getApproximateTableSize(TabletMetadata& tabletMeta,
 			int64_t& tableSize,
 			int64_t & rowCount)
 {
-  filestr << "LSMP getApproximateTableSize (2) called" << std::endl;
+  DHT_DEBUG_STREAM() << "LSMP getApproximateTableSize (2) called";
   return getApproximateTableSize(tabletMeta.getTabletId(), tableSize, rowCount);
 }
 
@@ -431,7 +433,7 @@ getApproximateTableSize(TabletMetadata& tabletMeta,
 SuCode::ResponseCode LSMPersistentStoreImpl::
 get(const TabletMetadata& tabletMeta, StorageRecord& recordData)
 {
-  filestr << "LSMP get called" << tabletMeta.getTabletId()  << ":" << recordData.recordKey()<< std::endl;
+  DHT_DEBUG_STREAM() << "LSMP get called" << tabletMeta.getTabletId()  << ":" << recordData.recordKey();
   if(recordData.recordKey().name().length() > (isOrdered_ ? SuLimits::MAX_ORDERED_RECORD_NAME_LENGTH : SuLimits::MAX_RECORD_NAME_LENGTH)) {
     return SuCode::PStoreIOFailed;
   }
@@ -445,20 +447,20 @@ get(const TabletMetadata& tabletMeta, StorageRecord& recordData)
   if((!result) || result->isDelete()) {
     ret = SuCode::PStoreRecordNotFound;
   } else {
-    DHT_DEBUG_STREAM() << "call val buf from get, data len = " << result->datalen() << std::endl;
+    //DHT_DEBUG_STREAM() << "call val buf from get, data len = " << result->datalen() << std::endl;
     ret = val_buf(recordData, result->data(), result->datalen());
   }
   if(result) {
     datatuple::freetuple(result);
   }
-  filestr << "LSMP get returns succ = " << (ret == SuCode::SuOk) << std::endl;
+  DHT_DEBUG_STREAM() << "LSMP get returns succ = " << (ret == SuCode::SuOk);
   return ret;
 }
 
 SuCode::ResponseCode LSMPersistentStoreImpl::
 update(const TabletMetadata& tabletMeta, const StorageRecord& updateData)
 {
-  filestr << "LSMP update called" << std::endl;
+  DHT_DEBUG_STREAM() << "LSMP update called";
   if(updateData.recordKey().name().length() > (isOrdered_ ? SuLimits::MAX_ORDERED_RECORD_NAME_LENGTH : SuLimits::MAX_RECORD_NAME_LENGTH)) {
     return SuCode::PStoreIOFailed;
   }
@@ -489,38 +491,35 @@ update(const TabletMetadata& tabletMeta, const StorageRecord& updateData)
 SuCode::ResponseCode LSMPersistentStoreImpl::  // XXX what to do about update?
 insert(const TabletMetadata& tabletMeta,
        const StorageRecord& insertData) {
-  filestr << "LSMP insert called" << tabletMeta.getTabletId()  << ":" << insertData.recordKey()<< std::endl;
+  DHT_DEBUG_STREAM()<< "LSMP insert called" << tabletMeta.getTabletId()  << ":" << insertData.recordKey();
   size_t keybuflen, valbuflen;
   if(insertData.recordKey().name().length() > (isOrdered_ ? SuLimits::MAX_ORDERED_RECORD_NAME_LENGTH : SuLimits::MAX_RECORD_NAME_LENGTH)) {
     return SuCode::PStoreIOFailed;
   }
   unsigned char * keybuf = buf_key(tabletMeta, insertData.recordKey(), &keybuflen);
-  filestr << "keybuf = " << keybuf << " (and perhaps a null)" << std::endl;
+  DHT_DEBUG_STREAM() << "keybuf = " << keybuf << " (and perhaps a null)";
   unsigned char * valbuf = buf_val(insertData, &valbuflen);
-  filestr << "valbuf = " << valbuf << " (and perhaps a null)" << std::endl;
+  DHT_DEBUG_STREAM() << "valbuf = " << valbuf << " (and perhaps a null)";
   datatuple * key_ins = datatuple::create(keybuf, keybuflen, valbuf, valbuflen);
-  filestr << "insert create()" << std::endl;
+  DHT_DEBUG_STREAM() << "insert create()";
   void * result = (void*)logstore_client_op(l_, OP_INSERT, key_ins);
-  filestr << "insert insert()" << std::endl;
+  DHT_DEBUG_STREAM() << "insert insert()";
   if(result) {
-    filestr << "LSMP insert will return result = " << result << std::endl;
+    DHT_DEBUG_STREAM() << "LSMP insert will return result = " << result;
   } else {
-    filestr << "LSMP insert will return null "<< std::endl;
+    DHT_DEBUG_STREAM() << "LSMP insert will return null ";
   }
   datatuple::freetuple(key_ins);
-  filestr << "insert free(key_ins)" << std::endl;
   free(keybuf);
-  filestr << "insert free(keybuf)" << std::endl;
   free(valbuf);
-  filestr << "insert free(valbuf)" << std::endl;
-  filestr << "LSMP insert returns "<< std::endl;
+  DHT_DEBUG_STREAM() << "LSMP insert returns ";
   return result ? SuCode::SuOk : SuCode::PStoreUnexpectedError;
 }
 
 SuCode::ResponseCode LSMPersistentStoreImpl::
 remove(const TabletMetadata& tabletMeta, const RecordKey& recordName)
 {
-  filestr << "LSMP remove called" << std::endl;
+  DHT_DEBUG_STREAM() << "LSMP remove called";
   if(recordName.name().length() > (isOrdered_ ? SuLimits::MAX_ORDERED_RECORD_NAME_LENGTH : SuLimits::MAX_RECORD_NAME_LENGTH)) {
     return SuCode::PStoreIOFailed;
   }
@@ -536,15 +535,16 @@ remove(const TabletMetadata& tabletMeta, const RecordKey& recordName)
     free(buf);
     return result ? SuCode::SuOk : SuCode::PStoreUnexpectedError;
   } else {
-    filestr << "LSMP remove: record not found, or error" << std::endl;
+    DHT_DEBUG_STREAM() << "LSMP remove: record not found, or error";
     return rc;
   }
 }
 
 bool LSMPersistentStoreImpl::ping() {
-  filestr << "LSMP ping called" << std::endl;
+  DHT_DEBUG_STREAM() << "LSMP ping called";
   datatuple * ret = logstore_client_op(l_, OP_DBG_NOOP);
   if(ret == NULL) {
+    DHT_WARN_STREAM() << "LSMP ping failed";
     return false;
   } else {
     datatuple::freetuple(ret);
@@ -556,16 +556,12 @@ StorageRecordIterator LSMPersistentStoreImpl::
 scan(const TabletMetadata& tabletMeta, const ScanContinuation& continuation,
      ScanSelect::Selector selector, const uint64_t expiryTime, unsigned int scanLimit, size_t byteLimit)
 {
-  filestr << "LSMP scan called.  " << std::endl;
-
-  filestr << "LSMP scan called.  Tablet: " << tabletMeta.getTabletId() << std::endl;
+  DHT_DEBUG_STREAM() << "LSMP scan called.  Tablet: " << tabletMeta.getTabletId();
   ScanContinuationAutoPtr newContinuation;
   TabletRangeAutoPtr tabletRange;
 
   if (SuCode::SuOk != tabletMeta.keyRange(tabletRange)){
-//	BAD_CODE_ABORT("Bad tablet name");
-    filestr << "LSMP bad tablet name" << std::endl;
-    abort();
+    BAD_CODE_ABORT("Bad tablet name");
   }
 
     /* This is necessary once we turn on splits, because multiple tablets
@@ -580,7 +576,7 @@ scan(const TabletMetadata& tabletMeta, const ScanContinuation& continuation,
 					    selector, /*getMetadataOnly,*/
 					    expiryTime, scanLimit, byteLimit);
 
-  filestr << "LSMP scan returns.  Error = " << iter->error << std::endl;
+  DHT_DEBUG_STREAM() << "LSMP scan returns.  Error = " << iter->error;
   return StorageRecordIterator(iter);
 
 }
@@ -590,7 +586,7 @@ getSnapshotExporter(const TabletMetadata& tabletMeta,
 		    const std::string& snapshotId,
 	       SnapshotExporterAutoPtr& exporter)
 {
-  filestr << "LSMP getSnapshotExported called" << std::endl;
+  DHT_WARN_STREAM() << "Unimplemented: LSMP getSnapshotExported called";
   /*    const std::string& mySQLTableName = tabletMeta.getTabletId();
 
     TabletRangeAutoPtr tabletRange;
@@ -610,7 +606,7 @@ getSnapshotImporter(const TabletMetadata& tabletMeta,
 		    const std::string& snapshotId,
 		    SnapshotImporterAutoPtr& importer)
 {
-  filestr << "LSMP getSnapshotImporter called" << std::endl;
+  DHT_WARN_STREAM() << "Unimplemented: getSnapshotImporter called";
   /*    if (version == LSMSnapshotExporter::VERSION){
 	const std::string& mySQLTableName = tabletMeta.getTabletId();
 	importer=LSMSnapshotExporter::getImporter(tabletMeta.table(),
@@ -634,10 +630,9 @@ getIncomingCopyProgress(const TabletMetadata& metadata,
 			int64_t& current,
 			int64_t& estimated) const
 {
-  *const_cast<std::fstream*>(&filestr) << "LSMP getIncomingCopyProgress called" << std::endl;
-  fprintf(stderr, "unsupported method getIncomingCopyProgrees called\n");
+  DHT_DEBUG_STREAM() << "Unimplemented: LSMP getIncomingCopyProgress called";
 
-    //This will be a problem when we have more than 1
+  //This will be a problem when we have more than 1
     //exporter/importer type. We will have to store the
     //snapshot version somewhere in tablet metadata
   current = 1024*1024*1024;
@@ -658,8 +653,7 @@ getOutgoingCopyProgress(const TabletMetadata& metadata,
 			int64_t& current,
 			int64_t& estimated) const
 {
-  *const_cast<std::fstream*>(&filestr) << "LSMP getOutgoingCopyProgress called" << std::endl;
-  fprintf(stderr, "unsupported method getOutgoingCopyProgrees called\n");
+  DHT_DEBUG_STREAM() << "Unimplemented: LSMP getOutgoingCopyProgress called";
   current = 1024*1024*1024;
   estimated = 1024*1024*1024;
   return SuCode::SuOk;
