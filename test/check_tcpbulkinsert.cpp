@@ -9,6 +9,7 @@
 #include <vector>
 #include <iostream>
 #include <sstream>
+#include <algorithm>
 #include "logstore.h"
 #include <assert.h>
 #include <limits.h>
@@ -27,7 +28,7 @@
 #undef end
 
 
-static char * svrname = "localhost";
+static const char * svrname = "localhost";
 static int svrport = 32432;
 
 void insertProbeIter(size_t NUM_ENTRIES)

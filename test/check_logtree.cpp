@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <iostream>
+#include <algorithm>
 #include <sstream>
 #include "logstore.h"
 #include "regionAllocator.h"

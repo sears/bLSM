@@ -10,7 +10,7 @@
 
 #include <stdio.h>
 #include <errno.h>
-
+#include <stdint.h>
 #include <string>
 typedef unsigned char byte;
 #include <cstring>

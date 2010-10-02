@@ -2,6 +2,7 @@
 #include <vector>
 #include <iostream>
 #include <sstream>
+#include <algorithm>
 #include "logstore.h"
 #include "datapage.h"
 #include "merger.h"

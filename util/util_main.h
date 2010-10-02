@@ -11,7 +11,7 @@
 logstore_handle_t * util_open_conn(int argc, char * argv[]) {
 	bool ok = true;
 	int svrport = 32432;
-	char * svrname = "localhost";
+	const char * svrname = "localhost";
 	if(argc == 3) {
 		svrport = atoi(argv[2]);
 	}

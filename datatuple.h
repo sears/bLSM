@@ -4,6 +4,7 @@
 #define _DATATUPLE_H_
 
 #include <string>
+#include <stdlib.h>
 typedef unsigned char byte;
 #include <cstring>
 #include <assert.h>

@@ -7,7 +7,7 @@
 
 #ifndef CHECK_UTIL_H_
 #define CHECK_UTIL_H_
-
+#include <stdlib.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
