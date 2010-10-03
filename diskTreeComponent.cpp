@@ -64,6 +64,9 @@ void diskTreeComponent::writes_done() {
 
 int diskTreeComponent::insertTuple(int xid, datatuple *t)
 {
+  if(bloom_filter) {
+    bloom_filter_insert(bloom_filter, (const char*)t->key(), t->keylen());
+  }
   int ret = 0; // no error.
   if(dp==0) {
     dp = insertDataPage(xid, t);
@@ -117,6 +120,12 @@ datatuple * diskTreeComponent::findTuple(int xid, datatuple::key_t key, size_t k
 {
     datatuple * tup=0;
 
+    if(bloom_filter) {
+      if(!bloom_filter_lookup(bloom_filter, (const char*)key, keySize)) {
+	return NULL;
+      }
+    }
+    
     //find the datapage
     pageid_t pid = ltree->findPage(xid, (byte*)key, keySize);
 

@@ -11,17 +11,34 @@
 #include "datapage.h"
 #include "datatuple.h"
 #include "mergeStats.h"
+#include "bloomFilter.h"
+#include <stasis/crc32.h>
+
+extern "C" {
+  static uint64_t diskTreeComponent_hash_func_a(const char* a, int len) {
+    return stasis_crc32(a,len,0xcafebabe);
+  }
+
+  static uint64_t diskTreeComponent_hash_func_b(const char* a, int len) {
+    return stasis_crc32(a,len,0xdeadbeef);
+  }
+}
 class diskTreeComponent {
  public:
   class internalNodes;
   class iterator;
 
   diskTreeComponent(int xid, pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size,
-                    mergeStats* stats) :
+                    mergeStats* stats, uint64_t bloom_filter_size = 0) :
     ltree(new diskTreeComponent::internalNodes(xid, internal_region_size, datapage_region_size, datapage_size)),
     dp(0),
     datapage_size(datapage_size),
-    stats(stats) {}
+    stats(stats), 
+      bloom_filter(bloom_filter_size == 0 ? 0 : 
+		   bloom_filter_create(diskTreeComponent_hash_func_a, diskTreeComponent_hash_func_b, bloom_filter_size, 0.01)
+		   )  {
+	if(bloom_filter) bloom_filter_print_stats(bloom_filter);
+	}
 
 
   diskTreeComponent(int xid, recordid root, recordid internal_node_state, recordid datapage_state,
@@ -29,9 +46,11 @@ class diskTreeComponent {
     ltree(new diskTreeComponent::internalNodes(xid, root, internal_node_state, datapage_state)),
     dp(0),
     datapage_size(-1),
-    stats(stats) {}
+    stats(stats),
+    bloom_filter(0) {}
 
   ~diskTreeComponent() {
+    if(bloom_filter) bloom_filter_destroy(bloom_filter);
     delete dp;
     delete ltree;
   }
@@ -175,6 +194,9 @@ class diskTreeComponent {
 
     };
   };
+
+  bloom_filter_t * bloom_filter;
+
   class iterator
   {
 
@@ -207,6 +229,7 @@ class diskTreeComponent {
     DataPage<datatuple>    *curr_page;   //current page
     typedef DataPage<datatuple>::iterator DPITR_T;
     DPITR_T *dp_itr;
+
   };
 };
 #endif /* DISKTREECOMPONENT_H_ */

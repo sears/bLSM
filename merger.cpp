@@ -172,9 +172,9 @@ void* memMergeThread(void*arg)
 //        memTreeComponent<datatuple>::batchedRevalidatingIterator *itrB =
 //            new memTreeComponent<datatuple>::batchedRevalidatingIterator(ltable->get_tree_c0(), &ltable->tree_bytes, ltable->max_c0_size, &ltable->flushing, 100, &ltable->rb_mut);
 #endif
-        
+        const int64_t min_bloom_target = 1000000000;
         //create a new tree
-        diskTreeComponent * c1_prime = new diskTreeComponent(xid,  ltable->internal_region_size, ltable->datapage_region_size, ltable->datapage_size, stats);
+	  diskTreeComponent * c1_prime = new diskTreeComponent(xid,  ltable->internal_region_size, ltable->datapage_region_size, ltable->datapage_size, stats, (stats->target_size < min_bloom_target ? min_bloom_target : stats->target_size) / 1000);
 
         ltable->set_tree_c1_prime(c1_prime);
 
