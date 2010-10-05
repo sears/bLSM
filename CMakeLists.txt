@@ -58,8 +58,8 @@ endif(NOT HAVE_STASIS)
 SET(CLIENT_LIBRARIES logstore_client pthread)
 
 IF ( "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" )
-  SET(COMMON_LIBRARIES logstore stasis m pthread stdc++)
-  SET(CMAKE_C_FLAGS "-g -Wall -pedantic -std=gnu99 -Wno-variadic-macros -DPBL_COMPAT -D_FILE_OFFSET_BITS=64 ${CMAKE_C_FLAGS}")
+  SET(COMMON_LIBRARIES logstore stasis m pthread stdc++)  #-Wno-variadic-macros
+  SET(CMAKE_C_FLAGS "-g -Wall -pedantic -std=gnu99  -DPBL_COMPAT -D_FILE_OFFSET_BITS=64 ${CMAKE_C_FLAGS}")
   SET(CMAKE_CXX_FLAGS "-g -Wall -Wno-long-long -pedantic -DPBL_COMPAT -D_FILE_OFFSET_BITS=64 ${CMAKE_CXX_FLAGS}")
 ELSEIF ( "${CMAKE_C_COMPILER_ID}" STREQUAL "SunPro" )
   SET(COMMON_LIBRARIES logstore stasis m pthread Crun Cstd)
@@ -69,7 +69,7 @@ ELSE( "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" )
   # TODO: how to detect compilers correctly on old cmake???  This is a huge hack; it uses old gcc 
   # options, since cmake is old...
   SET(COMMON_LIBRARIES logstore stasis m pthread stdc++)
-  SET(CMAKE_C_FLAGS "-g -Wall -pedantic -std=gnu99  -Wno-variadic-macros  -DPBL_COMPAT -D_FILE_OFFSET_BITS=64 ${CMAKE_C_FLAGS}")
+  SET(CMAKE_C_FLAGS "-g -Wall -pedantic -std=gnu99  -DPBL_COMPAT -D_FILE_OFFSET_BITS=64 ${CMAKE_C_FLAGS}")
   SET(CMAKE_CXX_FLAGS "-g -Wall -Wno-long-long -pedantic -DPBL_COMPAT -D_FILE_OFFSET_BITS=64 ${CMAKE_CXX_FLAGS}")
 ENDIF ( "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" )
 
