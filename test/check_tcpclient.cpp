@@ -16,10 +16,10 @@
 
 #include "check_util.h"
 
+#include <stasis/common.h>
+
 #undef begin
 #undef end
-
-#include <stasis/common.h>
 
 static const char * svrname = "localhost";
 static int svrport = 32432;
