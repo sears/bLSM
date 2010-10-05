@@ -10,7 +10,6 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
-#include "logstore.h"
 #include <assert.h>
 #include <limits.h>
 #include <math.h>
@@ -23,6 +22,8 @@
 #include "../network.h"
 
 #include "check_util.h"
+
+#include <stasis/common.h>
 
 #undef begin
 #undef end

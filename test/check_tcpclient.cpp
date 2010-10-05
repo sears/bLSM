@@ -3,7 +3,6 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
-#include "logstore.h"
 #include <assert.h>
 #include <limits.h>
 #include <math.h>
@@ -20,6 +19,7 @@
 #undef begin
 #undef end
 
+#include <stasis/common.h>
 
 static const char * svrname = "localhost";
 static int svrport = 32432;

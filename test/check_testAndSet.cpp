@@ -9,7 +9,6 @@
 #include <vector>
 #include <iostream>
 #include <sstream>
-#include "logstore.h"
 #include "datapage.h"
 #include "merger.h"
 #include <assert.h>
