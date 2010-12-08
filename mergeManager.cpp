@@ -349,7 +349,7 @@ void * mergeManager::pretty_print_thread() {
     struct timeval tv;
     gettimeofday(&tv, 0);
     struct timespec ts;
-    double_to_ts(&ts, tv_to_double(&tv)+1);
+    double_to_ts(&ts, tv_to_double(&tv)+1.01);
     pthread_cond_timedwait(&pp_cond, &dummy_mut, &ts);
     if(ltable) {
       rwlc_readlock(ltable->header_mut);
@@ -440,7 +440,7 @@ void mergeManager::pretty_print(FILE * out) {
 #ifdef NO_SNOWSHOVEL
   assert((!c1->active) || (c1->in_progress >= -0.01 && c1->in_progress < 1.02));
 #endif
-  assert((!c2->active) || (c2->in_progress >= -0.01 && c2->in_progress < 1.02));
+  assert((!c2->active) || (c2->in_progress >= -0.01 && c2->in_progress < 1.10));
 
   fprintf(out, "\r");
 }
