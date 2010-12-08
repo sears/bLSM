@@ -131,11 +131,11 @@ public:
     mergeManager * merge_mgr;
 
     bool accepting_new_requests;
-    inline bool is_still_running() { return still_running_; }
+    inline bool is_still_running() { return !shutting_down_; }
     inline void stop() {
       rwlc_writelock(header_mut);
-      if(still_running_) {
-        still_running_ = false;
+      if(!shutting_down_) {
+        shutting_down_ = true;
         flushTable();
         flushing = true;
       }
@@ -171,8 +171,9 @@ private:
     std::vector<iterator *> its;
 
     mergeStats * c0_stats;
-    bool still_running_;
+
 public:
+    bool shutting_down_;
 
     template<class ITRA, class ITRN>
     class mergeManyIterator {

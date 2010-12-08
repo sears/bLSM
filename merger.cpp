@@ -172,7 +172,8 @@ void* memMergeThread(void*arg)
 //        memTreeComponent<datatuple>::batchedRevalidatingIterator *itrB =
 //            new memTreeComponent<datatuple>::batchedRevalidatingIterator(ltable->get_tree_c0(), &ltable->tree_bytes, ltable->max_c0_size, &ltable->flushing, 100, &ltable->rb_mut);
 #endif
-        const int64_t min_bloom_target = 1000000000;
+        const int64_t min_bloom_target = ltable->max_c0_size;
+
         //create a new tree
 	  diskTreeComponent * c1_prime = new diskTreeComponent(xid,  ltable->internal_region_size, ltable->datapage_region_size, ltable->datapage_size, stats, (stats->target_size < min_bloom_target ? min_bloom_target : stats->target_size) / 100);
 
@@ -343,11 +344,12 @@ void *diskMergeThread(void*arg)
 #ifdef NO_SNOWSHOVEL
         diskTreeComponent::iterator *itrB = ltable->get_tree_c1_mergeable()->open_iterator();
 #else
-        diskTreeComponent::iterator *itrB = ltable->get_tree_c1_mergeable()->open_iterator(&ltable->merge_mgr->cur_c1_c2_progress_delta, 0.05, 0 /*XXX*/);
+        diskTreeComponent::iterator *itrB = ltable->get_tree_c1_mergeable()->open_iterator(&ltable->merge_mgr->cur_c1_c2_progress_delta, 0.05, &ltable->shutting_down_);
 #endif
 
         //create a new tree
-        diskTreeComponent * c2_prime = new diskTreeComponent(xid, ltable->internal_region_size, ltable->datapage_region_size, ltable->datapage_size, stats);
+        diskTreeComponent * c2_prime = new diskTreeComponent(xid, ltable->internal_region_size, ltable->datapage_region_size, ltable->datapage_size, stats, (ltable->max_c0_size * *ltable->R() + stats->base_size)/ 1000);
+//        diskTreeComponent * c2_prime = new diskTreeComponent(xid, ltable->internal_region_size, ltable->datapage_region_size, ltable->datapage_size, stats);
 
         rwlc_unlock(ltable->header_mut);
 

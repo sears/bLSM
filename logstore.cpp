@@ -33,7 +33,7 @@ logtable<TUPLE>::logtable(pageid_t internal_region_size, pageid_t datapage_regio
     tree_c2 = NULL;
     // This bool is purely for external code.
     this->accepting_new_requests = true;
-    this->still_running_ = true;
+    this->shutting_down_ = false;
     flushing = false;
     this->merge_mgr = new mergeManager(this);
     this->mergedata = 0;
@@ -87,8 +87,8 @@ void logtable<TUPLE>::init_stasis() {
   DataPage<datatuple>::register_stasis_page_impl();
   stasis_buffer_manager_size = 768 * 1024; // 4GB = 2^10 pages:
   // XXX Workaround Stasis' (still broken) default concurrent buffer manager
-  stasis_buffer_manager_factory = stasis_buffer_manager_hash_factory;
-  stasis_buffer_manager_hint_writes_are_sequential = 0;
+//  stasis_buffer_manager_factory = stasis_buffer_manager_hash_factory;
+//  stasis_buffer_manager_hint_writes_are_sequential = 0;
   Tinit();
 
 }
