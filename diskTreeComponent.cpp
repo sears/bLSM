@@ -122,7 +122,7 @@ datatuple * diskTreeComponent::findTuple(int xid, datatuple::key_t key, size_t k
 
     if(bloom_filter) {
       if(!bloom_filter_lookup(bloom_filter, (const char*)key, keySize)) {
-	return NULL;
+        return NULL;
       }
     }
     
