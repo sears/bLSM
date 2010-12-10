@@ -41,26 +41,26 @@ void insertProbeIter_str(int  NUM_ENTRIES)
     int xid = Tbegin();
 
     Tcommit(xid);
-    
+
     xid = Tbegin();
     diskTreeComponent::internalNodes *lt = new diskTreeComponent::internalNodes(xid, 1000, 10000, 40);
-  
+
     long oldpagenum = -1;
 
     std::vector<std::string> arr;
     preprandstr(NUM_ENTRIES, arr, 50, false);
     std::sort(arr.begin(), arr.end(), &mycmp);
-    
+
     //for(int i = 0; i < NUM_ENTRIES; i++)
     //{
     //   printf("%s\t", arr[i].c_str());
     //   int keylen = arr[i].length()+1;
-    //  printf("%d\n", keylen);      
+    //  printf("%d\n", keylen);
     //}
 
 
     printf("Stage 1: Writing %d keys\n", NUM_ENTRIES);
-      
+
 
     for(int i = 0; i < NUM_ENTRIES; i++)
     {
@@ -68,8 +68,8 @@ void insertProbeIter_str(int  NUM_ENTRIES)
         byte *currkey = (byte*)malloc(keylen);
         for(int j=0; j<keylen-1; j++)
             currkey[j] = arr[i][j];
-        currkey[keylen-1]='\0';      
-      
+        currkey[keylen-1]='\0';
+
         //printf("\n#########\ni=%d\nkey:\t%s\nkeylen:%d\n",i,((char*)currkey),keylen);
         long pagenum = lt->findPage(xid, currkey, keylen);
         //printf("pagenum:%d\n", pagenum);
@@ -80,7 +80,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
 
         pagenum = lt->findPage(xid, currkey,keylen);
         oldpagenum = pagenum;
-        //printf("pagenum:%d\n", pagenum);      
+        //printf("pagenum:%d\n", pagenum);
         assert(pagenum == i + OFFSET);
         free(currkey);
 
@@ -88,7 +88,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
     }
 
     printf("Writes complete.");
-    
+
     Tcommit(xid);
     xid = Tbegin();
 
@@ -96,7 +96,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
     lt->print_tree(xid);
 
     printf("Stage 2: Looking up %d keys\n", NUM_ENTRIES);
-  
+
     for(int i = 0; i < NUM_ENTRIES; i++) {
         int keylen = arr[i].length()+1;
         byte *currkey = (byte*)malloc(keylen);
@@ -106,7 +106,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
 
         //printf("\n#########\ni=%d\nkey:\t%s\nkeylen:%d\n",i,((char*)currkey),keylen);
         long pagenum = lt->findPage(xid, currkey, keylen);
-        //printf("pagenum:%d\n", pagenum);      
+        //printf("pagenum:%d\n", pagenum);
         assert(pagenum == i + OFFSET);
         free(currkey);
     }
@@ -114,7 +114,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
 
     printf("Stage 3: Iterating over %d keys\n", NUM_ENTRIES);
 
-    
+
     int64_t count = 0;
     RegionAllocator * ro_alloc = new RegionAllocator();
     diskTreeComponent::internalNodes::iterator * it = new diskTreeComponent::internalNodes::iterator(xid, ro_alloc, lt->get_root_rec());
@@ -123,7 +123,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
         byte * key;
         byte **key_ptr = &key;
         size_t keysize = it->key((byte**)key_ptr);
-        
+
         pageid_t *value;
         pageid_t **value_ptr = &value;
         size_t valsize = it->value((byte**)value_ptr);
@@ -152,25 +152,23 @@ void insertProbeIter_int(int  NUM_ENTRIES)
 
     sync();
 
-    bufferManagerNonBlockingSlowHandleType = IO_HANDLE_PFILE;
-
     Tinit();
 
     int xid = Tbegin();
 
     Tcommit(xid);
-    
+
     xid = Tbegin();
     diskTreeComponent::internalNodes *lt = new diskTreeComponent::internalNodes(xid, 1000, 10000, 40);
-  
+
     long oldpagenum = -1;
-    
+
     for(int32_t i = 0; i < NUM_ENTRIES; i++) {
         int keylen = sizeof(int32_t);
         byte *currkey = (byte*)malloc(keylen);
         memcpy(currkey, (byte*)(&i), keylen);
         //currkey[]='\0';
-      
+
         printf("\n#########\ni=%d\nkey:\t%d\nkeylen:%d\n",i,*((int32_t*)currkey),keylen);
         pageid_t pagenum = lt->findPage(xid, currkey, keylen);
         printf("pagenum:%lld\n", (long long)pagenum);
@@ -187,13 +185,13 @@ void insertProbeIter_int(int  NUM_ENTRIES)
     }
 
     printf("Writes complete.");
-  
+
     Tcommit(xid);
     xid = Tbegin();
 
     printf("\nTREE STRUCTURE\n");
     lt->print_tree(xid);
-  
+
     for(int32_t i = 1; i < NUM_ENTRIES; i++) {
         int keylen = sizeof(int32_t);
         byte *currkey = (byte*)malloc(keylen);
@@ -240,8 +238,8 @@ int main()
     insertProbeIter_str(NUM_ENTRIES_A);
     //insertProbeIter_int(NUM_ENTRIES_A);
 
-    
-    
+
+
     return 0;
 }
 
