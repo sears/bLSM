@@ -54,7 +54,6 @@ int main(int argc, char *argv[])
 
     int xid = Tbegin();
 
-    mscheduler = new merge_scheduler;
 
     logtable<datatuple> ltable;
 
@@ -72,8 +71,6 @@ int main(int argc, char *argv[])
 
     Tcommit(xid);
 
-    int lindex = mscheduler->addlogtable(&ltable);
-    ltable.setMergeData(mscheduler->getMergeData(lindex));
 
     int64_t c0_size = 1024 * 1024 * 512 * 1;
 
@@ -89,7 +86,9 @@ int main(int argc, char *argv[])
       printf("note: running w/ 2GB c0 for benchmarking"); // XXX build a separate test server and deployment server?
     }
 
-    mscheduler->startlogtable(lindex, c0_size);
+    ltable.set_max_c0_size(c0_size);
+    mscheduler = new merge_scheduler(&ltable);
+    mscheduler->start();
 
     lserver = new logserver(100, 32432);
 

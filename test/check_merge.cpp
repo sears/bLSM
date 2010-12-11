@@ -50,17 +50,15 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     int xid = Tbegin();
 
-    merge_scheduler mscheduler;    
-    logtable<datatuple> ltable(1000, 10000, 5);
+    logtable<datatuple> * ltable = new logtable<datatuple>(1000, 10000, 5);
+    ltable->set_max_c0_size(10 * 1024 * 1024);
+    merge_scheduler mscheduler(ltable);
 
-    recordid table_root = ltable.allocTable(xid);
+    recordid table_root = ltable->allocTable(xid);
 
     Tcommit(xid);
 
-    int lindex = mscheduler.addlogtable(&ltable);
-    ltable.setMergeData(mscheduler.getMergeData(lindex));
-
-    mscheduler.startlogtable(lindex, 10 * 1024 * 1024);
+    mscheduler.start();
 
     printf("Stage 1: Writing %llu keys\n", (unsigned long long)NUM_ENTRIES);
     
@@ -85,7 +83,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         datasize += newtuple->byte_length();
 
         gettimeofday(&ti_st,0);        
-        ltable.insertTuple(newtuple);
+        ltable->insertTuple(newtuple);
         gettimeofday(&ti_end,0);
         insert_time += tv_to_double(ti_end) - tv_to_double(ti_st);
 
@@ -122,7 +120,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         //rkey[keylen-1]='\0';
 
         //find the key with the given tuple
-        datatuple *dt = ltable.findTuple(xid, rkey, keylen);
+        datatuple *dt = ltable->findTuple(xid, rkey, keylen);
 
         assert(dt!=0);
         //if(dt!=0)
@@ -150,6 +148,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     
     Tcommit(xid);
+    delete ltable;
     logtable<datatuple>::deinit_stasis();
 }
 

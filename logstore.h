@@ -100,9 +100,6 @@ public:
     void set_tree_c0_mergeable(memTreeComponent<datatuple>::rbtree_ptr_t newtree){tree_c0_mergeable = newtree; bump_epoch(); }
     void update_persistent_header(int xid, int merge_level);
 
-    void setMergeData(logtable_mergedata * mdata);
-    logtable_mergedata* getMergeData(){return mergedata;}
-
     inline tuplemerger * gettuplemerger(){return tmerger;}
     
 public:
@@ -118,8 +115,6 @@ public:
         pageid_t c1_mergeable_size;
         pageid_t c1_base_size;
     };
-
-    logtable_mergedata * mergedata;
     rwlc * header_mut;
     pthread_mutex_t tick_mut;
     pthread_mutex_t rb_mut;

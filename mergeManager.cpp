@@ -23,13 +23,13 @@ mergeStats* mergeManager:: get_merge_stats(int mergeLevel) {
 }
 
 mergeManager::~mergeManager() {
-  delete c0;
-  delete c1;
-  delete c2;
   still_running = false;
   pthread_cond_signal(&pp_cond);
   pthread_join(pp_thread, 0);
   pthread_cond_destroy(&pp_cond);
+  delete c0;
+  delete c1;
+  delete c2;
 }
 
 void mergeManager::new_merge(int mergeLevel) {

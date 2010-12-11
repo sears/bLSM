@@ -102,16 +102,15 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     int xid = Tbegin();
 
-    merge_scheduler mscheduler;    
-    logtable<datatuple> ltable(1000, 1000, 40);
+    logtable<datatuple> *ltable = new logtable<datatuple>(1000, 1000, 40);
+    ltable->set_max_c0_size(10 * 1024 * 1024);
+    merge_scheduler mscheduler(ltable);
 
-    recordid table_root = ltable.allocTable(xid);
+    recordid table_root = ltable->allocTable(xid);
 
     Tcommit(xid);
-    int lindex = mscheduler.addlogtable(&ltable);
-    ltable.setMergeData(mscheduler.getMergeData(lindex));
 
-    mscheduler.startlogtable(lindex, 10 * 1024 * 1024);
+    mscheduler.start();
 
     printf("Stage 1: Writing %llu keys\n", (unsigned long long)NUM_ENTRIES);
     
@@ -134,7 +133,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         datasize += newtuple->byte_length();
 
         gettimeofday(&ti_st,0);        
-        ltable.insertTuple(newtuple);
+        ltable->insertTuple(newtuple);
         gettimeofday(&ti_end,0);
         insert_time += tv_to_double(ti_end) - tv_to_double(ti_st);
 
@@ -151,7 +150,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
                 datatuple *deltuple = datatuple::create((*key_arr)[del_index].c_str(), (*key_arr)[del_index].length()+1);
 
                 gettimeofday(&ti_st,0);        
-                ltable.insertTuple(deltuple);
+                ltable->insertTuple(deltuple);
                 gettimeofday(&ti_end,0);
                 insert_time += tv_to_double(ti_end) - tv_to_double(ti_st);
 
@@ -172,7 +171,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
                 datatuple *uptuple = datatuple::create((*key_arr)[up_index].c_str(), (*key_arr)[up_index].length()+1,
 													   ditem.c_str(), ditem.length()+1);
                 gettimeofday(&ti_st,0);        
-                ltable.insertTuple(uptuple);
+                ltable->insertTuple(uptuple);
                 gettimeofday(&ti_end,0);
                 insert_time += tv_to_double(ti_end) - tv_to_double(ti_st);
 
@@ -207,7 +206,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         memcpy((byte*)rkey, (*key_arr)[ri].c_str(), keylen);
 
         //find the key with the given tuple
-        datatuple *dt = ltable.findTuple(xid, rkey, keylen);
+        datatuple *dt = ltable->findTuple(xid, rkey, keylen);
 
         if(std::find(del_list.begin(), del_list.end(), i) == del_list.end())
         {
@@ -248,6 +247,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     
     Tcommit(xid);
+    delete ltable;
     logtable<datatuple>::deinit_stasis();
 }
 

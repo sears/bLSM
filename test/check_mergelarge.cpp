@@ -44,17 +44,15 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     int xid = Tbegin();
 
-    merge_scheduler mscheduler;    
-    logtable<datatuple> ltable(1000, 10000, 100);
+    logtable<datatuple> *ltable = new logtable<datatuple>(1000, 10000, 100);
+    ltable->set_max_c0_size(10*1024*1024);
+    merge_scheduler mscheduler(ltable);
 
-    recordid table_root = ltable.allocTable(xid);
+    recordid table_root = ltable->allocTable(xid);
 
     Tcommit(xid);
 
-    int lindex = mscheduler.addlogtable(&ltable);
-    ltable.setMergeData(mscheduler.getMergeData(lindex));
-
-    mscheduler.startlogtable(lindex, 10 * 1024 * 1024);
+    mscheduler.start();
 
     printf("Stage 1: Writing %llu keys\n", (unsigned long long)NUM_ENTRIES);
     
@@ -75,7 +73,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         datasize += newtuple->byte_length();
 
         gettimeofday(&ti_st,0);        
-        ltable.insertTuple(newtuple);
+        ltable->insertTuple(newtuple);
         gettimeofday(&ti_end,0);
         insert_time += tv_to_double(ti_end) - tv_to_double(ti_st);
 
@@ -90,10 +88,10 @@ void insertProbeIter(size_t NUM_ENTRIES)
     printf("datasize: %llu\n", (unsigned long long)datasize);
     
     mscheduler.shutdown();
+    delete ltable;
     printf("merge threads finished.\n");
     gettimeofday(&stop_tv,0);
     printf("run time: %6.1f\n", (tv_to_double(stop_tv) - tv_to_double(start_tv)));
-    
     logtable<datatuple>::deinit_stasis();
     
 }

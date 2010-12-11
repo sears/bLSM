@@ -8,33 +8,22 @@
 #undef try
 #undef end
 
-//TODO: 400 bytes overhead per tuple, this is nuts, check if this is true...
-static const int RB_TREE_OVERHEAD = 400;
-static const double MIN_R = 3.0;
-
-struct logtable_mergedata
-{
-    //merge threads
-    pthread_t diskmerge_thread;
-    pthread_t memmerge_thread;
-};
-
-class merge_scheduler
-{
-    std::vector<std::pair<logtable<datatuple> *, logtable_mergedata*> > mergedata;
-
+class merge_scheduler {
 public:
-    ~merge_scheduler();
+  merge_scheduler(logtable<datatuple> * ltable);
+  ~merge_scheduler();
 
-    int addlogtable(logtable<datatuple> * ltable);
-    void startlogtable(int index, int64_t MAX_C0_SIZE = 100*1024*1024);
+  void start();
+  void shutdown();
 
-    struct logtable_mergedata *getMergeData(int index){return mergedata[index].second;}
+  void * memMergeThread();
+  void * diskMergeThread();
 
-    void shutdown();
+private:
+  pthread_t mem_merge_thread_;
+  pthread_t disk_merge_thread_;
+  logtable<datatuple> * ltable_;
+  const double MIN_R;
 };
-
-void* memMergeThread(void* arg);
-void* diskMergeThread(void* arg);
 
 #endif

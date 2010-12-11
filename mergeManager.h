@@ -64,16 +64,14 @@ public:
 private:
   logtable<datatuple>*    ltable;
   double throttle_seconds;
-//  double elapsed_seconds;
   double last_throttle_seconds;
-//  double last_elapsed_seconds;
   mergeStats * c0;
   mergeStats * c1;
   mergeStats * c2;
   bool sleeping[3];
   bool still_running;
+  // Needed so that the pretty print thread can be woken up during shutdown.
   pthread_cond_t pp_cond;
   pthread_t pp_thread;
-
 };
 #endif /* MERGEMANAGER_H_ */

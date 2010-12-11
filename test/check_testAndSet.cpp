@@ -27,7 +27,8 @@
 #define NUM_THREADS 128
 
 unsigned char vals[NUM_THREADS];
-logtable<datatuple>* ltbl;
+
+logtable<datatuple> * ltable;
 
 int myucharcmp(const void * ap, const void * bp) {
   unsigned char a = *(unsigned char*)ap;
@@ -43,7 +44,7 @@ void * worker(void * idp) {
     printf("id = %d key = %d\n", (int)id, (int)key);
     datatuple * dt = datatuple::create(&key, sizeof(key), &id, sizeof(id));
     datatuple * dtdelete = datatuple::create(&key, sizeof(key));
-    succ = ltbl->testAndSetTuple(dt, dtdelete);
+    succ = ltable->testAndSetTuple(dt, dtdelete);
     datatuple::freetuple(dt);
     datatuple::freetuple(dtdelete);
     vals[id] = key;
@@ -60,18 +61,16 @@ void insertProbeIter(size_t NUM_ENTRIES)
     logtable<datatuple>::init_stasis();
     int xid = Tbegin();
 
-    merge_scheduler mscheduler;
-    logtable<datatuple> ltable(1000, 10000, 5);
-    ltbl = &ltable;
+    ltable = new logtable<datatuple>(1000, 10000, 5);
+    ltable->set_max_c0_size(10*1024*1024);
 
-    recordid table_root = ltable.allocTable(xid);
+    merge_scheduler mscheduler(ltable);
+
+    recordid table_root = ltable->allocTable(xid);
 
     Tcommit(xid);
 
-    int lindex = mscheduler.addlogtable(&ltable);
-    ltable.setMergeData(mscheduler.getMergeData(lindex));
-
-    mscheduler.startlogtable(lindex, 10 * 1024 * 1024);
+    mscheduler.start();
 
     pthread_t *threads = (pthread_t*)malloc(NUM_THREADS * sizeof(pthread_t));
 
@@ -92,6 +91,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     }
 
     mscheduler.shutdown();
+    delete ltable;
     logtable<datatuple>::deinit_stasis();
 
     printf("\npass\n");

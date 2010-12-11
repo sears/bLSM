@@ -21,7 +21,6 @@ int main(int argc, char *argv[])
 
     int xid = Tbegin();
 
-    merge_scheduler * mscheduler = new merge_scheduler;
 
     logtable<datatuple> ltable;
 
@@ -51,11 +50,9 @@ int main(int argc, char *argv[])
     }
 
     Tcommit(xid);
-
-    int lindex = mscheduler->addlogtable(&ltable);
-    ltable.setMergeData(mscheduler->getMergeData(lindex));
-
-    mscheduler->startlogtable(lindex, c0_size);
+    ltable.set_max_c0_size(c0_size);
+    merge_scheduler * mscheduler = new merge_scheduler(&ltable);
+    mscheduler->start();
 
     simpleServer *lserver = new simpleServer(&ltable);
 

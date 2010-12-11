@@ -23,7 +23,7 @@ template<class TUPLE>
 logtable<TUPLE>::logtable(pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size)
 {
 
-    r_val = MIN_R;
+    r_val = 3.0; // MIN_R
     tree_c0 = NULL;
     tree_c0_mergeable = NULL;
     c0_is_merging = false;
@@ -36,8 +36,6 @@ logtable<TUPLE>::logtable(pageid_t internal_region_size, pageid_t datapage_regio
     this->shutting_down_ = false;
     flushing = false;
     this->merge_mgr = new mergeManager(this);
-    this->mergedata = 0;
-    //tmerger = new tuplemerger(&append_merger);
     tmerger = new tuplemerger(&replace_merger);
 
     header_mut = rwlc_initlock();
@@ -61,6 +59,8 @@ logtable<TUPLE>::logtable(pageid_t internal_region_size, pageid_t datapage_regio
 template<class TUPLE>
 logtable<TUPLE>::~logtable()
 {
+    delete merge_mgr; // shuts down pretty print thread.
+
     if(tree_c1 != NULL)        
         delete tree_c1;
     if(tree_c2 != NULL)
@@ -85,7 +85,7 @@ template<class TUPLE>
 void logtable<TUPLE>::init_stasis() {
 
   DataPage<datatuple>::register_stasis_page_impl();
-  stasis_buffer_manager_size = 768 * 1024; // 4GB = 2^10 pages:
+  //stasis_buffer_manager_size = 768 * 1024; // 4GB = 2^10 pages:
   // XXX Workaround Stasis' (still broken) default concurrent buffer manager
 //  stasis_buffer_manager_factory = stasis_buffer_manager_hash_factory;
 //  stasis_buffer_manager_hint_writes_are_sequential = 0;
@@ -112,6 +112,8 @@ recordid logtable<TUPLE>::allocTable(int xid)
     merge_mgr->new_merge(0);
     c0_stats->starting_merge();
 
+    tree_c0 = new memTreeComponent<datatuple>::rbtree_t;
+
     update_persistent_header(xid, 1);
     update_persistent_header(xid, 2);
 
@@ -124,6 +126,7 @@ void logtable<TUPLE>::openTable(int xid, recordid rid) {
   Tread(xid, table_rec, &tbl_header);
   tree_c2 = new diskTreeComponent(xid, tbl_header.c2_root, tbl_header.c2_state, tbl_header.c2_dp_state, 0);
   tree_c1 = new diskTreeComponent(xid, tbl_header.c1_root, tbl_header.c1_state, tbl_header.c1_dp_state, 0);
+  tree_c0 = new memTreeComponent<datatuple>::rbtree_t;
 
   merge_mgr->get_merge_stats(1)->bytes_out = tbl_header.c1_base_size;
   merge_mgr->get_merge_stats(1)->base_size = tbl_header.c1_base_size;
@@ -158,12 +161,6 @@ void logtable<TUPLE>::update_persistent_header(int xid, int merge_level) {
     }
 
     Tset(xid, table_rec, &tbl_header);    
-}
-
-template<class TUPLE>
-void logtable<TUPLE>::setMergeData(logtable_mergedata * mdata){
-  this->mergedata = mdata;
-  bump_epoch();
 }
 
 template<class TUPLE>

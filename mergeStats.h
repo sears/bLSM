@@ -46,17 +46,13 @@ class mergeStats {
       lifetime_elapsed(0),
       lifetime_consumed(0),
       bps(10.0*1024.0*1024.0),
-      print_skipped(0),
       active(false) {
       gettimeofday(&sleep,0);
       gettimeofday(&last,0);
       mergeManager::double_to_ts(&last_tick, mergeManager::tv_to_double(&last));
       mergeManager::double_to_ts(&last_mini_tick, mergeManager::tv_to_double(&last));
-      pthread_mutex_init(&mut,0);
     }
-    ~mergeStats() {
-      pthread_mutex_destroy(&mut);
-    }
+    ~mergeStats() { }
     void new_merge2() {
       if(just_handed_off) {
         bytes_out = 0;
@@ -151,11 +147,8 @@ class mergeStats {
 
     double bps;
 
-    int print_skipped;  // used by pretty print in mergeManager.
-
     bool active;
 
-    pthread_mutex_t mut; // protects things touched in tick(), and nothing else.
   public:
 
     void pretty_print(FILE* fd) {
