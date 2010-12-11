@@ -75,15 +75,6 @@ void mergeManager::sleep_on_mini_delta(mergeStats *s, int delta) {
 }
 void mergeManager::update_progress(mergeStats * s, int delta) {
   s->delta += delta;
-#if 0
-#ifdef NO_SNOWSHOVEL
-  if(merge_level < 2 && delta) {
-#else
-  if(merge_level == 1 && delta) {
-#endif
-    sleep_on_mini_delta(s, delta);
-  }
-#endif
 
   if((!delta) || s->delta > UPDATE_PROGRESS_DELTA) {
     rwlc_writelock(ltable->header_mut);
@@ -92,9 +83,6 @@ void mergeManager::update_progress(mergeStats * s, int delta) {
       if(!s->need_tick) { s->need_tick = 1; }
     }
     if(s->merge_level == 2
-#ifdef NO_SNOWSHOVEL
-        || s->merge_level == 1
-#endif
     ) {
       if(s->active) {
         s->in_progress =  ((double)(s->bytes_in_large + s->bytes_in_small)) / (double)(get_merge_stats(s->merge_level-1)->mergeable_size + s->base_size);
@@ -104,22 +92,17 @@ void mergeManager::update_progress(mergeStats * s, int delta) {
     } else if(s->merge_level == 1) { // C0-C1 merge (c0 is continuously growing...)
       if(s->active) {
         s->in_progress = ((double)(s->bytes_in_large+s->bytes_in_small)) / (double)(s->base_size+ltable->mean_c0_effective_size);
-//        if(s->in_progress > 0.95) { s->in_progress = 0.95; }
-//        assert(s->in_progress > -0.01 && s->in_progress < 1.02);
       } else {
         s->in_progress = 0;
       }
     }
 
-#ifdef NO_SNOWSHOVEL
-    s->current_size = s->base_size + s->bytes_out - s->bytes_in_large;
-#else
     if(s->merge_level == 0) {
       s->current_size = ltable->tree_bytes; // we need to track the number of bytes consumed by the merger; this data is not present in s, so fall back on ltable's aggregate.
     } else {
       s->current_size = s->base_size + s->bytes_out - s->bytes_in_large;
     }
-#endif
+
     s->out_progress = ((double)s->current_size) / (double)s->target_size;
     struct timeval now;
     gettimeofday(&now, 0);
@@ -270,12 +253,7 @@ void mergeManager::tick_based_on_merge_progress(mergeStats *s) {
  */
 void mergeManager::tick(mergeStats * s) {
   if(s->need_tick) {
-#ifdef NO_SNOWSHOVEL
-    bool snowshovel = false;
-#else
-    bool snowshovel = true;
-#endif
-    if((!snowshovel) || s->merge_level == 1) { // apply backpressure based on merge progress.
+    if(s->merge_level == 1) { // apply backpressure based on merge progress.
       tick_based_on_merge_progress(s);
     } else if(s->merge_level == 0) {
       // Simple backpressure algorithm based on how full C0 is.
@@ -437,7 +415,7 @@ void mergeManager::pretty_print(FILE * out) {
 //                ((double)c1_totalConsumed)/((double)c1_totalWorktime),
 //                ((double)c2_totalConsumed)/((double)c2_totalWorktime));
   fflush(out);
-#ifdef NO_SNOWSHOVEL
+#if 0 // XXX would like to bring this back somehow...
   assert((!c1->active) || (c1->in_progress >= -0.01 && c1->in_progress < 1.02));
 #endif
   assert((!c2->active) || (c2->in_progress >= -0.01 && c2->in_progress < 1.10));

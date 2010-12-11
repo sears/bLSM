@@ -176,9 +176,6 @@ void logtable<TUPLE>::flushTable()
     gettimeofday(&start_tv,0);
     start = tv_to_double(start_tv);
 
-#ifdef NO_SNOWSHOVEL
-    merge_mgr->finished_merge(0);  // XXX will deadlock..
-#endif
 
     flushing = true;
     bool blocked = false;
@@ -187,11 +184,7 @@ void logtable<TUPLE>::flushTable()
     //this waits for the previous merger of the mem-tree
     //hopefullly this wont happen
 
-#ifdef NO_SNOWSHOVEL
-    while(get_tree_c0_mergeable()) {
-#else
     while(get_c0_is_merging()) {
-#endif
       rwlc_cond_wait(&c0_needed, header_mut);
       blocked = true;
       if(expmcount != merge_count) {
@@ -205,16 +198,10 @@ void logtable<TUPLE>::flushTable()
 
     gettimeofday(&stop_tv,0);
     stop = tv_to_double(stop_tv);
-#ifdef NO_SNOWSHOVEL
-    set_tree_c0_mergeable(get_tree_c0());
-#endif
     pthread_cond_signal(&c0_ready);
     DEBUG("Signaled c0-c1 merge thread\n");
 
     merge_count ++;
-#ifdef NO_SNOWSHOVEL
-    set_tree_c0(new memTreeComponent<datatuple>::rbtree_t);
-#endif
     c0_stats->starting_merge();
 
     tsize = 0;
@@ -540,23 +527,6 @@ datatuple * logtable<TUPLE>::insertTupleHelper(datatuple *tuple)
   }
   merge_mgr->wrote_tuple(0, t);  // needs to be here; doesn't grab a mutex.
 
-#ifdef NO_SNOWSHOVEL
-  //flushing logic
-  if(tree_bytes >= max_c0_size )
-  {
-    DEBUG("tree size before merge %d tuples %lld bytes.\n", tsize, tree_bytes);
-
-    // NOTE: we hold rb_mut across the (blocking on merge) flushTable.  Therefore:
-    //  *** Blocking in flushTable is REALLY BAD ***
-    // Because it blocks readers and writers.
-    // The merge policy does its best to make sure flushTable does not block.
-    rwlc_writelock(header_mut);
-    // the test of tree size needs to be atomic with the flushTable, and flushTable needs a writelock.
-    if(tree_bytes >= max_c0_size) {
-      flushTable();  // this needs to hold rb_mut if snowshoveling is disabled, but can't hold rb_mut if snowshoveling is enabled.
-  }
-  rwlc_unlock(header_mut);
-#endif
   return pre_t;
 }
 template<class TUPLE>
@@ -590,7 +560,6 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
     pre_t = insertTupleHelper(tuple);
     pthread_mutex_unlock(&rb_mut);
 
-    //  XXX is it OK to move this after the NO_SNOWSHOVEL block?
     if(pre_t) {
       // needs to be here; calls update_progress, which sometimes grabs mutexes..
       merge_mgr->read_tuple_from_large_component(0, pre_t);  // was interspersed with the erase, insert above...
