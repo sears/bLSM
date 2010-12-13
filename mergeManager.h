@@ -43,10 +43,8 @@ public:
 
   void new_merge(int mergelevel);
   void set_c0_size(int64_t size);
-  void sleep_on_mini_delta(mergeStats *s, int delta);
   void update_progress(mergeStats *s, int delta);
   void tick(mergeStats * s);
-  void tick_based_on_merge_progress(mergeStats * s);
   mergeStats* get_merge_stats(int mergeLevel);
   void read_tuple_from_small_component(int merge_level, datatuple * tup);
   void read_tuple_from_large_component(int merge_level, datatuple * tup) {
