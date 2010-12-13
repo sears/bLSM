@@ -70,14 +70,14 @@ int diskTreeComponent::insertTuple(int xid, datatuple *t)
   int ret = 0; // no error.
   if(dp==0) {
     dp = insertDataPage(xid, t);
-    //    stats->num_datapages_out++;
+    //    stats->stats_num_datapages_out++;
   } else if(!dp->append(t)) {
-    //    stats->bytes_out_with_overhead += (PAGE_SIZE * dp->get_page_count());
+    //    stats->stats_bytes_out_with_overhead += (PAGE_SIZE * dp->get_page_count());
     ((mergeStats*)stats)->wrote_datapage(dp);
     dp->writes_done();
     delete dp;
     dp = insertDataPage(xid, t);
-    //    stats->num_datapages_out++;
+    //    stats->stats_num_datapages_out++;
   }
   return ret;
 }

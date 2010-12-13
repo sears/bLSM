@@ -121,7 +121,7 @@ void * merge_scheduler::memMergeThread() {
         c1_prime->force(xid);
 
         merge_count++;        
-        DEBUG("mmt:\tmerge_count %lld #bytes written %lld\n", stats.merge_count, stats.output_size());
+        DEBUG("mmt:\tmerge_count %lld #bytes written %lld\n", stats.stats_merge_count, stats.output_size());
 
         // Immediately clean out c0 mergeable so that writers may continue.
 
@@ -257,7 +257,7 @@ void * merge_scheduler::diskMergeThread()
         diskTreeComponent::iterator *itrB = ltable_->get_tree_c1_mergeable()->open_iterator(&ltable_->merge_mgr->cur_c1_c2_progress_delta, 0.05, &ltable_->shutting_down_);
 
         //create a new tree
-        diskTreeComponent * c2_prime = new diskTreeComponent(xid, ltable_->internal_region_size, ltable_->datapage_region_size, ltable_->datapage_size, stats, (ltable_->max_c0_size * *ltable_->R() + stats->base_size)/ 1000);
+        diskTreeComponent * c2_prime = new diskTreeComponent(xid, ltable_->internal_region_size, ltable_->datapage_region_size, ltable_->datapage_size, stats, (uint64_t)(ltable_->max_c0_size * *ltable_->R() + stats->base_size)/ 1000);
 //        diskTreeComponent * c2_prime = new diskTreeComponent(xid, ltable_->internal_region_size, ltable_->datapage_region_size, ltable_->datapage_size, stats);
 
         rwlc_unlock(ltable_->header_mut);
@@ -295,7 +295,7 @@ void * merge_scheduler::diskMergeThread()
         
         DEBUG("\nR = %f\n", *(ltable_->R()));
 
-        DEBUG("dmt:\tmerge_count %lld\t#written bytes: %lld\n optimal r %.2f", stats.merge_count, stats.output_size(), *(a->r_i));
+        DEBUG("dmt:\tmerge_count %lld\t#written bytes: %lld\n optimal r %.2f", stats.stats_merge_count, stats.output_size(), *(a->r_i));
         // 10: C2 is never too big
         ltable_->set_tree_c2(c2_prime);
         stats->handed_off_tree();

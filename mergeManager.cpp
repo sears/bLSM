@@ -79,22 +79,25 @@ void mergeManager::update_progress(mergeStats * s, int delta) {
     }
 
     s->out_progress = ((double)s->current_size) / (double)s->target_size;
+
+#if EXTENDED_STATS
     struct timeval now;
     gettimeofday(&now, 0);
-    double elapsed_delta = tv_to_double(&now) - ts_to_double(&s->last_tick);
-    if(elapsed_delta < 0.0000001) { elapsed_delta = 0.0000001; }
-    s->lifetime_elapsed += elapsed_delta;
-    s->lifetime_consumed += s->bytes_in_small_delta;
-    double tau = 60.0; // number of seconds to look back for window computation.  (this is the expected mean residence time in an exponential decay model, so the units are not so intuitive...)
-    double decay = exp((0.0-elapsed_delta)/tau);
+    double stats_elapsed_delta = tv_to_double(&now) - ts_to_double(&s->stats_last_tick);
+    if(stats_elapsed_delta < 0.0000001) { stats_elapsed_delta = 0.0000001; }
+    s->stats_lifetime_elapsed += stats_elapsed_delta;
+    s->stats_lifetime_consumed += s->stats_bytes_in_small_delta;
+    double stats_tau = 60.0; // number of seconds to look back for window computation.  (this is the expected mean residence time in an exponential decay model, so the units are not so intuitive...)
+    double stats_decay = exp((0.0-stats_elapsed_delta)/stats_tau);
 
-    double_to_ts(&s->last_tick, tv_to_double(&now));
+    double_to_ts(&s->stats_last_tick, tv_to_double(&now));
 
-    double window_bps = ((double)s->bytes_in_small_delta) / (double)elapsed_delta;
+    double stats_window_bps = ((double)s->stats_bytes_in_small_delta) / (double)stats_elapsed_delta;
 
-    s->bps = (1.0-decay) * window_bps + decay * s->bps;
+    s->stats_bps = (1.0-stats_decay) * stats_window_bps + stats_decay * s->stats_bps;
 
-    s->bytes_in_small_delta = 0;
+    s->stats_bytes_in_small_delta = 0;
+#endif
 
     rwlc_unlock(ltable->header_mut);
 
@@ -119,7 +122,7 @@ void mergeManager::update_progress(mergeStats * s, int delta) {
  *
  *   current_size(c_i) = sum(bytes_out_delta) - sum(bytes_in_large_delta)
  *
- * bytes_consumed_by_merger = sum(bytes_in_small_delta)
+ * bytes_consumed_by_merger = sum(stats_bytes_in_small_delta)
  */
 void mergeManager::tick(mergeStats * s) {
   if(s->merge_level == 1) { // apply backpressure based on merge progress.
@@ -173,8 +176,10 @@ void mergeManager::tick(mergeStats * s) {
 void mergeManager::read_tuple_from_small_component(int merge_level, datatuple * tup) {
   if(tup) {
     mergeStats * s = get_merge_stats(merge_level);
-    (s->num_tuples_in_small)++;
-    (s->bytes_in_small_delta) += tup->byte_length();
+#if EXTENDED_STATS
+    (s->stats_num_tuples_in_small)++;
+    (s->stats_bytes_in_small_delta) += tup->byte_length();
+#endif
     (s->bytes_in_small) += tup->byte_length();
     update_progress(s, tup->byte_length());
     tick(s);
@@ -183,7 +188,9 @@ void mergeManager::read_tuple_from_small_component(int merge_level, datatuple * 
 void mergeManager::read_tuple_from_large_component(int merge_level, int tuple_count, pageid_t byte_len) {
   if(tuple_count) {
     mergeStats * s = get_merge_stats(merge_level);
-    s->num_tuples_in_large += tuple_count;
+#if EXTENDED_STATS
+    s->stats_num_tuples_in_large += tuple_count;
+#endif
     s->bytes_in_large += byte_len;
     update_progress(s, byte_len);
   }
@@ -191,7 +198,9 @@ void mergeManager::read_tuple_from_large_component(int merge_level, int tuple_co
 
 void mergeManager::wrote_tuple(int merge_level, datatuple * tup) {
   mergeStats * s = get_merge_stats(merge_level);
-  (s->num_tuples_out)++;
+#if EXTENDED_STATS
+  (s->stats_num_tuples_out)++;
+#endif
   (s->bytes_out) += tup->byte_length();
 }
 
@@ -202,7 +211,9 @@ void mergeManager::finished_merge(int merge_level) {
     get_merge_stats(merge_level - 1)->mergeable_size = 0;
     update_progress(get_merge_stats(merge_level-1), 0);
   }
-  gettimeofday(&get_merge_stats(merge_level)->done, 0);
+#if EXTENDED_STATS
+  gettimeofday(&get_merge_stats(merge_level)->stats_done, 0);
+#endif
   update_progress(get_merge_stats(merge_level), 0);
 }
 
@@ -242,16 +253,19 @@ mergeManager::mergeManager(logtable<datatuple> *ltable):
   sleeping[0] = false;
   sleeping[1] = false;
   sleeping[2] = false;
-  double_to_ts(&c0->last_tick, tv_to_double(&tv));
-  double_to_ts(&c1->last_tick, tv_to_double(&tv));
-  double_to_ts(&c2->last_tick, tv_to_double(&tv));
+#if EXTENDED_STATS
+  double_to_ts(&c0->stats_last_tick, tv_to_double(&tv));
+  double_to_ts(&c1->stats_last_tick, tv_to_double(&tv));
+  double_to_ts(&c2->stats_last_tick, tv_to_double(&tv));
+#endif
   still_running = true;
   pthread_cond_init(&pp_cond, 0);
   pthread_create(&pp_thread, 0, merge_manager_pretty_print_thread, (void*)this);
 }
 
 void mergeManager::pretty_print(FILE * out) {
-  pageid_t mb = 1024 * 1024;
+
+#if EXTENDED_STATS
   logtable<datatuple> * lt = (logtable<datatuple>*)ltable;
   bool have_c0  = false;
   bool have_c0m = false;
@@ -265,29 +279,33 @@ void mergeManager::pretty_print(FILE * out) {
     have_c1m = NULL != lt->get_tree_c1_mergeable() ;
     have_c2  = NULL != lt->get_tree_c2();
   }
-
+  pageid_t mb = 1024 * 1024;
   fprintf(out,"[merge progress MB/s window (lifetime)]: app [%s %6lldMB ~ %3.0f%%/%3.0f%% %6.1fsec %4.1f (%4.1f)] %s %s [%s %3.0f%% ~ %3.0f%% %4.1f (%4.1f)] %s %s [%s %3.0f%% %4.1f (%4.1f)] %s ",
-      c0->active ? "RUN" : "---", (long long)(c0->lifetime_consumed / mb), 100.0 * c0->out_progress, 100.0 * ((double)ltable->tree_bytes)/(double)ltable->max_c0_size, c0->lifetime_elapsed, c0->bps/((double)mb), c0->lifetime_consumed/(((double)mb)*c0->lifetime_elapsed),
+      c0->active ? "RUN" : "---", (long long)(c0->stats_lifetime_consumed / mb), 100.0 * c0->out_progress, 100.0 * ((double)ltable->tree_bytes)/(double)ltable->max_c0_size, c0->stats_lifetime_elapsed, c0->stats_bps/((double)mb), c0->stats_lifetime_consumed/(((double)mb)*c0->stats_lifetime_elapsed),
       have_c0 ? "C0" : "..",
       have_c0m ? "C0'" : "...",
-      c1->active ? "RUN" : "---", 100.0 * c1->in_progress, 100.0 * c1->out_progress, c1->bps/((double)mb), c1->lifetime_consumed/(((double)mb)*c1->lifetime_elapsed),
+      c1->active ? "RUN" : "---", 100.0 * c1->in_progress, 100.0 * c1->out_progress, c1->stats_bps/((double)mb), c1->stats_lifetime_consumed/(((double)mb)*c1->stats_lifetime_elapsed),
       have_c1 ? "C1" : "..",
       have_c1m ? "C1'" : "...",
-      c2->active ? "RUN" : "---", 100.0 * c2->in_progress, c2->bps/((double)mb), c2->lifetime_consumed/(((double)mb)*c2->lifetime_elapsed),
+      c2->active ? "RUN" : "---", 100.0 * c2->in_progress, c2->stats_bps/((double)mb), c2->stats_lifetime_consumed/(((double)mb)*c2->stats_lifetime_elapsed),
       have_c2 ? "C2" : "..");
-// #define PP_SIZES
+#endif
+//#define PP_SIZES
 #ifdef PP_SIZES
-  fprintf(out, "[target cur base in_small in_large, out, mergeable] C0 %4lld %4lld %4lld %4lld %4lld %4lld %4lld ",
-          c0->target_size/mb, c0->current_size/mb, c0->base_size/mb, c0->bytes_in_small/mb,
-          c0->bytes_in_large/mb, c0->bytes_out/mb, c0->mergeable_size/mb);
+  {
+    pageid_t mb = 1024 * 1024;
+    fprintf(out, "[target cur base in_small in_large, out, mergeable] C0 %4lld %4lld %4lld %4lld %4lld %4lld %4lld ",
+            c0->target_size/mb, c0->current_size/mb, c0->base_size/mb, c0->bytes_in_small/mb,
+            c0->bytes_in_large/mb, c0->bytes_out/mb, c0->mergeable_size/mb);
 
-  fprintf(out, "C1 %4lld %4lld %4lld %4lld %4lld %4lld %4lld ",
-          c1->target_size/mb, c1->current_size/mb, c1->base_size/mb, c1->bytes_in_small/mb,
-          c1->bytes_in_large/mb, c1->bytes_out/mb, c1->mergeable_size/mb);
+    fprintf(out, "C1 %4lld %4lld %4lld %4lld %4lld %4lld %4lld ",
+            c1->target_size/mb, c1->current_size/mb, c1->base_size/mb, c1->bytes_in_small/mb,
+            c1->bytes_in_large/mb, c1->bytes_out/mb, c1->mergeable_size/mb);
 
-  fprintf(out, "C2 ---- %4lld %4lld %4lld %4lld %4lld %4lld ",
-          /*----*/            c2->current_size/mb, c2->base_size/mb, c2->bytes_in_small/mb,
-          c2->bytes_in_large/mb, c2->bytes_out/mb, c2->mergeable_size/mb);
+    fprintf(out, "C2 ---- %4lld %4lld %4lld %4lld %4lld %4lld ",
+            /*----*/            c2->current_size/mb, c2->base_size/mb, c2->bytes_in_small/mb,
+            c2->bytes_in_large/mb, c2->bytes_out/mb, c2->mergeable_size/mb);
+  }
 #endif
 //  fprintf(out, "Throttle: %6.1f%% (cur) %6.1f%% (overall) ", 100.0*(last_throttle_seconds/(last_elapsed_seconds)), 100.0*(throttle_seconds/(elapsed_seconds)));
 //  fprintf(out, "C0 size %4lld resident %4lld ",
@@ -304,8 +322,8 @@ void mergeManager::pretty_print(FILE * out) {
   fflush(out);
 #if 0 // XXX would like to bring this back somehow...
   assert((!c1->active) || (c1->in_progress >= -0.01 && c1->in_progress < 1.02));
-#endif
   assert((!c2->active) || (c2->in_progress >= -0.01 && c2->in_progress < 1.10));
+#endif
 
   fprintf(out, "\r");
 }
