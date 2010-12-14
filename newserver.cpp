@@ -22,8 +22,6 @@ int main(int argc, char *argv[])
     int xid = Tbegin();
 
 
-    logtable<datatuple> ltable;
-
     recordid table_root = ROOT_RECORD;
 
     int64_t c0_size = 1024 * 1024 * 512 * 1;
@@ -38,6 +36,8 @@ int main(int argc, char *argv[])
       printf("note: running w/ 2GB c0 for benchmarking\n"); // XXX build a separate test server and deployment server?
     }
 
+    logtable<datatuple> ltable(c0_size);
+
     if(TrecordType(xid, ROOT_RECORD) == INVALID_SLOT) {
         printf("Creating empty logstore\n");
         table_root = ltable.allocTable(xid);
@@ -50,7 +50,6 @@ int main(int argc, char *argv[])
     }
 
     Tcommit(xid);
-    ltable.set_max_c0_size(c0_size);
     merge_scheduler * mscheduler = new merge_scheduler(&ltable);
     mscheduler->start();
 

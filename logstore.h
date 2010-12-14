@@ -34,7 +34,7 @@ public:
   //  6GB ~= 100B * 500 GB / (datapage_size * 4KB)
   //  (100B * 500GB) / (6GB * 4KB) = 2.035
   // RCS: Set this to 1 so that we do (on average) one seek per b-tree read.
-  logtable(pageid_t internal_region_size = 1000, pageid_t datapage_region_size = 10000, pageid_t datapage_size = 1);
+  logtable(pageid_t max_c0_size = 100 * 1024 * 1024, pageid_t internal_region_size = 1000, pageid_t datapage_region_size = 10000, pageid_t datapage_size = 1);
 
     ~logtable();
 
@@ -88,17 +88,11 @@ public:
     inline memTreeComponent<datatuple>::rbtree_ptr_t get_tree_c0(){return tree_c0;}
     inline memTreeComponent<datatuple>::rbtree_ptr_t get_tree_c0_mergeable(){return tree_c0_mergeable;}
     void set_tree_c0(memTreeComponent<datatuple>::rbtree_ptr_t newtree){tree_c0 = newtree;                     bump_epoch(); }
-    void set_max_c0_size(int64_t max_c0_size) {
-      this->max_c0_size = max_c0_size;
-      this->mean_c0_effective_size = max_c0_size;
-      this->num_c0_mergers = 0;
-      merge_mgr->set_c0_size(max_c0_size);
-      merge_mgr->get_merge_stats(1);
-    }
+
     bool get_c0_is_merging() { return c0_is_merging; }
     void set_c0_is_merging(bool is_merging) { c0_is_merging = is_merging; }
     void set_tree_c0_mergeable(memTreeComponent<datatuple>::rbtree_ptr_t newtree){tree_c0_mergeable = newtree; bump_epoch(); }
-    void update_persistent_header(int xid, int merge_level);
+    void update_persistent_header(int xid);
 
     inline tuplemerger * gettuplemerger(){return tmerger;}
     
@@ -111,9 +105,7 @@ public:
         recordid c1_root;
         recordid c1_state;
         recordid c1_dp_state;
-        pageid_t c2_base_size;
-        pageid_t c1_mergeable_size;
-        pageid_t c1_base_size;
+        recordid merge_manager;
     };
     rwlc * header_mut;
     pthread_mutex_t tick_mut;
@@ -164,8 +156,6 @@ private:
     tuplemerger *tmerger;
 
     std::vector<iterator *> its;
-
-    mergeStats * c0_stats;
 
 public:
     bool shutting_down_;

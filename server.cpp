@@ -54,8 +54,21 @@ int main(int argc, char *argv[])
 
     int xid = Tbegin();
 
+    int64_t c0_size = 1024 * 1024 * 512 * 1;
 
-    logtable<datatuple> ltable;
+    if(argc == 2 && !strcmp(argv[1], "--test")) {
+
+      c0_size = 1024 * 1024 * 100;
+      printf("warning: running w/ tiny c0 for testing"); // XXX build a separate test server and deployment server?
+    }
+
+    if(argc == 2 && !strcmp(argv[1], "--benchmark")) {
+
+      c0_size = 1024 * 1024 * 1024 * 1;
+      printf("note: running w/ 2GB c0 for benchmarking"); // XXX build a separate test server and deployment server?
+    }
+
+    logtable<datatuple> ltable(c0_size);
 
     recordid table_root = ROOT_RECORD;
     if(TrecordType(xid, ROOT_RECORD) == INVALID_SLOT) {
@@ -71,22 +84,6 @@ int main(int argc, char *argv[])
 
     Tcommit(xid);
 
-
-    int64_t c0_size = 1024 * 1024 * 512 * 1;
-
-    if(argc == 2 && !strcmp(argv[1], "--test")) {
-
-      c0_size = 1024 * 1024 * 100;
-      printf("warning: running w/ tiny c0 for testing"); // XXX build a separate test server and deployment server?
-    }
-
-    if(argc == 2 && !strcmp(argv[1], "--benchmark")) {
-
-      c0_size = 1024 * 1024 * 1024 * 1;
-      printf("note: running w/ 2GB c0 for benchmarking"); // XXX build a separate test server and deployment server?
-    }
-
-    ltable.set_max_c0_size(c0_size);
     mscheduler = new merge_scheduler(&ltable);
     mscheduler->start();
 

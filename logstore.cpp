@@ -20,8 +20,11 @@ static inline double tv_to_double(struct timeval tv)
 /////////////////////////////////////////////////////////////////
 
 template<class TUPLE>
-logtable<TUPLE>::logtable(pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size)
+logtable<TUPLE>::logtable(pageid_t max_c0_size, pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size)
 {
+    this->max_c0_size = max_c0_size;
+    this->mean_c0_effective_size = max_c0_size;
+    this->num_c0_mergers = 0;
 
     r_val = 3.0; // MIN_R
     tree_c0 = NULL;
@@ -35,7 +38,7 @@ logtable<TUPLE>::logtable(pageid_t internal_region_size, pageid_t datapage_regio
     this->accepting_new_requests = true;
     this->shutting_down_ = false;
     flushing = false;
-    this->merge_mgr = new mergeManager(this);
+    this->merge_mgr = 0;
     tmerger = new tuplemerger(&replace_merger);
 
     header_mut = rwlc_initlock();
@@ -108,15 +111,14 @@ recordid logtable<TUPLE>::allocTable(int xid)
     //create the small tree
     tree_c1 = new diskTreeComponent(xid, internal_region_size, datapage_region_size, datapage_size, stats);
 
-    c0_stats = merge_mgr->get_merge_stats(0);
+    merge_mgr = new mergeManager(this);
+    merge_mgr->set_c0_size(max_c0_size);
     merge_mgr->new_merge(0);
-    c0_stats->starting_merge();
+    merge_mgr->get_merge_stats(0)->starting_merge();
 
     tree_c0 = new memTreeComponent<datatuple>::rbtree_t;
-
-    update_persistent_header(xid, 1);
-    update_persistent_header(xid, 2);
-
+    tbl_header.merge_manager = merge_mgr->talloc(xid);
+    update_persistent_header(xid);
 
     return table_rec;
 }
@@ -128,19 +130,15 @@ void logtable<TUPLE>::openTable(int xid, recordid rid) {
   tree_c1 = new diskTreeComponent(xid, tbl_header.c1_root, tbl_header.c1_state, tbl_header.c1_dp_state, 0);
   tree_c0 = new memTreeComponent<datatuple>::rbtree_t;
 
-  merge_mgr->get_merge_stats(1)->bytes_out = tbl_header.c1_base_size;
-  merge_mgr->get_merge_stats(1)->base_size = tbl_header.c1_base_size;
-  merge_mgr->get_merge_stats(1)->mergeable_size = tbl_header.c1_mergeable_size;
-  merge_mgr->get_merge_stats(2)->base_size = tbl_header.c2_base_size;
-  merge_mgr->get_merge_stats(2)->bytes_out = tbl_header.c2_base_size;
+  merge_mgr = new mergeManager(this, xid, tbl_header.merge_manager);
+  merge_mgr->set_c0_size(max_c0_size);
 
-  c0_stats = merge_mgr->get_merge_stats(0);
   merge_mgr->new_merge(0);
-  c0_stats->starting_merge();
+  merge_mgr->get_merge_stats(0)->starting_merge();
 
 }
 template<class TUPLE>
-void logtable<TUPLE>::update_persistent_header(int xid, int merge_level) {
+void logtable<TUPLE>::update_persistent_header(int xid) {
 
     tbl_header.c2_root = tree_c2->get_root_rid();
     tbl_header.c2_dp_state = tree_c2->get_datapage_allocator_rid();
@@ -149,16 +147,7 @@ void logtable<TUPLE>::update_persistent_header(int xid, int merge_level) {
     tbl_header.c1_dp_state = tree_c1->get_datapage_allocator_rid();
     tbl_header.c1_state = tree_c1->get_internal_node_allocator_rid();
     
-    if(merge_level == 1) {
-      tbl_header.c1_base_size = merge_mgr->get_merge_stats(1)->bytes_out;
-      tbl_header.c1_mergeable_size = merge_mgr->get_merge_stats(1)->mergeable_size;
-    } else if(merge_level == 2) {
-      tbl_header.c1_mergeable_size = 0;
-      tbl_header.c2_base_size = merge_mgr->get_merge_stats(2)->bytes_out;
-    } else {
-      assert(merge_level == 1 || merge_level == 2);
-      abort();
-    }
+    merge_mgr->marshal(xid, tbl_header.merge_manager);
 
     Tset(xid, table_rec, &tbl_header);    
 }
@@ -193,7 +182,7 @@ void logtable<TUPLE>::flushTable()
     }
     set_c0_is_merging(true);
 
-    c0_stats->handed_off_tree();
+    merge_mgr->get_merge_stats(0)->handed_off_tree();
     merge_mgr->new_merge(0);
 
     gettimeofday(&stop_tv,0);
@@ -202,7 +191,7 @@ void logtable<TUPLE>::flushTable()
     DEBUG("Signaled c0-c1 merge thread\n");
 
     merge_count ++;
-    c0_stats->starting_merge();
+    merge_mgr->get_merge_stats(0)->starting_merge();
 
     tsize = 0;
     tree_bytes = 0;
@@ -503,7 +492,7 @@ datatuple * logtable<TUPLE>::insertTupleHelper(datatuple *tuple)
       pre_t = *rbitr;
       //do the merging
       datatuple *new_t = tmerger->merge(pre_t, tuple);
-      c0_stats->merged_tuples(new_t, tuple, pre_t);
+      merge_mgr->get_merge_stats(0)->merged_tuples(new_t, tuple, pre_t);
       t = new_t;
       tree_c0->erase(pre_t); //remove the previous tuple
 

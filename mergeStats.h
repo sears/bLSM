@@ -21,6 +21,10 @@
 
 #include <mergeManager.h> // XXX for double_to_ts, etc... create a util class.
 
+#include <stasis/transactional.h>
+#undef try
+#undef end
+
 class mergeStats {
   public:
     mergeStats(int merge_level, int64_t target_size) :
@@ -58,6 +62,35 @@ class mergeStats {
       gettimeofday(&last,0);
       mergeManager::double_to_ts(&stats_last_tick, mergeManager::tv_to_double(&last));
 #endif
+    }
+    mergeStats(int xid, recordid rid) {
+      marshalled_header h;
+      Tread(xid, rid, &h);
+      merge_level    = h.merge_level;
+      base_size      = h.base_size;
+      mergeable_size = h.mergeable_size;
+      target_size    = h.target_size;
+      current_size   = 0;
+      bytes_out      = base_size;
+      bytes_in_small = 0;
+      bytes_in_large = 0;
+      just_handed_off= false;
+      delta          = 0;
+      need_tick      = 0;
+      in_progress    = 0;
+      out_progress   = ((double)base_size) / (double)target_size;
+      active         = false;
+    }
+    recordid talloc(int xid) {
+      return Talloc(xid, sizeof(marshalled_header));
+    }
+    void marshal(int xid, recordid rid) {
+      marshalled_header h;
+      h.merge_level = merge_level;
+      h.base_size = base_size;
+      h.mergeable_size = mergeable_size;
+      h.target_size = h.target_size;
+      Tset(xid, rid, &h);
     }
     ~mergeStats() { }
     void new_merge2() {
@@ -110,7 +143,7 @@ class mergeStats {
     pageid_t output_size() {
       return bytes_out;
     }
-    const int merge_level;               // 1 => C0->C1, 2 => C1->C2
+    int merge_level;               // 1 => C0->C1, 2 => C1->C2
   protected:
 
     double float_tv(struct timeval& tv) {
@@ -118,12 +151,23 @@ class mergeStats {
     }
     friend class mergeManager;
 
-  public: // XXX only accessed during initialization.
+  protected: // XXX only accessed during initialization.
+    struct marshalled_header {
+      int merge_level;
+      pageid_t base_size;
+      pageid_t mergeable_size;
+      pageid_t target_size; // Needed?
+    };
+  public:
     pageid_t base_size; // size of table at beginning of merge.  for c0, size of table at beginning of current c0-c1 merge round, plus data written since then.  (this minus c1->bytes_in_small is the current size)
+  protected:
     pageid_t mergeable_size;  // protected by mutex.
+  public:
     pageid_t target_size;
+  protected:
     pageid_t current_size;
     pageid_t bytes_out;            // How many bytes worth of tuples did we write?
+  public:
     pageid_t bytes_in_small;       // How many bytes from the small input tree (for C0, we ignore tree overheads)?
   protected:
     pageid_t bytes_in_large;       // Bytes from the large input?

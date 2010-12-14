@@ -10,6 +10,10 @@
 #include "logstore.h"
 #include "math.h"
 #include "time.h"
+#include <stasis/transactional.h>
+#undef try
+#undef end
+
 mergeStats* mergeManager:: get_merge_stats(int mergeLevel) {
   if (mergeLevel == 0) {
     return c0;
@@ -46,6 +50,7 @@ void mergeManager::new_merge(int mergeLevel) {
   s->new_merge2();
 }
 void mergeManager::set_c0_size(int64_t size) {
+  assert(size);
   c0->target_size = size;
 }
 void mergeManager::update_progress(mergeStats * s, int delta) {
@@ -241,18 +246,14 @@ void * merge_manager_pretty_print_thread(void * arg) {
   return m->pretty_print_thread();
 }
 
-mergeManager::mergeManager(logtable<datatuple> *ltable):
-  UPDATE_PROGRESS_PERIOD(0.005),
-  cur_c1_c2_progress_delta(0.0),
-  ltable(ltable),
-  c0(new mergeStats(0, ltable ? ltable->max_c0_size : 10000000)),
-  c1(new mergeStats(1, (int64_t)(ltable ? ((double)(ltable->max_c0_size) * *ltable->R()) : 100000000.0) )),
-  c2(new mergeStats(2, 0)) {
+void mergeManager::init_helper(void) {
   struct timeval tv;
   gettimeofday(&tv, 0);
   sleeping[0] = false;
   sleeping[1] = false;
   sleeping[2] = false;
+  cur_c1_c2_progress_delta = c2->in_progress - c1->out_progress;
+
 #if EXTENDED_STATS
   double_to_ts(&c0->stats_last_tick, tv_to_double(&tv));
   double_to_ts(&c1->stats_last_tick, tv_to_double(&tv));
@@ -261,6 +262,41 @@ mergeManager::mergeManager(logtable<datatuple> *ltable):
   still_running = true;
   pthread_cond_init(&pp_cond, 0);
   pthread_create(&pp_thread, 0, merge_manager_pretty_print_thread, (void*)this);
+}
+
+mergeManager::mergeManager(logtable<datatuple> *ltable):
+  UPDATE_PROGRESS_PERIOD(0.005),
+  ltable(ltable) {
+  c0 = new mergeStats(0, ltable ? ltable->max_c0_size : 10000000);
+  c1 = new mergeStats(1, (int64_t)(ltable ? ((double)(ltable->max_c0_size) * *ltable->R()) : 100000000.0) );
+  c2 = new mergeStats(2, 0);
+  init_helper();
+}
+mergeManager::mergeManager(logtable<datatuple> *ltable, int xid, recordid rid):
+  UPDATE_PROGRESS_PERIOD(0.005),
+  ltable(ltable) {
+  marshalled_header h;
+  Tread(xid, rid, &h);
+  c0 = new mergeStats(xid, h.c0);
+  c1 = new mergeStats(xid, h.c1);
+  c2 = new mergeStats(xid, h.c2);
+  init_helper();
+}
+recordid mergeManager::talloc(int xid) {
+  marshalled_header h;
+  recordid ret = Talloc(xid, sizeof(h));
+  h.c0 = c0->talloc(xid);
+  h.c1 = c1->talloc(xid);
+  h.c2 = c2->talloc(xid);
+  Tset(xid, ret, &h);
+  return ret;
+}
+void mergeManager::marshal(int xid, recordid rid) {
+  marshalled_header h;
+  Tread(xid, rid, &h);
+  c0->marshal(xid, h.c0);
+  c1->marshal(xid, h.c1);
+  c2->marshal(xid, h.c2);
 }
 
 void mergeManager::pretty_print(FILE * out) {

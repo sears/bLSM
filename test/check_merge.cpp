@@ -50,8 +50,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     int xid = Tbegin();
 
-    logtable<datatuple> * ltable = new logtable<datatuple>(1000, 10000, 5);
-    ltable->set_max_c0_size(10 * 1024 * 1024);
+    logtable<datatuple> * ltable = new logtable<datatuple>(10 * 1024 * 1024, 1000, 10000, 5);
     merge_scheduler mscheduler(ltable);
 
     recordid table_root = ltable->allocTable(xid);

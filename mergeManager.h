@@ -38,7 +38,9 @@ public:
     return (1000000ULL * (uint64_t)tv.tv_sec) + ((uint64_t)tv.tv_usec);
   }
   mergeManager(logtable<datatuple> *ltable);
-
+  mergeManager(logtable<datatuple> *ltable, int xid, recordid rid);
+  void marshal(int xid, recordid rid);
+  recordid talloc(int xid);
   ~mergeManager();
 
   void new_merge(int mergelevel);
@@ -60,6 +62,12 @@ public:
 
   double cur_c1_c2_progress_delta;
 private:
+  void init_helper(void);
+  struct marshalled_header {
+    recordid c0;
+    recordid c1;
+    recordid c2;
+  };
   logtable<datatuple>*    ltable;
   double throttle_seconds;
   double last_throttle_seconds;

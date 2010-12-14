@@ -61,8 +61,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     logtable<datatuple>::init_stasis();
     int xid = Tbegin();
 
-    ltable = new logtable<datatuple>(1000, 10000, 5);
-    ltable->set_max_c0_size(10*1024*1024);
+    ltable = new logtable<datatuple>(10 * 1024 * 1024, 1000, 10000, 5);
 
     merge_scheduler mscheduler(ltable);
 

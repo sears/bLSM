@@ -139,27 +139,28 @@ void * merge_scheduler::memMergeThread() {
         double new_c1_size = stats->output_size();
         pthread_cond_signal(&ltable_->c0_needed);
 
-        ltable_->update_persistent_header(xid, 1);
+        ltable_->update_persistent_header(xid);
         Tcommit(xid);
 
         //TODO: this is simplistic for now
         //6: if c1' is too big, signal the other merger
 
-        // update c0 effective size.
-        double frac = 1.0/(double)merge_count;
-        ltable_->num_c0_mergers = merge_count;
-        ltable_->mean_c0_effective_size =
-          (int64_t) (
-           ((double)ltable_->mean_c0_effective_size)*(1-frac) +
-           ((double)stats->bytes_in_small*frac));
-        ltable_->merge_mgr->get_merge_stats(0)->target_size = ltable_->mean_c0_effective_size;
-        double target_R = *ltable_->R();
+        if(stats->bytes_in_small) {
+          // update c0 effective size.
+          double frac = 1.0/(double)merge_count;
+          ltable_->num_c0_mergers = merge_count;
+          ltable_->mean_c0_effective_size =
+            (int64_t) (
+             ((double)ltable_->mean_c0_effective_size)*(1-frac) +
+             ((double)stats->bytes_in_small*frac));
+          ltable_->merge_mgr->get_merge_stats(0)->target_size = ltable_->mean_c0_effective_size;
+        }
 
-        printf("Merge done. R = %f MemSize = %lld Mean = %lld, This = %lld, Count = %d factor %3.3fcur%3.3favg\n", target_R, (long long)ltable_->max_c0_size, (long long int)ltable_->mean_c0_effective_size, stats->bytes_in_small, merge_count, ((double)stats->bytes_in_small) / (double)ltable_->max_c0_size, ((double)ltable_->mean_c0_effective_size) / (double)ltable_->max_c0_size);
+        printf("Merge done. R = %f MemSize = %lld Mean = %lld, This = %lld, Count = %d factor %3.3fcur%3.3favg\n", *ltable_->R(), (long long)ltable_->max_c0_size, (long long int)ltable_->mean_c0_effective_size, stats->bytes_in_small, merge_count, ((double)stats->bytes_in_small) / (double)ltable_->max_c0_size, ((double)ltable_->mean_c0_effective_size) / (double)ltable_->max_c0_size);
 
-        assert(target_R >= MIN_R);
-        bool signal_c2 = (new_c1_size / ltable_->mean_c0_effective_size > target_R);
-        DEBUG("\nc1 size %f R %f\n", new_c1_size, target_R);
+        assert(*ltable_->R() >= MIN_R);
+        bool signal_c2 = (new_c1_size / ltable_->mean_c0_effective_size > *ltable_->R());
+        DEBUG("\nc1 size %f R %f\n", new_c1_size, *ltable_->R());
         if( signal_c2  )
         {
             DEBUG("mmt:\tsignaling C2 for merge\n");
@@ -183,10 +184,7 @@ void * merge_scheduler::memMergeThread() {
           ltable_->set_tree_c1(new diskTreeComponent(xid, ltable_->internal_region_size, ltable_->datapage_region_size, ltable_->datapage_size, stats));
 
           pthread_cond_signal(&ltable_->c1_ready);
-          pageid_t old_bytes_out = stats->bytes_out;
-          stats->bytes_out = 0; // XXX HACK
-          ltable_->update_persistent_header(xid, 1);
-          stats->bytes_out = old_bytes_out;
+          ltable_->update_persistent_header(xid);
           Tcommit(xid);
 
         }
@@ -302,7 +300,7 @@ void * merge_scheduler::diskMergeThread()
 
         DEBUG("dmt:\tUpdated C2's position on disk to %lld\n",(long long)-1);
         // 13
-        ltable_->update_persistent_header(xid, 2);
+        ltable_->update_persistent_header(xid);
         Tcommit(xid);
 
         rwlc_unlock(ltable_->header_mut);
