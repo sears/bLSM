@@ -46,6 +46,8 @@ public:
   void new_merge(int mergelevel);
   void set_c0_size(int64_t size);
   void update_progress(mergeStats *s, int delta);
+  double c1_c2_progress_delta();
+
   void tick(mergeStats * s);
   mergeStats* get_merge_stats(int mergeLevel);
   void read_tuple_from_small_component(int merge_level, datatuple * tup);
@@ -60,8 +62,8 @@ public:
   void pretty_print(FILE * out);
   void *pretty_print_thread();
 
-  double cur_c1_c2_progress_delta;
 private:
+  double c1_c2_delta;
   void init_helper(void);
   struct marshalled_header {
     recordid c0;
@@ -69,14 +71,12 @@ private:
     recordid c2;
   };
   logtable<datatuple>*    ltable;
-  double throttle_seconds;
-  double last_throttle_seconds;
   mergeStats * c0;
   mergeStats * c1;
   mergeStats * c2;
-  bool sleeping[3];
+
+  // The following fields are used to shut down the pretty print thread.
   bool still_running;
-  // Needed so that the pretty print thread can be woken up during shutdown.
   pthread_cond_t pp_cond;
   pthread_t pp_thread;
 };

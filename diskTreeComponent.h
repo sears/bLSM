@@ -64,8 +64,8 @@ class diskTreeComponent {
   void writes_done();
 
 
-  iterator * open_iterator(double* cur_size = NULL, double target_size = 0, bool * flushing = NULL) {
-    return new iterator(ltree, cur_size, target_size, flushing);
+  iterator * open_iterator(mergeManager * mgr = NULL, double target_size = 0, bool * flushing = NULL) {
+    return new iterator(ltree, mgr, target_size, flushing);
   }
   iterator * open_iterator(datatuple * key) {
     if(key != NULL) {
@@ -201,7 +201,7 @@ class diskTreeComponent {
   {
 
   public:
-      explicit iterator(diskTreeComponent::internalNodes *tree, double* cur_size = NULL, double target_size = 0, bool * flushing = NULL);
+      explicit iterator(diskTreeComponent::internalNodes *tree, mergeManager * mgr = NULL, double target_size = 0, bool * flushing = NULL);
 
       explicit iterator(diskTreeComponent::internalNodes *tree,datatuple *key);
 
@@ -219,7 +219,7 @@ class diskTreeComponent {
 
     RegionAllocator * ro_alloc_;  // has a filehandle that we use to optimize sequential scans.
     recordid tree_; //root of the tree
-    double * cur_progress_delta_;
+    mergeManager * mgr_;
     double   target_progress_delta_;
     bool * flushing_;
 

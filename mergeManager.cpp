@@ -42,7 +42,7 @@ void mergeManager::new_merge(int mergeLevel) {
     // target_size was set during startup
   } else if(s->merge_level == 1) {
     assert(c0->target_size);
-    c1->target_size = (pageid_t)(*ltable->R() * (double)c0->target_size);
+    c1->target_size = (pageid_t)(*ltable->R() * (double)ltable->mean_c0_run_length);
     assert(c1->target_size);
   } else if(s->merge_level == 2) {
     // target_size is infinity...
@@ -62,8 +62,7 @@ void mergeManager::update_progress(mergeStats * s, int delta) {
       s->delta = 0;
       if(!s->need_tick) { s->need_tick = 1; }
     }
-    if(s->merge_level == 2
-    ) {
+    if(s->merge_level == 2) {
       if(s->active) {
         s->in_progress =  ((double)(s->bytes_in_large + s->bytes_in_small)) / (double)(get_merge_stats(s->merge_level-1)->mergeable_size + s->base_size);
       } else {
@@ -71,7 +70,7 @@ void mergeManager::update_progress(mergeStats * s, int delta) {
       }
     } else if(s->merge_level == 1) { // C0-C1 merge (c0 is continuously growing...)
       if(s->active) {
-        s->in_progress = ((double)(s->bytes_in_large+s->bytes_in_small)) / (double)(s->base_size+ltable->mean_c0_effective_size);
+        s->in_progress = ((double)(s->bytes_in_large+s->bytes_in_small)) / (double)(s->base_size+ltable->mean_c0_run_length);
       } else {
         s->in_progress = 0;
       }
@@ -83,7 +82,12 @@ void mergeManager::update_progress(mergeStats * s, int delta) {
       s->current_size = s->base_size + s->bytes_out - s->bytes_in_large;
     }
 
-    s->out_progress = ((double)s->current_size) / (double)s->target_size;
+    s->out_progress = ((double)s->current_size) / ((s->merge_level == 0 ) ? (double)ltable->mean_c0_run_length : (double)s->target_size);
+    if(c2->active && c1->mergeable_size) {
+      c1_c2_delta = c1->out_progress - c2->in_progress;
+    } else {
+      c1_c2_delta = -0.02;  // We try to keep this number between -0.05 and -0.01.
+    }
 
 #if EXTENDED_STATS
     struct timeval now;
@@ -136,16 +140,20 @@ void mergeManager::tick(mergeStats * s) {
       // Only apply back pressure if next thread is not waiting on us.
       rwlc_readlock(ltable->header_mut);
       if(c1->mergeable_size && c2->active) {
-        double delta = c1->out_progress - c2->in_progress;
-        rwlc_unlock(ltable->header_mut);
-        if(delta > -0.01) {
+        if(c1_c2_delta > -0.01) {
+          DEBUG("Input is too far ahead.  Delta is %f\n", c1_c2_delta);
+          double delta = c1_c2_delta;
+          rwlc_unlock(ltable->header_mut);
           delta += 0.01; // delta > 0;
           double slp = 0.001 + delta;
           struct timespec sleeptime;
           DEBUG("\ndisk sleeping %0.6f tree_megabytes %0.3f\n", slp, ((double)ltable->tree_bytes)/(1024.0*1024.0));
           double_to_ts(&sleeptime,slp);
           nanosleep(&sleeptime, 0);
+          update_progress(s, 0);
           s->need_tick = 1;
+        } else {
+          rwlc_unlock(ltable->header_mut);
         }
       } else {
         rwlc_unlock(ltable->header_mut);
@@ -246,13 +254,14 @@ void * merge_manager_pretty_print_thread(void * arg) {
   return m->pretty_print_thread();
 }
 
+double mergeManager::c1_c2_progress_delta() {
+  return c1_c2_delta;
+}
+
 void mergeManager::init_helper(void) {
   struct timeval tv;
+  c1_c2_delta = -0.02; // XXX move this magic number somewhere.  It's also in update_progress.
   gettimeofday(&tv, 0);
-  sleeping[0] = false;
-  sleeping[1] = false;
-  sleeping[2] = false;
-  cur_c1_c2_progress_delta = c2->in_progress - c1->out_progress;
 
 #if EXTENDED_STATS
   double_to_ts(&c0->stats_last_tick, tv_to_double(&tv));

@@ -112,7 +112,7 @@ public:
     pthread_mutex_t rb_mut;
     int64_t max_c0_size;
     // these track the effectiveness of snowshoveling
-    int64_t mean_c0_effective_size;
+    int64_t mean_c0_run_length;
     int64_t num_c0_mergers;
 
     mergeManager * merge_mgr;

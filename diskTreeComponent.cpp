@@ -903,10 +903,10 @@ void diskTreeComponent::iterator::init_iterators(datatuple * key1, datatuple * k
     }
   }
 
-diskTreeComponent::iterator::iterator(diskTreeComponent::internalNodes *tree, double* cur_progress_delta, double target_progress_delta, bool * flushing) :
+diskTreeComponent::iterator::iterator(diskTreeComponent::internalNodes *tree, mergeManager * mgr, double target_progress_delta, bool * flushing) :
     ro_alloc_(new RegionAllocator()),
     tree_(tree ? tree->get_root_rec() : NULLRID),
-    cur_progress_delta_(cur_progress_delta),
+    mgr_(mgr),
     target_progress_delta_(target_progress_delta),
     flushing_(flushing)
 {
@@ -917,7 +917,7 @@ diskTreeComponent::iterator::iterator(diskTreeComponent::internalNodes *tree, do
 diskTreeComponent::iterator::iterator(diskTreeComponent::internalNodes *tree, datatuple* key) :
     ro_alloc_(new RegionAllocator()),
     tree_(tree ? tree->get_root_rec() : NULLRID),
-    cur_progress_delta_(NULL),
+    mgr_(NULL),
     target_progress_delta_(0.0),
     flushing_(NULL)
 {
@@ -1006,12 +1006,14 @@ datatuple * diskTreeComponent::iterator::next_callerFrees()
       // else readTuple is null.  We're done.
     }
 
-    if(readTuple && cur_progress_delta_) {
-      // *cur_progress_delta is how far ahead we are, as a fraction of the total merge.
-      while(*cur_progress_delta_ > target_progress_delta_ && ((!flushing_) || (! *flushing_))) {  // TODO: how to pick this threshold?
+    if(readTuple && mgr_) {
+      // c1_c2_progress_delta() is c1's out progress - c2's in progress.  We want to stop processing c2 if we are too far ahead (ie; c2 >> c1; delta << 0).
+      while(mgr_->c1_c2_progress_delta() < -target_progress_delta_ && ((!flushing_) || (! *flushing_))) {  // TODO: how to pick this threshold?
+        DEBUG("Input is too far behind.  Delta is %f\n", mgr_->c1_c2_progress_delta());
         struct timespec ts;
-        mergeManager::double_to_ts(&ts, 0.1);
+        mergeManager::double_to_ts(&ts, 0.01);
         nanosleep(&ts, 0);
+        mgr_->update_progress(mgr_->get_merge_stats(1), 0);
       }
     }
 

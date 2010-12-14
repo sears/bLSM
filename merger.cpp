@@ -95,7 +95,7 @@ void * merge_scheduler::memMergeThread() {
         const int64_t min_bloom_target = ltable_->max_c0_size;
 
         //create a new tree
-	  diskTreeComponent * c1_prime = new diskTreeComponent(xid,  ltable_->internal_region_size, ltable_->datapage_region_size, ltable_->datapage_size, stats, (stats->target_size < min_bloom_target ? min_bloom_target : stats->target_size) / 100);
+        diskTreeComponent * c1_prime = new diskTreeComponent(xid,  ltable_->internal_region_size, ltable_->datapage_region_size, ltable_->datapage_size, stats, (stats->target_size < min_bloom_target ? min_bloom_target : stats->target_size) / 100);
 
         ltable_->set_tree_c1_prime(c1_prime);
 
@@ -149,17 +149,17 @@ void * merge_scheduler::memMergeThread() {
           // update c0 effective size.
           double frac = 1.0/(double)merge_count;
           ltable_->num_c0_mergers = merge_count;
-          ltable_->mean_c0_effective_size =
+          ltable_->mean_c0_run_length=
             (int64_t) (
-             ((double)ltable_->mean_c0_effective_size)*(1-frac) +
+             ((double)ltable_->mean_c0_run_length)*(1-frac) +
              ((double)stats->bytes_in_small*frac));
-          ltable_->merge_mgr->get_merge_stats(0)->target_size = ltable_->mean_c0_effective_size;
+          //ltable_->merge_mgr->get_merge_stats(0)->target_size = ltable_->mean_c0_run_length;
         }
 
-        printf("Merge done. R = %f MemSize = %lld Mean = %lld, This = %lld, Count = %d factor %3.3fcur%3.3favg\n", *ltable_->R(), (long long)ltable_->max_c0_size, (long long int)ltable_->mean_c0_effective_size, stats->bytes_in_small, merge_count, ((double)stats->bytes_in_small) / (double)ltable_->max_c0_size, ((double)ltable_->mean_c0_effective_size) / (double)ltable_->max_c0_size);
+        printf("Merge done. R = %f MemSize = %lld Mean = %lld, This = %lld, Count = %d factor %3.3fcur%3.3favg\n", *ltable_->R(), (long long)ltable_->max_c0_size, (long long int)ltable_->mean_c0_run_length, stats->bytes_in_small, merge_count, ((double)stats->bytes_in_small) / (double)ltable_->max_c0_size, ((double)ltable_->mean_c0_run_length) / (double)ltable_->max_c0_size);
 
         assert(*ltable_->R() >= MIN_R);
-        bool signal_c2 = (new_c1_size / ltable_->mean_c0_effective_size > *ltable_->R());
+        bool signal_c2 = (new_c1_size / ltable_->mean_c0_run_length > *ltable_->R());
         DEBUG("\nc1 size %f R %f\n", new_c1_size, *ltable_->R());
         if( signal_c2  )
         {
@@ -252,7 +252,7 @@ void * merge_scheduler::diskMergeThread()
         // 4: do the merge.
         //create the iterators
         diskTreeComponent::iterator *itrA = ltable_->get_tree_c2()->open_iterator();
-        diskTreeComponent::iterator *itrB = ltable_->get_tree_c1_mergeable()->open_iterator(&ltable_->merge_mgr->cur_c1_c2_progress_delta, 0.05, &ltable_->shutting_down_);
+        diskTreeComponent::iterator *itrB = ltable_->get_tree_c1_mergeable()->open_iterator(ltable_->merge_mgr, 0.05, &ltable_->shutting_down_);
 
         //create a new tree
         diskTreeComponent * c2_prime = new diskTreeComponent(xid, ltable_->internal_region_size, ltable_->datapage_region_size, ltable_->datapage_size, stats, (uint64_t)(ltable_->max_c0_size * *ltable_->R() + stats->base_size)/ 1000);
@@ -289,7 +289,7 @@ void * merge_scheduler::diskMergeThread()
 
         merge_count++;        
         //update the current optimal R value
-        *(ltable_->R()) = std::max(MIN_R, sqrt( ((double)stats->output_size()) / ((double)ltable_->mean_c0_effective_size) ) );
+        *(ltable_->R()) = std::max(MIN_R, sqrt( ((double)stats->output_size()) / ((double)ltable_->mean_c0_run_length) ) );
         
         DEBUG("\nR = %f\n", *(ltable_->R()));
 

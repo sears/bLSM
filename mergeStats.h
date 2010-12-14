@@ -143,7 +143,6 @@ class mergeStats {
     pageid_t output_size() {
       return bytes_out;
     }
-    int merge_level;               // 1 => C0->C1, 2 => C1->C2
   protected:
 
     double float_tv(struct timeval& tv) {
@@ -151,14 +150,15 @@ class mergeStats {
     }
     friend class mergeManager;
 
-  protected: // XXX only accessed during initialization.
+  protected:
     struct marshalled_header {
       int merge_level;
       pageid_t base_size;
       pageid_t mergeable_size;
       pageid_t target_size; // Needed?
     };
-  public:
+  public: // XXX eliminate protected fields.
+    int merge_level;               // 1 => C0->C1, 2 => C1->C2
     pageid_t base_size; // size of table at beginning of merge.  for c0, size of table at beginning of current c0-c1 merge round, plus data written since then.  (this minus c1->bytes_in_small is the current size)
   protected:
     pageid_t mergeable_size;  // protected by mutex.
