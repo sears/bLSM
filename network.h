@@ -30,7 +30,7 @@ static const network_op_t LOGSTORE_FIRST_RESPONSE_CODE = 1;
 static const network_op_t LOGSTORE_RESPONSE_SUCCESS = 1;
 static const network_op_t LOGSTORE_RESPONSE_FAIL = 2;
 static const network_op_t LOGSTORE_RESPONSE_SENDING_TUPLES = 3;
-static const network_op_t LOGSTORE_RESPONSE_RECEIVING_TUPLES = 3;
+static const network_op_t LOGSTORE_RESPONSE_RECEIVING_TUPLES = 4;
 static const network_op_t LOGSTORE_LAST_RESPONSE_CODE = 4;
 
 //client codes
