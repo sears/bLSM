@@ -48,9 +48,6 @@ logtable<TUPLE>::logtable(pageid_t max_c0_size, pageid_t internal_region_size, p
     pthread_cond_init(&c1_needed, 0);
     pthread_cond_init(&c1_ready, 0);
 
-    tsize = 0;
-    tree_bytes = 0;
-        
     epoch = 0;
 
     this->internal_region_size = internal_region_size;
@@ -88,8 +85,8 @@ void logtable<TUPLE>::init_stasis() {
   DataPage<datatuple>::register_stasis_page_impl();
   //stasis_buffer_manager_size = 768 * 1024; // 4GB = 2^10 pages:
   // XXX Workaround Stasis' (still broken) default concurrent buffer manager
-//  stasis_buffer_manager_factory = stasis_buffer_manager_hash_factory;
-//  stasis_buffer_manager_hint_writes_are_sequential = 0;
+  stasis_buffer_manager_factory = stasis_buffer_manager_hash_factory;
+  stasis_buffer_manager_hint_writes_are_sequential = 0;
   Tinit();
 
 }
@@ -191,8 +188,7 @@ void logtable<TUPLE>::flushTable()
     merge_count ++;
     merge_mgr->get_merge_stats(0)->starting_merge();
 
-    tsize = 0;
-    tree_bytes = 0;
+    merge_mgr->get_merge_stats(0)->current_size = 0;
 
     if(blocked && stop - start > 1.0) {
       if(first)
@@ -497,7 +493,7 @@ datatuple * logtable<TUPLE>::insertTupleHelper(datatuple *tuple)
       tree_c0->insert(new_t); //insert the new tuple
 
       //update the tree size (+ new_t size - pre_t size)
-      tree_bytes += ((int64_t)new_t->byte_length() - (int64_t)pre_t->byte_length());
+      merge_mgr->get_merge_stats(0)->current_size += ((int64_t)new_t->byte_length() - (int64_t)pre_t->byte_length());
 
   }
   else //no tuple with same key exists in mem-tree
@@ -508,8 +504,7 @@ datatuple * logtable<TUPLE>::insertTupleHelper(datatuple *tuple)
       //insert tuple into the rbtree
       tree_c0->insert(t);
 
-      tsize++;
-      tree_bytes += t->byte_length();// + RB_TREE_OVERHEAD;
+      merge_mgr->get_merge_stats(0)->current_size += t->byte_length();// + RB_TREE_OVERHEAD;
 
   }
   merge_mgr->wrote_tuple(0, t);  // needs to be here; doesn't grab a mutex.

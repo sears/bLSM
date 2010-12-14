@@ -77,7 +77,7 @@ void mergeManager::update_progress(mergeStats * s, int delta) {
     }
 
     if(s->merge_level == 0) {
-      s->current_size = ltable->tree_bytes; // we need to track the number of bytes consumed by the merger; this data is not present in s, so fall back on ltable's aggregate.
+      // ltable manages c0's current size directly.
     } else {
       s->current_size = s->base_size + s->bytes_out - s->bytes_in_large;
     }
@@ -163,16 +163,15 @@ void mergeManager::tick(mergeStats * s) {
     // Simple backpressure algorithm based on how full C0 is.
 
     // Is C0 bigger than is allowed?
-    while(ltable->tree_bytes > ltable->max_c0_size) {  // can't use s->current_size, since this is the thread that maintains that number...
+    while(c0->current_size > ltable->max_c0_size) {  // can't use s->current_size, since this is the thread that maintains that number...
       printf("\nMEMORY OVERRUN!!!! SLEEP!!!!\n");
       struct timespec ts;
       double_to_ts(&ts, 0.1);
       nanosleep(&ts, 0);
     }
     // Linear backpressure model
-    s->current_size = ltable->tree_bytes;
-    s->out_progress = ((double)ltable->tree_bytes)/((double)ltable->max_c0_size);
-    double delta = ((double)ltable->tree_bytes)/(0.9*(double)ltable->max_c0_size); // 0 <= delta <= 1.111...
+    s->out_progress = ((double)c0->current_size)/((double)ltable->max_c0_size);
+    double delta = ((double)c0->current_size)/(0.9*(double)ltable->max_c0_size); // 0 <= delta <= 1.111...
     delta -= 1.0;
     if(delta > 0.00005) {
       double slp = 0.001 + 5.0 * delta; //0.0015 < slp < 1.112111..
@@ -325,8 +324,8 @@ void mergeManager::pretty_print(FILE * out) {
     have_c2  = NULL != lt->get_tree_c2();
   }
   pageid_t mb = 1024 * 1024;
-  fprintf(out,"[merge progress MB/s window (lifetime)]: app [%s %6lldMB ~ %3.0f%%/%3.0f%% %6.1fsec %4.1f (%4.1f)] %s %s [%s %3.0f%% ~ %3.0f%% %4.1f (%4.1f)] %s %s [%s %3.0f%% %4.1f (%4.1f)] %s ",
-      c0->active ? "RUN" : "---", (long long)(c0->stats_lifetime_consumed / mb), 100.0 * c0->out_progress, 100.0 * ((double)ltable->tree_bytes)/(double)ltable->max_c0_size, c0->stats_lifetime_elapsed, c0->stats_bps/((double)mb), c0->stats_lifetime_consumed/(((double)mb)*c0->stats_lifetime_elapsed),
+  fprintf(out,"[merge progress MB/s window (lifetime)]: app [%s %6lldMB tot %6lldMB cur ~ %3.0f%%/%3.0f%% %6.1fsec %4.1f (%4.1f)] %s %s [%s %3.0f%% ~ %3.0f%% %4.1f (%4.1f)] %s %s [%s %3.0f%% %4.1f (%4.1f)] %s ",
+      c0->active ? "RUN" : "---", (long long)(c0->stats_lifetime_consumed / mb), (long long)(c0->current_size / mb), 100.0 * c0->out_progress, 100.0 * ((double)c0->current_size)/(double)ltable->max_c0_size, c0->stats_lifetime_elapsed, c0->stats_bps/((double)mb), c0->stats_lifetime_consumed/(((double)mb)*c0->stats_lifetime_elapsed),
       have_c0 ? "C0" : "..",
       have_c0m ? "C0'" : "...",
       c1->active ? "RUN" : "---", 100.0 * c1->in_progress, 100.0 * c1->out_progress, c1->stats_bps/((double)mb), c1->stats_lifetime_consumed/(((double)mb)*c1->stats_lifetime_elapsed),

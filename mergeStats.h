@@ -164,8 +164,8 @@ class mergeStats {
     pageid_t mergeable_size;  // protected by mutex.
   public:
     pageid_t target_size;
-  protected:
     pageid_t current_size;
+  protected:
     pageid_t bytes_out;            // How many bytes worth of tuples did we write?
   public:
     pageid_t bytes_in_small;       // How many bytes from the small input tree (for C0, we ignore tree overheads)?

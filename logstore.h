@@ -143,9 +143,7 @@ private:
     memTreeComponent<datatuple>::rbtree_ptr_t tree_c0_mergeable; // in-mem red black tree: ready to be merged with c1.
     bool c0_is_merging;
 
-    int tsize; //number of tuples
 public:
-    int64_t tree_bytes; //number of bytes
     bool flushing;
 
     //DATA PAGE SETTINGS
