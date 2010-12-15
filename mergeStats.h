@@ -32,7 +32,6 @@ class mergeStats {
       base_size(0),
       mergeable_size(0),
       target_size(target_size),
-      current_size(0),
       bytes_out(0),
       bytes_in_small(0),
       bytes_in_large(0),
@@ -70,7 +69,6 @@ class mergeStats {
       base_size      = h.base_size;
       mergeable_size = h.mergeable_size;
       target_size    = h.target_size;
-      current_size   = 0;
       bytes_out      = base_size;
       bytes_in_small = 0;
       bytes_in_large = 0;
@@ -100,7 +98,6 @@ class mergeStats {
         just_handed_off = false;
       }
       base_size = bytes_out;
-      current_size = base_size;
       bytes_out = 0;
       bytes_in_small = 0;
       bytes_in_large = 0;
@@ -125,10 +122,18 @@ class mergeStats {
       mergeManager::double_to_ts(&stats_last_tick, mergeManager::tv_to_double(&last));
 #endif
     }
+    pageid_t get_current_size() {
+      if(merge_level == 0) {
+        return base_size + bytes_in_small - bytes_in_large - bytes_out;
+      } else {
+        // s->bytes_out has strange semantics.  It's how many bytes our input has written into this tree.
+        return base_size + bytes_out - bytes_in_large;
+      }
+    }
     void handed_off_tree() {
       if(merge_level == 2) {
       } else {
-        mergeable_size = current_size;
+        mergeable_size = get_current_size();
         just_handed_off = true;
       }
     }
@@ -164,7 +169,6 @@ class mergeStats {
     pageid_t mergeable_size;  // protected by mutex.
   public:
     pageid_t target_size;
-    pageid_t current_size;
   protected:
     pageid_t bytes_out;            // How many bytes worth of tuples did we write?
   public:

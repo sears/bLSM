@@ -103,7 +103,7 @@ void * merge_scheduler::memMergeThread() {
 
         // needs to be past the rwlc_unlock...
         memTreeComponent<datatuple>::batchedRevalidatingIterator *itrB =
-            new memTreeComponent<datatuple>::batchedRevalidatingIterator(ltable_->get_tree_c0(), &ltable_->merge_mgr->get_merge_stats(0)->current_size, ltable_->max_c0_size, &ltable_->flushing, 100, &ltable_->rb_mut);
+            new memTreeComponent<datatuple>::batchedRevalidatingIterator(ltable_->get_tree_c0(), ltable_->merge_mgr, ltable_->max_c0_size, &ltable_->flushing, 100, &ltable_->rb_mut);
 
         //: do the merge
         DEBUG("mmt:\tMerging:\n");
@@ -339,7 +339,7 @@ static int garbage_collect(logtable<datatuple> * ltable_, datatuple ** garbage, 
       } // close rbitr before touching the tree.
       if(t2tmp) {
         ltable_->get_tree_c0()->erase(garbage[i]);
-        ltable_->merge_mgr->get_merge_stats(0)->current_size -= garbage[i]->byte_length();
+        //ltable_->merge_mgr->get_merge_stats(0)->current_size -= garbage[i]->byte_length();
         datatuple::freetuple(t2tmp);
       }
       datatuple::freetuple(garbage[i]);
@@ -423,6 +423,9 @@ void merge_iterators(int xid,
             // cannot free any tuples here; they may still be read through a lookup
         }
         if(stats->merge_level == 1) {
+          // We consume tuples from c0 as we read them, so update its stats here.
+          ltable->merge_mgr->wrote_tuple(0, t2);
+
           next_garbage = garbage_collect(ltable, garbage, garbage_len, next_garbage);
           garbage[next_garbage] = t2;
           next_garbage++;

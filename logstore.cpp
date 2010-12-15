@@ -188,8 +188,6 @@ void logtable<TUPLE>::flushTable()
     merge_count ++;
     merge_mgr->get_merge_stats(0)->starting_merge();
 
-    merge_mgr->get_merge_stats(0)->current_size = 0;
-
     if(blocked && stop - start > 1.0) {
       if(first)
       {
@@ -492,9 +490,6 @@ datatuple * logtable<TUPLE>::insertTupleHelper(datatuple *tuple)
 
       tree_c0->insert(new_t); //insert the new tuple
 
-      //update the tree size (+ new_t size - pre_t size)
-      merge_mgr->get_merge_stats(0)->current_size += ((int64_t)new_t->byte_length() - (int64_t)pre_t->byte_length());
-
   }
   else //no tuple with same key exists in mem-tree
   {
@@ -503,11 +498,7 @@ datatuple * logtable<TUPLE>::insertTupleHelper(datatuple *tuple)
 
       //insert tuple into the rbtree
       tree_c0->insert(t);
-
-      merge_mgr->get_merge_stats(0)->current_size += t->byte_length();// + RB_TREE_OVERHEAD;
-
   }
-  merge_mgr->wrote_tuple(0, t);  // needs to be here; doesn't grab a mutex.
 
   return pre_t;
 }

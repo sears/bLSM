@@ -3,7 +3,7 @@
 #include <set>
 #include <assert.h>
 #include <mergeManager.h> // XXX for double_to_ts.
-
+#include <mergeStats.h>
 template<class TUPLE>
 class memTreeComponent {
 public:
@@ -167,8 +167,8 @@ public:
     void populate_next_ret(TUPLE *key=NULL) {
       if(cur_off_ == num_batched_) {
         if(mut_) pthread_mutex_lock(mut_);
-        if(cur_size_) {
-          while(*cur_size_ < (0.8 * (double)target_size_) && ! *flushing_) {  // TODO: how to pick this threshold?  Too high, and the disk is idle.  Too low, and we waste ram.
+        if(mgr_) {
+          while(mgr_->get_merge_stats(0)->get_current_size() < (0.8 * (double)target_size_) && ! *flushing_) {  // TODO: how to pick this threshold?  Too high, and the disk is idle.  Too low, and we waste ram.
             pthread_mutex_unlock(mut_);
             struct timespec ts;
             mergeManager::double_to_ts(&ts, 0.1);
@@ -186,11 +186,11 @@ public:
     }
 
   public:
-    batchedRevalidatingIterator( rbtree_t *s, pageid_t* cur_size, int64_t target_size, bool * flushing, int batch_size, pthread_mutex_t * rb_mut ) : s_(s), cur_size_(cur_size), target_size_(target_size), flushing_(flushing), batch_size_(batch_size), num_batched_(batch_size), cur_off_(batch_size), mut_(rb_mut) {
+    batchedRevalidatingIterator( rbtree_t *s, mergeManager * mgr, int64_t target_size, bool * flushing, int batch_size, pthread_mutex_t * rb_mut ) : s_(s), mgr_(mgr), target_size_(target_size), flushing_(flushing), batch_size_(batch_size), num_batched_(batch_size), cur_off_(batch_size), mut_(rb_mut) {
       next_ret_ = (TUPLE**)malloc(sizeof(next_ret_[0]) * batch_size_);
       populate_next_ret();
     }
-      batchedRevalidatingIterator( rbtree_t *s, int batch_size, pthread_mutex_t * rb_mut, TUPLE *&key ) : s_(s), cur_size_(0), target_size_(0), flushing_(0), batch_size_(batch_size), num_batched_(batch_size), cur_off_(batch_size), mut_(rb_mut) {
+      batchedRevalidatingIterator( rbtree_t *s, int batch_size, pthread_mutex_t * rb_mut, TUPLE *&key ) : s_(s), mgr_(NULL), target_size_(0), flushing_(0), batch_size_(batch_size), num_batched_(batch_size), cur_off_(batch_size), mut_(rb_mut) {
       next_ret_ = (TUPLE**)malloc(sizeof(next_ret_[0]) * batch_size_);
       populate_next_ret(key);
     }
@@ -217,7 +217,7 @@ public:
 
     rbtree_t *s_;
     TUPLE ** next_ret_;
-    pageid_t* cur_size_;  // a pointer to the current size of the red-black tree, in bytes.
+    mergeManager * mgr_;
     int64_t target_size_; // the low-water size for the tree.  If cur_size_ is not null, and *cur_size_ < C * target_size_, we sleep.
     bool* flushing_; // never block if *flushing is true.
     int batch_size_;

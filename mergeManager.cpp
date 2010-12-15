@@ -44,10 +44,11 @@ void mergeManager::new_merge(int mergeLevel) {
     assert(c0->target_size);
     c1->target_size = (pageid_t)(*ltable->R() * (double)ltable->mean_c0_run_length);
     assert(c1->target_size);
+    s->new_merge2();
   } else if(s->merge_level == 2) {
     // target_size is infinity...
+    s->new_merge2();
   } else { abort(); }
-  s->new_merge2();
 }
 void mergeManager::set_c0_size(int64_t size) {
   assert(size);
@@ -76,13 +77,7 @@ void mergeManager::update_progress(mergeStats * s, int delta) {
       }
     }
 
-    if(s->merge_level == 0) {
-      // ltable manages c0's current size directly.
-    } else {
-      s->current_size = s->base_size + s->bytes_out - s->bytes_in_large;
-    }
-
-    s->out_progress = ((double)s->current_size) / ((s->merge_level == 0 ) ? (double)ltable->mean_c0_run_length : (double)s->target_size);
+    s->out_progress = ((double)s->get_current_size()) / ((s->merge_level == 0 ) ? (double)ltable->mean_c0_run_length : (double)s->target_size);
     if(c2->active && c1->mergeable_size) {
       c1_c2_delta = c1->out_progress - c2->in_progress;
     } else {
@@ -162,16 +157,17 @@ void mergeManager::tick(mergeStats * s) {
   } else if(s->merge_level == 0) {
     // Simple backpressure algorithm based on how full C0 is.
 
+    pageid_t cur_c0_sz;
     // Is C0 bigger than is allowed?
-    while(c0->current_size > ltable->max_c0_size) {  // can't use s->current_size, since this is the thread that maintains that number...
+    while((cur_c0_sz = s->get_current_size()) > ltable->max_c0_size) {  // can't use s->current_size, since this is the thread that maintains that number...
       printf("\nMEMORY OVERRUN!!!! SLEEP!!!!\n");
       struct timespec ts;
       double_to_ts(&ts, 0.1);
       nanosleep(&ts, 0);
     }
     // Linear backpressure model
-    s->out_progress = ((double)c0->current_size)/((double)ltable->max_c0_size);
-    double delta = ((double)c0->current_size)/(0.9*(double)ltable->max_c0_size); // 0 <= delta <= 1.111...
+    s->out_progress = ((double)cur_c0_sz)/((double)ltable->max_c0_size);
+    double delta = ((double)cur_c0_sz)/(0.9*(double)ltable->max_c0_size); // 0 <= delta <= 1.111...
     delta -= 1.0;
     if(delta > 0.00005) {
       double slp = 0.001 + 5.0 * delta; //0.0015 < slp < 1.112111..
@@ -325,7 +321,7 @@ void mergeManager::pretty_print(FILE * out) {
   }
   pageid_t mb = 1024 * 1024;
   fprintf(out,"[merge progress MB/s window (lifetime)]: app [%s %6lldMB tot %6lldMB cur ~ %3.0f%%/%3.0f%% %6.1fsec %4.1f (%4.1f)] %s %s [%s %3.0f%% ~ %3.0f%% %4.1f (%4.1f)] %s %s [%s %3.0f%% %4.1f (%4.1f)] %s ",
-      c0->active ? "RUN" : "---", (long long)(c0->stats_lifetime_consumed / mb), (long long)(c0->current_size / mb), 100.0 * c0->out_progress, 100.0 * ((double)c0->current_size)/(double)ltable->max_c0_size, c0->stats_lifetime_elapsed, c0->stats_bps/((double)mb), c0->stats_lifetime_consumed/(((double)mb)*c0->stats_lifetime_elapsed),
+      c0->active ? "RUN" : "---", (long long)(c0->stats_lifetime_consumed / mb), (long long)(c0->get_current_size() / mb), 100.0 * c0->out_progress, 100.0 * ((double)c0->get_current_size())/(double)ltable->max_c0_size, c0->stats_lifetime_elapsed, c0->stats_bps/((double)mb), c0->stats_lifetime_consumed/(((double)mb)*c0->stats_lifetime_elapsed),
       have_c0 ? "C0" : "..",
       have_c0m ? "C0'" : "...",
       c1->active ? "RUN" : "---", 100.0 * c1->in_progress, 100.0 * c1->out_progress, c1->stats_bps/((double)mb), c1->stats_lifetime_consumed/(((double)mb)*c1->stats_lifetime_elapsed),
