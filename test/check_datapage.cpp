@@ -91,7 +91,7 @@ void insertWithConcurrentReads(size_t NUM_ENTRIES) {
           dsp.push_back(dp->get_start_pid());
       }
       size_t j = (rand() % (2 * (1 + i - last_i))) + last_i;
-
+      if(j >= key_arr.size()) { j = key_arr.size()-1; }
       bool found = 0;
       {
         DataPage<datatuple>::iterator it = dp->begin();
