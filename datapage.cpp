@@ -270,8 +270,42 @@ bool DataPage<TUPLE>::read_data(byte * buf, off_t offset, size_t len) {
 template <class TUPLE>
 bool DataPage<TUPLE>::append(TUPLE const * dat)
 {
-  // Don't append record to already-full datapage.  The record could push us over the page limit, but that's OK.
+  // First, decide if we should append to this datapage, based on whether appending will waste more or less space than starting a new datapage
+
+  bool accept_tuple;
+  len_t tup_len = dat->byte_length();
+  // Decsion tree
   if(write_offset_ > (initial_page_count_ * PAGE_SIZE)) {
+    // we already exceeded the page budget
+    if(write_offset_ > (2 * initial_page_count_ * PAGE_SIZE)) {
+      // ... by a lot.  Reject regardless.
+      accept_tuple = false;
+    } else {
+      // ... by a little bit.  Accept tuple if it fits on this page.
+      accept_tuple = (((write_offset_-1) & ~(PAGE_SIZE-1)) == (((write_offset_ + tup_len)-1) & ~(PAGE_SIZE-1)));
+    }
+  } else {
+    if(write_offset_ + tup_len < (initial_page_count_ * PAGE_SIZE)) {
+      // tuple fits.  contractually obligated to accept it.
+      accept_tuple = true;
+    } else if(write_offset_ == 0) {
+      // datapage is emptry.  contractually obligated to accept tuple.
+      accept_tuple = true;
+    } else {
+      if(tup_len > initial_page_count_ * PAGE_SIZE) {
+        // this is a "big tuple"
+        len_t reject_padding = PAGE_SIZE - (write_offset_ & PAGE_SIZE-1);
+        len_t accept_padding = PAGE_SIZE - ((write_offset_ + tup_len) & PAGE_SIZE-1);
+        accept_tuple = accept_padding < reject_padding;
+      } else {
+        // this is a "small tuple"; only exceed budget if doing so leads to < 33% overhead for this data.
+        len_t accept_padding = PAGE_SIZE - (write_offset_ & PAGE_SIZE-1);
+        accept_tuple = (3*accept_padding) < tup_len;
+      }
+    }
+  }
+
+  if(!accept_tuple) {
     DEBUG("offset %lld closing datapage\n", write_offset_);
     return false;
   }
