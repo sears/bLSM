@@ -49,6 +49,14 @@ void mergeManager::new_merge(int mergeLevel) {
     // target_size is infinity...
     s->new_merge2();
   } else { abort(); }
+#ifdef EXTENDED_STATS
+  gettimeofday(&s->stats_start,0);
+  double elapsed = (tv_to_double(&s->stats_start) - tv_to_double(&s->stats_sleep));
+  s->stats_lifetime_elapsed += elapsed;
+  (s->stats_elapsed) = elapsed;
+  (s->stats_active)  = 0;
+
+#endif
 }
 void mergeManager::set_c0_size(int64_t size) {
   assert(size);
@@ -89,7 +97,10 @@ void mergeManager::update_progress(mergeStats * s, int delta) {
     gettimeofday(&now, 0);
     double stats_elapsed_delta = tv_to_double(&now) - ts_to_double(&s->stats_last_tick);
     if(stats_elapsed_delta < 0.0000001) { stats_elapsed_delta = 0.0000001; }
+    s->stats_lifetime_active += stats_elapsed_delta;
     s->stats_lifetime_elapsed += stats_elapsed_delta;
+    s->stats_active += stats_elapsed_delta;
+    s->stats_elapsed += stats_elapsed_delta;
     s->stats_lifetime_consumed += s->stats_bytes_in_small_delta;
     double stats_tau = 60.0; // number of seconds to look back for window computation.  (this is the expected mean residence time in an exponential decay model, so the units are not so intuitive...)
     double stats_decay = exp((0.0-stats_elapsed_delta)/stats_tau);
@@ -213,14 +224,26 @@ void mergeManager::wrote_tuple(int merge_level, datatuple * tup) {
 }
 
 void mergeManager::finished_merge(int merge_level) {
-  update_progress(get_merge_stats(merge_level), 0);
-  get_merge_stats(merge_level)->active = false;
+  mergeStats *s = get_merge_stats(merge_level);
+  update_progress(s, 0);
+  s->active = false;
   if(merge_level != 0) {
     get_merge_stats(merge_level - 1)->mergeable_size = 0;
     update_progress(get_merge_stats(merge_level-1), 0);
   }
 #if EXTENDED_STATS
-  gettimeofday(&get_merge_stats(merge_level)->stats_done, 0);
+  gettimeofday(&s->stats_done, 0);
+  double elapsed = tv_to_double(&s->stats_done) - ts_to_double(&s->stats_last_tick);
+  (s->stats_lifetime_active) += elapsed;
+  (s->stats_lifetime_elapsed) += elapsed;
+  (s->stats_elapsed) += elapsed;
+  (s->stats_active) += elapsed;
+  memcpy(&s->stats_sleep, &s->stats_done, sizeof(s->stats_sleep));
+#define VERBOSE
+#ifdef VERBOSE
+  fprintf(stdout, "\n");
+  s->pretty_print(stdout);
+#endif
 #endif
   update_progress(get_merge_stats(merge_level), 0);
 }

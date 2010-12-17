@@ -43,6 +43,7 @@ public:
   recordid talloc(int xid);
   ~mergeManager();
 
+  void finished_merge(int merge_level);
   void new_merge(int mergelevel);
   void set_c0_size(int64_t size);
   void update_progress(mergeStats *s, int delta);
@@ -58,22 +59,45 @@ public:
   void read_tuple_from_large_component(int merge_level, int tuple_count, pageid_t byte_len);
 
   void wrote_tuple(int merge_level, datatuple * tup);
-  void finished_merge(int merge_level);
   void pretty_print(FILE * out);
   void *pretty_print_thread();
 
 private:
+  /**
+   * How far apart are the c0-c1 and c1-c2 mergers?
+   *
+   * This is c1->out_progress - c2->in_progress.  We want the downstream merger
+   * to be slightly ahead of the upstream one so that we can mask latency blips
+   * due to tearing down the downstream merger and starting the new one.
+   * Therefore, this should always be slightly negative.
+   *
+   * TODO remove c1_c2_delta, which is derived, but difficult (from a synchronization perspective) to compute?
+   */
   double c1_c2_delta;
+  /** Helper method for the constructors */
   void init_helper(void);
+  /**
+   * Serialization format for Stasis merge statistics header.
+   *
+   * The small amount of state maintained by mergeManager consists of derived
+   * and runtime-only fields.  This struct reflects that, and only contains
+   * pointers to marshaled versions of the per-tree component statistics.
+   */
   struct marshalled_header {
-    recordid c0;
+    recordid c0; // Probably redundant, but included for symmetry.
     recordid c1;
     recordid c2;
   };
+  /**
+   * A pointer to the logtable that we manage statistics for.  Most usages of
+   * this are layering violations; the main exception is in pretty_print.
+   *
+   * TODO: remove mergeManager->ltable?
+   */
   logtable<datatuple>*    ltable;
-  mergeStats * c0;
-  mergeStats * c1;
-  mergeStats * c2;
+  mergeStats * c0;   /// Per-tree component statistics for c0 and c0_mergeable (the latter should always be null...)
+  mergeStats * c1;   /// Per-tree component statistics for c1 and c1_mergeable.
+  mergeStats * c2;   /// Per-tree component statistics for c2.
 
   // The following fields are used to shut down the pretty print thread.
   bool still_running;

@@ -109,7 +109,6 @@ recordid logtable<TUPLE>::allocTable(int xid)
     merge_mgr = new mergeManager(this);
     merge_mgr->set_c0_size(max_c0_size);
     merge_mgr->new_merge(0);
-    merge_mgr->get_merge_stats(0)->starting_merge();
 
     tree_c0 = new memTreeComponent<datatuple>::rbtree_t;
     tbl_header.merge_manager = merge_mgr->talloc(xid);
@@ -129,7 +128,6 @@ void logtable<TUPLE>::openTable(int xid, recordid rid) {
   merge_mgr->set_c0_size(max_c0_size);
 
   merge_mgr->new_merge(0);
-  merge_mgr->get_merge_stats(0)->starting_merge();
 
 }
 template<class TUPLE>

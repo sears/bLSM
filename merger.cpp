@@ -145,6 +145,7 @@ void * merge_scheduler::memMergeThread() {
         //TODO: this is simplistic for now
         //6: if c1' is too big, signal the other merger
 
+        // XXX move this to mergeManager, and make bytes_in_small be protected.
         if(stats->bytes_in_small) {
           // update c0 effective size.
           double frac = 1.0/(double)merge_count;
@@ -156,7 +157,7 @@ void * merge_scheduler::memMergeThread() {
           //ltable_->merge_mgr->get_merge_stats(0)->target_size = ltable_->mean_c0_run_length;
         }
 
-        printf("Merge done. R = %f MemSize = %lld Mean = %lld, This = %lld, Count = %d factor %3.3fcur%3.3favg\n", *ltable_->R(), (long long)ltable_->max_c0_size, (long long int)ltable_->mean_c0_run_length, stats->bytes_in_small, merge_count, ((double)stats->bytes_in_small) / (double)ltable_->max_c0_size, ((double)ltable_->mean_c0_run_length) / (double)ltable_->max_c0_size);
+        printf("\nMerge done. R = %f MemSize = %lld Mean = %lld, This = %lld, Count = %d factor %3.3fcur%3.3favg\n", *ltable_->R(), (long long)ltable_->max_c0_size, (long long int)ltable_->mean_c0_run_length, stats->bytes_in_small, merge_count, ((double)stats->bytes_in_small) / (double)ltable_->max_c0_size, ((double)ltable_->mean_c0_run_length) / (double)ltable_->max_c0_size);
 
         assert(*ltable_->R() >= MIN_R);
         bool signal_c2 = (new_c1_size / ltable_->mean_c0_run_length > *ltable_->R());
