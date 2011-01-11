@@ -4,10 +4,12 @@
 #include <assert.h>
 #include <mergeManager.h> // XXX for double_to_ts.
 #include <mergeStats.h>
+#include <stasis/util/stlslab.h>
 template<class TUPLE>
 class memTreeComponent {
 public:
-  typedef std::set<TUPLE*, TUPLE> rbtree_t;
+//  typedef std::set<TUPLE*, TUPLE, stlslab<TUPLE*> > rbtree_t;
+  typedef std::set<TUPLE*, TUPLE > rbtree_t;
   typedef rbtree_t* rbtree_ptr_t;
 
   static void tearDownTree(rbtree_ptr_t t);
