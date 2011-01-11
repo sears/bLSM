@@ -17,8 +17,7 @@ public:
 	typedef unsigned char* data_t ;
 private:
 	len_t datalen_;
-	byte* key_;
-	byte* data_; // aliases key.  data_ - 1 should be the \0 terminating key_.
+	byte* data_; // aliases key().  data_ - 1 should be the \0 terminating key().
 
   datatuple* sanity_check() {
     assert(keylen() < 3000);
@@ -27,7 +26,7 @@ private:
 public:
 
 	inline len_t keylen() const {
-		return data_ - key_;
+		return data_ - key();
 	}
 	inline len_t datalen() const {
 		return (datalen_ == DELETE) ? 0 : datalen_;
@@ -42,7 +41,7 @@ public:
     }
 
     inline key_t key() const {
-		return key_;
+		return (key_t)(this+1);
 	}
 	inline data_t data() const {
 		return data_;
@@ -110,10 +109,9 @@ public:
       return create(key, keylen, 0, DELETE);
     }
     static datatuple* create(const void* key, len_t keylen, const void* data, len_t datalen) {
-    	datatuple *ret = (datatuple*)malloc(sizeof(datatuple));
-    	ret->key_      = (byte*)malloc(length_from_header(keylen, datalen));
-    	memcpy(ret->key_, key, keylen);
-    	ret->data_ = ret->key_ + keylen;  // need to set this even if delete, since it encodes the key length.
+    	datatuple *ret = (datatuple*)malloc(sizeof(datatuple) + length_from_header(keylen,datalen));
+    	memcpy(ret->key(), key, keylen);
+    	ret->data_ = ret->key() + keylen;  // need to set this even if delete, since it encodes the key length.
     	if(datalen != DELETE) {
     		memcpy(ret->data_, data, datalen);
     	}
@@ -126,38 +124,36 @@ public:
     	byte *ret = (byte*)malloc(byte_length());
     	((len_t*)ret)[0] = keylen();
     	((len_t*)ret)[1] = datalen_;
-    	memcpy(((len_t*)ret)+2, key_, length_from_header(keylen(), datalen_));
+    	memcpy(((len_t*)ret)+2, key(), length_from_header(keylen(), datalen_));
         return ret;
     }
 
     const byte* get_bytes(len_t *keylen, len_t *datalen) const {
         *keylen  = this->keylen();
     	*datalen = datalen_;
-    	return key_;
+    	return key();
     }
 
     //format of buf: key _ data.  The caller needs to 'peel' off key length and data length for this call.
     static datatuple* from_bytes(len_t keylen, len_t datalen, byte* buf) {
-    	datatuple *dt = (datatuple*) malloc(sizeof(datatuple));
+    	datatuple *dt = (datatuple*) malloc(sizeof(datatuple) + length_from_header(keylen,datalen));
     	dt->datalen_ = datalen;
-    	dt->key_ = buf;
-    	dt->data_ = dt->key_ + keylen;
+    	memcpy(dt->key(),buf, length_from_header(keylen,datalen));
+    	dt->data_ = dt->key() + keylen;
     	return dt->sanity_check();
     }
     static datatuple* from_bytes(byte* buf) {
-    	datatuple *dt = (datatuple*) malloc(sizeof(datatuple));
-    	len_t keylen = ((len_t*)buf)[0];
-    	dt->datalen_ = ((len_t*)buf)[1];
-    	len_t buflen = length_from_header(keylen, dt->datalen_);
-    	dt->key_ = (byte*)malloc(buflen);
-    	memcpy(dt->key_,((len_t*)buf)+2,buflen);
-    	dt->data_ = dt->key_ + keylen;
+      len_t keylen = ((len_t*)buf)[0];
+      len_t buflen = length_from_header(keylen, ((len_t*)buf)[1]);
+      datatuple *dt = (datatuple*) malloc(sizeof(datatuple) + buflen);
+      dt->datalen_ = ((len_t*)buf)[1];
+      memcpy(dt->key(),((len_t*)buf)+2,buflen);
+      dt->data_ = dt->key() + keylen;
 
     	return dt->sanity_check();
     }
 
     static inline void freetuple(datatuple* dt) {
-        free(dt->key_);
         free(dt);
     }
 

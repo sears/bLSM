@@ -264,7 +264,9 @@ static inline datatuple* readtuplefromsocket(FILE * sockf, int * err) {
 
   if(( *err = readfromsocket(sockf, bytes, buflen)             )) { free(bytes); return NULL; }
 
-  return datatuple::from_bytes(keylen, datalen, bytes);   // from_bytes consumes the buffer.
+  datatuple * ret = datatuple::from_bytes(keylen, datalen, bytes);
+  free(bytes);
+  return ret;
 }
 
 /**
@@ -281,11 +283,16 @@ static inline datatuple* readtuplefromsocket(int sockd, int * err) {
     if(( *err = readfromsocket(sockd, &datalen, sizeof(datalen)) )) return NULL;
 
     buflen = datatuple::length_from_header(keylen, datalen);
+
+    // TODO remove the malloc / free in readtuplefromsocket, either with a
+    // two-stage API for datatuple::create, or with realloc.
     byte*  bytes = (byte*) malloc(buflen);
 
     if(( *err = readfromsocket(sockd, bytes, buflen)             )) return NULL;
 
-	return datatuple::from_bytes(keylen, datalen, bytes);   // from_bytes consumes the buffer.
+	datatuple * ret = datatuple::from_bytes(keylen, datalen, bytes);
+	free(bytes);
+	return ret;
 }
 
 static inline int writeendofiteratortosocket(FILE * sockf) {
