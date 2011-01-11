@@ -160,7 +160,8 @@ void * merge_scheduler::memMergeThread() {
         printf("\nMerge done. R = %f MemSize = %lld Mean = %lld, This = %lld, Count = %d factor %3.3fcur%3.3favg\n", *ltable_->R(), (long long)ltable_->max_c0_size, (long long int)ltable_->mean_c0_run_length, stats->bytes_in_small, merge_count, ((double)stats->bytes_in_small) / (double)ltable_->max_c0_size, ((double)ltable_->mean_c0_run_length) / (double)ltable_->max_c0_size);
 
         assert(*ltable_->R() >= MIN_R);
-        bool signal_c2 = (new_c1_size / ltable_->mean_c0_run_length > *ltable_->R());
+        // XXX don't hardcode 1.05, which will break for R > ~20.
+        bool signal_c2 = (1.05 * new_c1_size / ltable_->mean_c0_run_length > *ltable_->R());
         DEBUG("\nc1 size %f R %f\n", new_c1_size, *ltable_->R());
         if( signal_c2  )
         {

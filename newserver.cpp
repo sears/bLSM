@@ -17,24 +17,28 @@
 int main(int argc, char *argv[])
 {
 
-  logtable<datatuple>::init_stasis();
-
-    int xid = Tbegin();
-
-
-    recordid table_root = ROOT_RECORD;
-
     int64_t c0_size = 1024 * 1024 * 512 * 1;
+    stasis_buffer_manager_size = 1 * 1024 * 1024 * 1024 / PAGE_SIZE;  // 1.5GB total
 
     if(argc == 2 && !strcmp(argv[1], "--test")) {
+      stasis_buffer_manager_size = 3 * 1024 * 1024 * 128 / PAGE_SIZE;  // 228MB total
       c0_size = 1024 * 1024 * 100;
       printf("warning: running w/ tiny c0 for testing\n"); // XXX build a separate test server and deployment server?
     }
 
     if(argc == 2 && !strcmp(argv[1], "--benchmark")) {
-      c0_size = 1024 * 1024 * 768 * 1;
+      stasis_buffer_manager_size = 2L * 1024L * 1024L * 1024L / PAGE_SIZE;  // 4GB total
+      c0_size = 1024L * 1024L * 1024L * 2L;
       printf("note: running w/ 2GB c0 for benchmarking\n"); // XXX build a separate test server and deployment server?
     }
+
+    logtable<datatuple>::init_stasis();
+
+      int xid = Tbegin();
+
+
+      recordid table_root = ROOT_RECORD;
+
 
     logtable<datatuple> ltable(c0_size);
 

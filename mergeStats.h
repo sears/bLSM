@@ -47,6 +47,9 @@ class mergeStats {
       bytes_out(0),
       bytes_in_small(0),
       bytes_in_large(0),
+      num_tuples_out(0),
+      num_tuples_in_small(0),
+      num_tuples_in_large(0),
       just_handed_off(false),
       delta(0),
       need_tick(0),
@@ -57,11 +60,8 @@ class mergeStats {
       ,
       stats_merge_count(0),
       stats_bytes_out_with_overhead(0),
-      stats_num_tuples_out(0),
       stats_num_datapages_out(0),
       stats_bytes_in_small_delta(0),
-      stats_num_tuples_in_small(0),
-      stats_num_tuples_in_large(0),
       stats_lifetime_elapsed(0),
       stats_lifetime_active(0),
       stats_elapsed(0),
@@ -82,6 +82,9 @@ class mergeStats {
       bytes_out      = base_size;
       bytes_in_small = 0;
       bytes_in_large = 0;
+      num_tuples_out = 0;
+      num_tuples_in_small = 0;
+      num_tuples_in_large = 0;
       just_handed_off= false;
       delta          = 0;
       need_tick      = 0;
@@ -91,11 +94,8 @@ class mergeStats {
 #if EXTENDED_STATS
       stats_merge_count = 0;
       stats_bytes_out_with_overhead = 0;
-      stats_num_tuples_out = 0;
       stats_num_datapages_out = 0;
       stats_bytes_in_small_delta = 0;
-      stats_num_tuples_in_small = 0;
-      stats_num_tuples_in_large = 0;
       stats_lifetime_elapsed = 0;
       stats_lifetime_active = 0;
       stats_elapsed = 0;
@@ -127,15 +127,15 @@ class mergeStats {
       bytes_out = 0;
       bytes_in_small = 0;
       bytes_in_large = 0;
+      num_tuples_out = 0;
+      num_tuples_in_small = 0;
+      num_tuples_in_large = 0;
       in_progress = 0;
 #if EXTENDED_STATS
       stats_merge_count++;
       stats_bytes_out_with_overhead = 0;
-      stats_num_tuples_out = 0;
       stats_num_datapages_out = 0;
       stats_bytes_in_small_delta = 0;
-      stats_num_tuples_in_small = 0;
-      stats_num_tuples_in_large = 0;
 #endif
     }
     void starting_merge() {
@@ -149,6 +149,7 @@ class mergeStats {
     }
     pageid_t get_current_size() {
       if(merge_level == 0) {
+        printf("base = %lld in_s = %lld in_l = %lld out = %lld\n", base_size, bytes_in_small, bytes_in_large, bytes_out);
         return base_size + bytes_in_small - bytes_in_large - bytes_out;
       } else {
         // s->bytes_out has strange semantics.  It's how many bytes our input has written into this tree.
@@ -201,6 +202,10 @@ class mergeStats {
   protected:
     pageid_t bytes_in_large;       /// Bytes from the large input?  (for C0, bytes deleted due to updates)
 
+    pageid_t num_tuples_out;       /// How many tuples did we write?  TODO Only used for C0, so not stored on disk.
+    pageid_t num_tuples_in_small;  /// Tuples from the small input?   TODO Only used for C0, so not stored on disk.
+    pageid_t num_tuples_in_large;  /// Tuples from large input?       TODO Only used for C0, so not stored on disk.
+
     // todo: simplify confusing hand off logic, and remove this field?
     bool just_handed_off;
 
@@ -220,11 +225,8 @@ class mergeStats {
     struct timeval stats_done;           /// When did we finish merging?
     struct timespec stats_last_tick;
     pageid_t stats_bytes_out_with_overhead;/// How many bytes did we write (including internal tree nodes)?
-    pageid_t stats_num_tuples_out;       /// How many tuples did we write?
     pageid_t stats_num_datapages_out;    /// How many datapages?
     pageid_t stats_bytes_in_small_delta; /// How many bytes from the small input tree during this tick (for C0, we ignore tree overheads)?
-    pageid_t stats_num_tuples_in_small;  /// Tuples from the small input?
-    pageid_t stats_num_tuples_in_large;  /// Tuples from large input?
     double stats_lifetime_elapsed;       /// How long has this tree existed, in seconds?
     double stats_lifetime_active;        /// How long has this tree been running (i.e.; active = true), in seconds?
     double stats_elapsed;                /// How long did this merge take, including idle time (not valid until after merge is complete)?
@@ -244,9 +246,9 @@ class mergeStats {
       double phys_mb_out = ((double)stats_bytes_out_with_overhead) / (1024.0 * 1024.0);
       double mb_ins = ((double)bytes_in_small)     /(1024.0*1024.0);
       double mb_inl = ((double)bytes_in_large)     /(1024.0*1024.0);
-      double kt_out = ((double)stats_num_tuples_out)     /(1024.0);
-      double kt_ins=  ((double)stats_num_tuples_in_small)     /(1024.0);
-      double kt_inl = ((double)stats_num_tuples_in_large)     /(1024.0);
+      double kt_out = ((double)num_tuples_out)     /(1024.0);
+      double kt_ins=  ((double)num_tuples_in_small)     /(1024.0);
+      double kt_inl = ((double)num_tuples_in_large)     /(1024.0);
       double mb_hdd = mb_out + mb_inl + (merge_level == 1 ? 0.0 : mb_ins);
       double kt_hdd = kt_out + kt_inl + (merge_level == 1 ? 0.0 : kt_ins);
 
