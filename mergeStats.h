@@ -38,6 +38,15 @@ class mergeStats {
       mergeManager::double_to_ts(&stats_last_tick, mergeManager::tv_to_double(&last));
 #endif
     }
+    pageid_t rb_size_estimator(pageid_t num_bytes, pageid_t num_tuples) {
+      // Experimentally determined numbers
+//      pageid_t small_tup_est =  num_bytes + 110L * num_tuples;
+//      pageid_t big_tup_est   =  num_bytes + (2L * num_bytes) / 100L;
+      // Pessimistic numbers
+      pageid_t small_tup_est =  num_bytes + 220L * num_tuples;
+      pageid_t big_tup_est   =  num_bytes + (4L * num_bytes) / 100L;
+      return big_tup_est > small_tup_est ? big_tup_est : small_tup_est;  // max
+    }
   public:
     mergeStats(int merge_level, int64_t target_size) :
       merge_level(merge_level),
@@ -149,8 +158,8 @@ class mergeStats {
     }
     pageid_t get_current_size() {
       if(merge_level == 0) {
-        printf("base = %lld in_s = %lld in_l = %lld out = %lld\n", base_size, bytes_in_small, bytes_in_large, bytes_out);
-        return base_size + bytes_in_small - bytes_in_large - bytes_out;
+        return rb_size_estimator(base_size + bytes_in_small - bytes_in_large - bytes_out,
+                                 /*num_tuples_base + */ num_tuples_in_small - num_tuples_in_large - num_tuples_out);;
       } else {
         // s->bytes_out has strange semantics.  It's how many bytes our input has written into this tree.
         return base_size + bytes_out - bytes_in_large;
