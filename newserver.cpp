@@ -27,8 +27,8 @@ int main(int argc, char *argv[])
     }
 
     if(argc == 2 && !strcmp(argv[1], "--benchmark")) {
-      stasis_buffer_manager_size = 2L * 1024L * 1024L * 1024L / PAGE_SIZE;  // 4GB total
-      c0_size = 1024L * 1024L * 1024L * 2L;
+      stasis_buffer_manager_size = (1024L * 1024L * 1024L * 2L) / PAGE_SIZE;  // 4GB total
+      c0_size =                     1024L * 1024L * 1024L * 2L;
       printf("note: running w/ 2GB c0 for benchmarking\n"); // XXX build a separate test server and deployment server?
     }
 
