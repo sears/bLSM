@@ -3,6 +3,9 @@
 #undef try
 #undef begin
 
+#include <signal.h>
+
+
 #include "merger.h"
 #include "logstore.h"
 #include "simpleServer.h"
@@ -16,7 +19,7 @@
 
 int main(int argc, char *argv[])
 {
-
+    signal(SIGPIPE, SIG_IGN);
     int64_t c0_size = 1024 * 1024 * 512 * 1;
     stasis_buffer_manager_size = 1 * 1024 * 1024 * 1024 / PAGE_SIZE;  // 1.5GB total
 
