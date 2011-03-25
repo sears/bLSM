@@ -103,7 +103,7 @@ void * merge_scheduler::memMergeThread() {
 
         // needs to be past the rwlc_unlock...
         memTreeComponent<datatuple>::batchedRevalidatingIterator *itrB =
-            new memTreeComponent<datatuple>::batchedRevalidatingIterator(ltable_->get_tree_c0(), ltable_->merge_mgr, ltable_->max_c0_size, &ltable_->flushing, 100, &ltable_->rb_mut);
+            new memTreeComponent<datatuple>::batchedRevalidatingIterator(ltable_->get_tree_c0(), ltable_->merge_mgr, ltable_->max_c0_size, &ltable_->c0_flushing, 100, &ltable_->rb_mut);
 
         //: do the merge
         DEBUG("mmt:\tMerging:\n");
@@ -171,7 +171,9 @@ void * merge_scheduler::memMergeThread() {
 
             // XXX need to report backpressure here!
             while(ltable_->get_tree_c1_mergeable()) {
+                ltable_->c1_flushing = true;
                 rwlc_cond_wait(&ltable_->c1_needed, ltable_->header_mut);
+                ltable_->c1_flushing = false;
             }
 
             xid = Tbegin();
@@ -254,7 +256,7 @@ void * merge_scheduler::diskMergeThread()
         // 4: do the merge.
         //create the iterators
         diskTreeComponent::iterator *itrA = ltable_->get_tree_c2()->open_iterator();
-        diskTreeComponent::iterator *itrB = ltable_->get_tree_c1_mergeable()->open_iterator(ltable_->merge_mgr, 0.05, &ltable_->shutting_down_);
+        diskTreeComponent::iterator *itrB = ltable_->get_tree_c1_mergeable()->open_iterator(ltable_->merge_mgr, 0.05, &ltable_->c1_flushing);
 
         //create a new tree
         diskTreeComponent * c2_prime = new diskTreeComponent(xid, ltable_->internal_region_size, ltable_->datapage_region_size, ltable_->datapage_size, stats, (uint64_t)(ltable_->max_c0_size * *ltable_->R() + stats->base_size)/ 1000);

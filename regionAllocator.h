@@ -121,6 +121,7 @@ public:
 
 
   lsn_t get_lsn(int xid) {
+    // XXX we shouldn't need to have this logic in here anymore...
     lsn_t xid_lsn = stasis_transaction_table_get((stasis_transaction_table_t*)stasis_runtime_transaction_table(), xid)->prevLSN;
     lsn_t log_lsn = ((stasis_log_t*)stasis_log())->next_available_lsn((stasis_log_t*)stasis_log());
     lsn_t ret = xid_lsn == INVALID_LSN ? log_lsn-1 : xid_lsn;

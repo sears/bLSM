@@ -124,7 +124,8 @@ public:
       if(!shutting_down_) {
         shutting_down_ = true;
         flushTable();
-        flushing = true;
+        c0_flushing = true;
+        c1_flushing = true;
       }
       rwlc_unlock(header_mut);
       // XXX must need to do other things! (join the threads?)
@@ -144,7 +145,8 @@ private:
     bool c0_is_merging;
 
 public:
-    bool flushing;
+    bool c0_flushing;
+    bool c1_flushing; // this needs to be set to true at shutdown, or when the c0-c1 merger is waiting for c1-c2 to finish its merge
 
     //DATA PAGE SETTINGS
     pageid_t internal_region_size; // in number of pages

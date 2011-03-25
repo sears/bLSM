@@ -398,7 +398,7 @@ recordid diskTreeComponent::internalNodes::appendInternalNode(int xid, Page *p,
     if(ret.size != INVALID_SLOT) {
       stasis_record_alloc_done(xid, p, ret);
       writeNodeRecord(xid,p,ret,key,key_len,val_page);
-      stasis_page_lsn_write(xid, p, internal_node_alloc->get_lsn(xid));
+      stasis_page_lsn_write(xid, p, internal_node_alloc->get_lsn(xid)); // XXX remove this (writeNodeRecord calls it for us)
     }
     unlock(p->rwlatch);
   } else {

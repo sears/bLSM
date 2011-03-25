@@ -37,7 +37,8 @@ logtable<TUPLE>::logtable(pageid_t max_c0_size, pageid_t internal_region_size, p
     // This bool is purely for external code.
     this->accepting_new_requests = true;
     this->shutting_down_ = false;
-    flushing = false;
+    c0_flushing = false;
+    c1_flushing = false;
     this->merge_mgr = 0;
     tmerger = new tuplemerger(&replace_merger);
 
@@ -85,8 +86,8 @@ void logtable<TUPLE>::init_stasis() {
   DataPage<datatuple>::register_stasis_page_impl();
   //stasis_buffer_manager_size = 768 * 1024; // 4GB = 2^10 pages:
   // XXX Workaround Stasis' (still broken) default concurrent buffer manager
-  stasis_buffer_manager_factory = stasis_buffer_manager_hash_factory;
-  stasis_buffer_manager_hint_writes_are_sequential = 0;
+//  stasis_buffer_manager_factory = stasis_buffer_manager_hash_factory;
+  stasis_buffer_manager_hint_writes_are_sequential = 1;
   Tinit();
 
 }
@@ -159,7 +160,7 @@ void logtable<TUPLE>::flushTable()
     start = tv_to_double(start_tv);
 
 
-    flushing = true;
+    c0_flushing = true;
     bool blocked = false;
 
     int expmcount = merge_count;
@@ -201,7 +202,7 @@ void logtable<TUPLE>::flushTable()
     } else {
       DEBUG("signaled c0-c1 merge\n");
     }
-    flushing = false;
+    c0_flushing = false;
 }
 
 template<class TUPLE>

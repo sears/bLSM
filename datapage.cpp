@@ -114,7 +114,7 @@ void DataPage<TUPLE>::initialize_page(pageid_t pageid) {
     //initialize header
     p->pageType = DATA_PAGE;
     
-    //clear page (arranges for null-padding)
+    //clear page (arranges for null-padding)  XXX null pad more carefully and use sentinel value instead?
     memset(p->memAddr, 0, PAGE_SIZE);
 
     //we're the last page for now.
@@ -162,7 +162,10 @@ size_t DataPage<TUPLE>::read_bytes(byte * buf, off_t offset, ssize_t remaining) 
 		chunk.size = 0; // eof
 	} else {
 		Page *p = alloc_ ? alloc_->load_page(xid_, chunk.page) : loadPage(xid_, chunk.page);
-		assert(p->pageType == DATA_PAGE);
+                if(p->pageType != DATA_PAGE) {
+                  fprintf(stderr, "Page type %d, id %lld lsn %lld\n", (int)p->pageType, (long long)p->id, (long long)p->LSN);
+                  assert(p->pageType == DATA_PAGE);
+                }
 		if((chunk.page + 1 == page_count_ + first_page_)
 		  && (*is_another_page_ptr(p))) {
 			page_count_++;
