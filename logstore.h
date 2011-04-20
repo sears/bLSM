@@ -34,7 +34,7 @@ public:
   //  6GB ~= 100B * 500 GB / (datapage_size * 4KB)
   //  (100B * 500GB) / (6GB * 4KB) = 2.035
   // RCS: Set this to 1 so that we do (on average) one seek per b-tree read.
-  logtable(pageid_t max_c0_size = 100 * 1024 * 1024, pageid_t internal_region_size = 1000, pageid_t datapage_region_size = 10000, pageid_t datapage_size = 1);
+  logtable(int log_mode = 0, pageid_t max_c0_size = 100 * 1024 * 1024, pageid_t internal_region_size = 1000, pageid_t datapage_region_size = 10000, pageid_t datapage_size = 1);
 
     ~logtable();
 
@@ -49,7 +49,7 @@ private:
     datatuple * insertTupleHelper(datatuple *tuple);
 public:
     void insertManyTuples(struct datatuple **tuples, int tuple_count);
-    void insertTuple(struct datatuple *tuple, bool should_log = true);
+    void insertTuple(struct datatuple *tuple);
     /** This test and set has strange semantics on two fronts:
      *
      * 1) It is not atomic with respect to non-testAndSet operations (which is fine in theory, since they have no barrier semantics, and we don't have a use case to support the extra overhead)
@@ -125,6 +125,8 @@ public:
     mergeManager * merge_mgr;
 
     stasis_log_t * log_file;
+    int log_mode;
+    int batch_size;
     bool recovering;
 
     bool accepting_new_requests;

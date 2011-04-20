@@ -11,6 +11,7 @@ int main(int argc, char **argv)
 {
     unlink("storefile.txt");
     unlink("logfile.txt");
+    system("rm -rf stasis_log/");
 
     sync();
 

@@ -22,6 +22,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 {
 	unlink("logfile.txt");
 	unlink("storefile.txt");
+    system("rm -rf stasis_log/");
     //data generation
     std::vector<std::string> data_arr;
     std::vector<std::string> key_arr;

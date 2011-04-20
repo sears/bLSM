@@ -24,6 +24,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     srand(1000);
     unlink("storefile.txt");
     unlink("logfile.txt");
+    system("rm -rf stasis_log/");
 
     logtable<datatuple>::init_stasis();
 

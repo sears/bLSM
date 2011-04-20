@@ -27,6 +27,7 @@ void insertWithConcurrentReads(size_t NUM_ENTRIES) {
   srand(1001);
   unlink("storefile.txt");
   unlink("logfile.txt");
+  system("rm -rf stasis_log/");
 
   sync();
 

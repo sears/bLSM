@@ -6,7 +6,7 @@
 #include <stasis/bufferManager/bufferHash.h>
 #include <stasis/logger/logger2.h>
 #include <stasis/logger/logHandle.h>
-#include <stasis/logger/safeWrites.h>
+#include <stasis/logger/filePool.h>
 #include "mergeStats.h"
 
 #undef try
@@ -23,7 +23,7 @@ static inline double tv_to_double(struct timeval tv)
 /////////////////////////////////////////////////////////////////
 
 template<class TUPLE>
-logtable<TUPLE>::logtable(pageid_t max_c0_size, pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size)
+logtable<TUPLE>::logtable(int log_mode, pageid_t max_c0_size, pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size)
 {
     recovering = true;
     this->max_c0_size = max_c0_size;
@@ -59,16 +59,15 @@ logtable<TUPLE>::logtable(pageid_t max_c0_size, pageid_t internal_region_size, p
     this->datapage_region_size = datapage_region_size;
     this->datapage_size = datapage_size;
 
-
-    const char * lsm_log_file_name = "lsm.logfile";
-
-    log_file = stasis_log_safe_writes_open(lsm_log_file_name,
-                                           stasis_log_file_mode,
-                                           stasis_log_file_permissions,
-                                           stasis_log_softcommit);
-    log_file->group_force =
-       stasis_log_group_force_init(log_file, 10 * 1000 * 1000); // timeout in nsec; want 10msec.
-    printf("Warning enable group force in logstore.cpp\n");
+    this->log_mode = log_mode;
+    this->batch_size++;
+    if(log_mode > 0) {
+      log_file = stasis_log_file_pool_open("lsm_log",
+					 stasis_log_file_mode,
+					 stasis_log_file_permissions);
+    } else {
+      log_file = NULL;
+    }
 }
 
 template<class TUPLE>
@@ -155,6 +154,7 @@ void logtable<TUPLE>::logUpdate(datatuple * tup) {
 
 template<class TUPLE>
 void logtable<TUPLE>::replayLog() {
+  if(!log_file) { assert(!log_mode); recovering = false; return; }
   lsn_t start = tbl_header.log_trunc;
   LogHandle * lh = start ? getLSNHandle(log_file, start) : getLogHandle(log_file);
   const LogEntry * e;
@@ -162,8 +162,7 @@ void logtable<TUPLE>::replayLog() {
     switch(e->type) {
     case UPDATELOG: {
       datatuple * tup = datatuple::from_bytes((byte*)stasis_log_entry_update_args_cptr(e));
-      // assert(e->update.funcID == 0/*LSMINSERT*/);
-      insertTuple(tup, false);
+      insertTuple(tup);
       datatuple::freetuple(tup);
     } break;
     case INTERNALLOG: { } break;
@@ -177,7 +176,7 @@ void logtable<TUPLE>::replayLog() {
 
 template<class TUPLE>
 lsn_t logtable<TUPLE>::get_log_offset() {
-  if(recovering) { return INVALID_LSN; }
+  if(recovering || !log_mode) { return INVALID_LSN; }
   return log_file->next_available_lsn(log_file);
 }
 template<class TUPLE>
@@ -570,10 +569,16 @@ void logtable<TUPLE>::insertManyTuples(datatuple ** tuples, int tuple_count) {
   for(int i = 0; i < tuple_count; i++) {
     merge_mgr->read_tuple_from_small_component(0, tuples[i]);
   }
-  for(int i = 0; i < tuple_count; i++) {
-    logUpdate(tuples[i]);
+  if(log_file && !recovering) {
+	  for(int i = 0; i < tuple_count; i++) {
+	    logUpdate(tuples[i]);
+	  }
+	  batch_size ++;
+	  if(batch_size >= log_mode) {
+		  log_file->force_tail(log_file, LOG_FORCE_COMMIT);
+		  batch_size = 0;
+	  }
   }
-  log_file->force_tail(log_file, LOG_FORCE_COMMIT);
 
   pthread_mutex_lock(&rb_mut);
   int num_old_tups = 0;
@@ -591,11 +596,15 @@ void logtable<TUPLE>::insertManyTuples(datatuple ** tuples, int tuple_count) {
 }
 
 template<class TUPLE>
-void logtable<TUPLE>::insertTuple(datatuple *tuple, bool should_log)
+void logtable<TUPLE>::insertTuple(datatuple *tuple)
 {
-    if(should_log) {
+    if(log_file && !recovering) {
         logUpdate(tuple);
-        log_file->force_tail(log_file, LOG_FORCE_COMMIT);
+        batch_size++;
+        if(batch_size >= log_mode) {
+        	log_file->force_tail(log_file, LOG_FORCE_COMMIT);
+        	batch_size = 0;
+        }
     }
     //lock the red-black tree
     merge_mgr->read_tuple_from_small_component(0, tuple);  // has to be before rb_mut, since it calls tick with block = true, and that releases header_mut.

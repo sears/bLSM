@@ -14,6 +14,8 @@
 #undef try
 #undef end
 
+#define LEGACY_BACKPRESSURE
+
 mergeStats* mergeManager:: get_merge_stats(int mergeLevel) {
   if (mergeLevel == 0) {
     return c0;

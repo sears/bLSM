@@ -297,12 +297,12 @@ bool DataPage<TUPLE>::append(TUPLE const * dat)
     } else {
       if(tup_len > initial_page_count_ * PAGE_SIZE) {
         // this is a "big tuple"
-        len_t reject_padding = PAGE_SIZE - (write_offset_ & PAGE_SIZE-1);
-        len_t accept_padding = PAGE_SIZE - ((write_offset_ + tup_len) & PAGE_SIZE-1);
+        len_t reject_padding = PAGE_SIZE - (write_offset_ & (PAGE_SIZE-1));
+        len_t accept_padding = PAGE_SIZE - ((write_offset_ + tup_len) & (PAGE_SIZE-1));
         accept_tuple = accept_padding < reject_padding;
       } else {
         // this is a "small tuple"; only exceed budget if doing so leads to < 33% overhead for this data.
-        len_t accept_padding = PAGE_SIZE - (write_offset_ & PAGE_SIZE-1);
+        len_t accept_padding = PAGE_SIZE - (write_offset_ & (PAGE_SIZE-1));
         accept_tuple = (3*accept_padding) < tup_len;
       }
     }

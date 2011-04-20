@@ -33,7 +33,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
     srand(1000);
     unlink("storefile.txt");
     unlink("logfile.txt");
-
+    system("rm -rf stasis_log/");
     sync();
 
     logtable<datatuple>::init_stasis();
