@@ -85,6 +85,8 @@ void * merge_scheduler::memMergeThread() {
 
         stats->starting_merge();
 
+        lsn_t merge_start = ltable_->get_log_offset();
+        printf("\nstarting memory merge. log offset is %lld\n", merge_start);
         // 3: Begin transaction
         xid = Tbegin();
 
@@ -139,8 +141,10 @@ void * merge_scheduler::memMergeThread() {
         double new_c1_size = stats->output_size();
         pthread_cond_signal(&ltable_->c0_needed);
 
-        ltable_->update_persistent_header(xid);
+        ltable_->update_persistent_header(xid, merge_start);
         Tcommit(xid);
+
+        ltable_->truncate_log();
 
         //TODO: this is simplistic for now
         //6: if c1' is too big, signal the other merger

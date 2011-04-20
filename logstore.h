@@ -49,7 +49,7 @@ private:
     datatuple * insertTupleHelper(datatuple *tuple);
 public:
     void insertManyTuples(struct datatuple **tuples, int tuple_count);
-    void insertTuple(struct datatuple *tuple);
+    void insertTuple(struct datatuple *tuple, bool should_log = true);
     /** This test and set has strange semantics on two fronts:
      *
      * 1) It is not atomic with respect to non-testAndSet operations (which is fine in theory, since they have no barrier semantics, and we don't have a use case to support the extra overhead)
@@ -61,6 +61,9 @@ public:
     recordid allocTable(int xid);
     void openTable(int xid, recordid rid);
     void flushTable();    
+
+    void replayLog();
+    void logUpdate(datatuple * tup);
 
     static void init_stasis();
     static void deinit_stasis();
@@ -92,7 +95,10 @@ public:
     bool get_c0_is_merging() { return c0_is_merging; }
     void set_c0_is_merging(bool is_merging) { c0_is_merging = is_merging; }
     void set_tree_c0_mergeable(memTreeComponent<datatuple>::rbtree_ptr_t newtree){tree_c0_mergeable = newtree; bump_epoch(); }
-    void update_persistent_header(int xid);
+    lsn_t get_log_offset();
+    void truncate_log();
+
+    void update_persistent_header(int xid, lsn_t log_trunc = INVALID_LSN);
 
     inline tuplemerger * gettuplemerger(){return tmerger;}
     
@@ -106,6 +112,7 @@ public:
         recordid c1_state;
         recordid c1_dp_state;
         recordid merge_manager;
+        lsn_t    log_trunc;
     };
     rwlc * header_mut;
     pthread_mutex_t tick_mut;
@@ -116,6 +123,9 @@ public:
     int64_t num_c0_mergers;
 
     mergeManager * merge_mgr;
+
+    stasis_log_t * log_file;
+    bool recovering;
 
     bool accepting_new_requests;
     inline bool is_still_running() { return !shutting_down_; }

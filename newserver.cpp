@@ -1,4 +1,5 @@
 #include <stasis/transactional.h>
+#include <stasis/logger/safeWrites.h>
 #undef end
 #undef try
 #undef begin
@@ -59,6 +60,7 @@ int main(int argc, char *argv[])
     Tcommit(xid);
     merge_scheduler * mscheduler = new merge_scheduler(&ltable);
     mscheduler->start();
+    ltable.replayLog();
 
     simpleServer *lserver = new simpleServer(&ltable);
 

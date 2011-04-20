@@ -4,6 +4,9 @@
 #include <stasis/transactional.h>
 #include <stasis/bufferManager.h>
 #include <stasis/bufferManager/bufferHash.h>
+#include <stasis/logger/logger2.h>
+#include <stasis/logger/logHandle.h>
+#include <stasis/logger/safeWrites.h>
 #include "mergeStats.h"
 
 #undef try
@@ -22,6 +25,7 @@ static inline double tv_to_double(struct timeval tv)
 template<class TUPLE>
 logtable<TUPLE>::logtable(pageid_t max_c0_size, pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size)
 {
+    recovering = true;
     this->max_c0_size = max_c0_size;
     this->mean_c0_run_length = max_c0_size;
     this->num_c0_mergers = 0;
@@ -54,6 +58,17 @@ logtable<TUPLE>::logtable(pageid_t max_c0_size, pageid_t internal_region_size, p
     this->internal_region_size = internal_region_size;
     this->datapage_region_size = datapage_region_size;
     this->datapage_size = datapage_size;
+
+
+    const char * lsm_log_file_name = "lsm.logfile";
+
+    log_file = stasis_log_safe_writes_open(lsm_log_file_name,
+                                           stasis_log_file_mode,
+                                           stasis_log_file_permissions,
+                                           stasis_log_softcommit);
+    log_file->group_force =
+       stasis_log_group_force_init(log_file, 10 * 1000 * 1000); // timeout in nsec; want 10msec.
+    printf("Warning enable group force in logstore.cpp\n");
 }
 
 template<class TUPLE>
@@ -98,7 +113,6 @@ void logtable<TUPLE>::deinit_stasis() { Tdeinit(); }
 template<class TUPLE>
 recordid logtable<TUPLE>::allocTable(int xid)
 {
-
     table_rec = Talloc(xid, sizeof(tbl_header));
     mergeStats * stats = 0;
     //create the big tree
@@ -113,6 +127,7 @@ recordid logtable<TUPLE>::allocTable(int xid)
 
     tree_c0 = new memTreeComponent<datatuple>::rbtree_t;
     tbl_header.merge_manager = merge_mgr->talloc(xid);
+    tbl_header.log_trunc = 0;
     update_persistent_header(xid);
 
     return table_rec;
@@ -131,8 +146,52 @@ void logtable<TUPLE>::openTable(int xid, recordid rid) {
   merge_mgr->new_merge(0);
 
 }
+
 template<class TUPLE>
-void logtable<TUPLE>::update_persistent_header(int xid) {
+void logtable<TUPLE>::logUpdate(datatuple * tup) {
+  LogEntry * e = stasis_log_write_update(log_file, 0, INVALID_PAGE, 0/*Page**/, 0/*op*/, tup->to_bytes(), tup->byte_length());
+  log_file->write_entry_done(log_file,e);
+}
+
+template<class TUPLE>
+void logtable<TUPLE>::replayLog() {
+  lsn_t start = tbl_header.log_trunc;
+  LogHandle * lh = start ? getLSNHandle(log_file, start) : getLogHandle(log_file);
+  const LogEntry * e;
+  while((e = nextInLog(lh))) {
+    switch(e->type) {
+    case UPDATELOG: {
+      datatuple * tup = datatuple::from_bytes((byte*)stasis_log_entry_update_args_cptr(e));
+      // assert(e->update.funcID == 0/*LSMINSERT*/);
+      insertTuple(tup, false);
+      datatuple::freetuple(tup);
+    } break;
+    case INTERNALLOG: { } break;
+    default: assert(e->type == UPDATELOG); abort();
+    }
+  }
+  recovering = false;
+  printf("\nLog replay complete.\n");
+
+}
+
+template<class TUPLE>
+lsn_t logtable<TUPLE>::get_log_offset() {
+  if(recovering) { return INVALID_LSN; }
+  return log_file->next_available_lsn(log_file);
+}
+template<class TUPLE>
+void logtable<TUPLE>::truncate_log() {
+  if(recovering) {
+    printf("Not truncating log until recovery is complete.\n");
+  } else {
+    printf("truncating log to %lld\n", tbl_header.log_trunc);
+    log_file->truncate(log_file, tbl_header.log_trunc);
+  }
+}
+
+template<class TUPLE>
+void logtable<TUPLE>::update_persistent_header(int xid, lsn_t trunc_lsn) {
 
     tbl_header.c2_root = tree_c2->get_root_rid();
     tbl_header.c2_dp_state = tree_c2->get_datapage_allocator_rid();
@@ -142,6 +201,11 @@ void logtable<TUPLE>::update_persistent_header(int xid) {
     tbl_header.c1_state = tree_c1->get_internal_node_allocator_rid();
     
     merge_mgr->marshal(xid, tbl_header.merge_manager);
+
+    if(trunc_lsn != INVALID_LSN) {
+      printf("\nsetting log truncation point to %lld\n", trunc_lsn);
+      tbl_header.log_trunc = trunc_lsn;
+    }
 
     Tset(xid, table_rec, &tbl_header);    
 }
@@ -506,6 +570,11 @@ void logtable<TUPLE>::insertManyTuples(datatuple ** tuples, int tuple_count) {
   for(int i = 0; i < tuple_count; i++) {
     merge_mgr->read_tuple_from_small_component(0, tuples[i]);
   }
+  for(int i = 0; i < tuple_count; i++) {
+    logUpdate(tuples[i]);
+  }
+  log_file->force_tail(log_file, LOG_FORCE_COMMIT);
+
   pthread_mutex_lock(&rb_mut);
   int num_old_tups = 0;
   pageid_t sum_old_tup_lens = 0;
@@ -522,8 +591,12 @@ void logtable<TUPLE>::insertManyTuples(datatuple ** tuples, int tuple_count) {
 }
 
 template<class TUPLE>
-void logtable<TUPLE>::insertTuple(datatuple *tuple)
+void logtable<TUPLE>::insertTuple(datatuple *tuple, bool should_log)
 {
+    if(should_log) {
+        logUpdate(tuple);
+        log_file->force_tail(log_file, LOG_FORCE_COMMIT);
+    }
     //lock the red-black tree
     merge_mgr->read_tuple_from_small_component(0, tuple);  // has to be before rb_mut, since it calls tick with block = true, and that releases header_mut.
     datatuple * pre_t = 0; // this is a pointer to any data tuples that we'll be deleting below.  We need to update the merge_mgr statistics with it, but have to do so outside of the rb_mut region.
