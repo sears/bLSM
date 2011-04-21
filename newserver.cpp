@@ -49,39 +49,39 @@ int main(int argc, char *argv[])
 
 
       recordid table_root = ROOT_RECORD;
+    {
+		logtable<datatuple> ltable(log_mode, c0_size);
 
+		if(TrecordType(xid, ROOT_RECORD) == INVALID_SLOT) {
+			printf("Creating empty logstore\n");
+			table_root = ltable.allocTable(xid);
+			assert(table_root.page == ROOT_RECORD.page &&
+				   table_root.slot == ROOT_RECORD.slot);
+		} else {
+			printf("Opened existing logstore\n");
+			table_root.size = TrecordSize(xid, ROOT_RECORD);
+			ltable.openTable(xid, table_root);
+		}
 
-    logtable<datatuple> ltable(log_mode, c0_size);
+		Tcommit(xid);
+		merge_scheduler * mscheduler = new merge_scheduler(&ltable);
+		mscheduler->start();
+		ltable.replayLog();
 
-    if(TrecordType(xid, ROOT_RECORD) == INVALID_SLOT) {
-        printf("Creating empty logstore\n");
-        table_root = ltable.allocTable(xid);
-        assert(table_root.page == ROOT_RECORD.page &&
-               table_root.slot == ROOT_RECORD.slot);
-    } else {
-        printf("Opened existing logstore\n");
-        table_root.size = TrecordSize(xid, ROOT_RECORD);
-        ltable.openTable(xid, table_root);
+		simpleServer *lserver = new simpleServer(&ltable);
+
+		lserver->acceptLoop();
+
+		printf ("Stopping server...\n");
+		delete lserver;
+
+		printf("Stopping merge threads...\n");
+		mscheduler->shutdown();
+		delete mscheduler;
+
+		printf("Deinitializing stasis...\n");
+		fflush(stdout);
     }
-
-    Tcommit(xid);
-    merge_scheduler * mscheduler = new merge_scheduler(&ltable);
-    mscheduler->start();
-    ltable.replayLog();
-
-    simpleServer *lserver = new simpleServer(&ltable);
-
-    lserver->acceptLoop();
-
-    printf ("Stopping server...\n");
-    delete lserver;
-
-    printf("Stopping merge threads...\n");
-    mscheduler->shutdown();
-    delete mscheduler;
-
-    printf("Deinitializing stasis...\n");
-    fflush(stdout);
     logtable<datatuple>::deinit_stasis();
 
     printf("Shutdown complete\n");

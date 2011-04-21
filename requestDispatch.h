@@ -26,6 +26,7 @@ private:
   static inline int op_dbg_blockmap(logtable<datatuple> * ltable, HANDLE fd);
   static inline int op_dbg_drop_database(logtable<datatuple> * ltable, HANDLE fd);
   static inline int op_dbg_noop(logtable<datatuple> * ltable, HANDLE fd);
+  static inline int op_dbg_set_log_mode(logtable<datatuple> * ltable, HANDLE fd, datatuple * tuple);
 
 public:
   static int dispatch_request(HANDLE f, logtable<datatuple> * ltable);

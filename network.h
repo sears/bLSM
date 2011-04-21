@@ -51,7 +51,8 @@ static const network_op_t OP_STAT_HISTOGRAM      = 18;  // Return N approximatel
 static const network_op_t OP_DBG_DROP_DATABASE        = 19;
 static const network_op_t OP_DBG_BLOCKMAP             = 20;
 static const network_op_t OP_DBG_NOOP                 = 21;
-static const network_op_t LOGSTORE_LAST_REQUEST_CODE  = 21;
+static const network_op_t OP_DBG_SET_LOG_MODE         = 22;
+static const network_op_t LOGSTORE_LAST_REQUEST_CODE  = 22;
 
 //error codes
 static const network_op_t LOGSTORE_FIRST_ERROR  = 27;

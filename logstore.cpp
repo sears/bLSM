@@ -60,14 +60,10 @@ logtable<TUPLE>::logtable(int log_mode, pageid_t max_c0_size, pageid_t internal_
     this->datapage_size = datapage_size;
 
     this->log_mode = log_mode;
-    this->batch_size++;
-    if(log_mode > 0) {
-      log_file = stasis_log_file_pool_open("lsm_log",
-					 stasis_log_file_mode,
-					 stasis_log_file_permissions);
-    } else {
-      log_file = NULL;
-    }
+    this->batch_size = 0;
+    log_file = stasis_log_file_pool_open("lsm_log",
+    									 stasis_log_file_mode,
+    									 stasis_log_file_permissions);
 }
 
 template<class TUPLE>
@@ -85,6 +81,8 @@ logtable<TUPLE>::~logtable()
       memTreeComponent<datatuple>::tearDownTree(tree_c0);
     }
 
+    log_file->close(log_file);
+
     pthread_mutex_destroy(&rb_mut);
     rwlc_deletelock(header_mut);
     pthread_cond_destroy(&c0_needed);
@@ -98,9 +96,6 @@ template<class TUPLE>
 void logtable<TUPLE>::init_stasis() {
 
   DataPage<datatuple>::register_stasis_page_impl();
-  //stasis_buffer_manager_size = 768 * 1024; // 4GB = 2^10 pages:
-  // XXX Workaround Stasis' (still broken) default concurrent buffer manager
-//  stasis_buffer_manager_factory = stasis_buffer_manager_hash_factory;
   stasis_buffer_manager_hint_writes_are_sequential = 1;
   Tinit();
 
@@ -154,7 +149,6 @@ void logtable<TUPLE>::logUpdate(datatuple * tup) {
 
 template<class TUPLE>
 void logtable<TUPLE>::replayLog() {
-  if(!log_file) { assert(!log_mode); recovering = false; return; }
   lsn_t start = tbl_header.log_trunc;
   LogHandle * lh = start ? getLSNHandle(log_file, start) : getLogHandle(log_file);
   const LogEntry * e;
@@ -184,8 +178,10 @@ void logtable<TUPLE>::truncate_log() {
   if(recovering) {
     printf("Not truncating log until recovery is complete.\n");
   } else {
-    printf("truncating log to %lld\n", tbl_header.log_trunc);
-    log_file->truncate(log_file, tbl_header.log_trunc);
+	if(tbl_header.log_trunc) {
+      printf("truncating log to %lld\n", tbl_header.log_trunc);
+      log_file->truncate(log_file, tbl_header.log_trunc);
+	}
   }
 }
 
@@ -569,7 +565,7 @@ void logtable<TUPLE>::insertManyTuples(datatuple ** tuples, int tuple_count) {
   for(int i = 0; i < tuple_count; i++) {
     merge_mgr->read_tuple_from_small_component(0, tuples[i]);
   }
-  if(log_file && !recovering) {
+  if(log_mode && !recovering) {
 	  for(int i = 0; i < tuple_count; i++) {
 	    logUpdate(tuples[i]);
 	  }
@@ -598,7 +594,7 @@ void logtable<TUPLE>::insertManyTuples(datatuple ** tuples, int tuple_count) {
 template<class TUPLE>
 void logtable<TUPLE>::insertTuple(datatuple *tuple)
 {
-    if(log_file && !recovering) {
+    if(log_mode && !recovering) {
         logUpdate(tuple);
         batch_size++;
         if(batch_size >= log_mode) {

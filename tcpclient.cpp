@@ -78,7 +78,7 @@ logstore_client_op_returns_many(logstore_handle_t *l,
         if (l->server_socket < 0)
         {
             perror("ERROR opening socket.\n");
-			return 0;
+			return LOGSTORE_CONN_CLOSED_ERROR;
         }
 
 #ifdef LOGSTORE_NODELAY
@@ -92,14 +92,14 @@ logstore_client_op_returns_many(logstore_handle_t *l,
         if (result < 0)
         {
             perror("ERROR on setting socket option TCP_NODELAY.\n");
-            return 0;
+            return LOGSTORE_CONN_CLOSED_ERROR;
         }
 #endif
         /* connect: create a connection with the server */
         if (connect(l->server_socket, (sockaddr*) &(l->serveraddr), sizeof(l->serveraddr)) < 0)
         {
             perror("ERROR connecting\n");
-            return 0;
+            return LOGSTORE_CONN_CLOSED_ERROR;
         }
 
         DEBUG("sock opened %d\n", l->server_socket);

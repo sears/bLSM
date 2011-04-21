@@ -421,7 +421,18 @@ template<class HANDLE>
 inline int requestDispatch<HANDLE>::op_dbg_noop(logtable<datatuple> * ltable, HANDLE fd) {
   return writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
 }
-
+template<class HANDLE>
+inline int requestDispatch<HANDLE>::op_dbg_set_log_mode(logtable<datatuple> * ltable, HANDLE fd, datatuple * tuple) {
+  if(tuple->keylen() != sizeof(int)) {
+	  abort();
+	  return writeoptosocket(fd, LOGSTORE_PROTOCOL_ERROR);
+  } else {
+	  int old_mode = ltable->log_mode;
+	  ltable->log_mode = *(int*)tuple->key();
+	  fprintf(stderr, "\n\nChanged log mode from %d to %d\n\n", old_mode, ltable->log_mode);
+	  return writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
+  }
+}
 template<class HANDLE>
 int requestDispatch<HANDLE>::dispatch_request(HANDLE f, logtable<datatuple>*ltable) {
   //step 1: read the opcode
@@ -513,6 +524,9 @@ int requestDispatch<HANDLE>::dispatch_request(network_op_t opcode, datatuple * t
     }
     else if(opcode == OP_DBG_NOOP) {
       err = op_dbg_noop(ltable, fd);
+    }
+    else if(opcode == OP_DBG_SET_LOG_MODE) {
+      err = op_dbg_set_log_mode(ltable, fd, tuple);
     }
     return err;
 }
