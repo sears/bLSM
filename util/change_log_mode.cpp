@@ -19,7 +19,7 @@ int main(int argc, char * argv[]) {
 	char ** orig_argv = argv;
 	if(argc > 1) {
 		char * end;
-		int n = strtod(argv[1], &end);
+		int n = strtol(argv[1], &end, 10);
 		if(argv[1][0] && !*end) {
 			mode = n;
 			argc--;
