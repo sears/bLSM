@@ -53,31 +53,53 @@ public:
 	}
 
     /**
+     * This function handles ASCII and UTF-8 correctly, as well as 64-bit
+     * and shorter integers encoded with the most significant byte first.
+     *
+     * It also handles a special tuple encoding, where multiple utf-8 strings
+     * are concatenated with \254, and \255 is used as a high key. \254 and
+     * \255 never occur in valid UTF-8 strings. (However, this encoding
+     * tie-breaks by placing substrings *later* in the sort order, which
+     * is non-standard.)
+     *
+     * If a key is greater than 64-bits long, then this function checks to see
+     * if the 9th to last byte is zero (null bytes are disallowed by both ASCII
+     * and UTF-8.  If so, it discards everything after the null.  This allows
+     * us to pack a 64-bit timestamp into the end of the key.
+     *
+     *
      * return -1 if k1 < k2
      * 0 if k1 == k2
      * 1 of k1 > k2
-    **/
+     */
     static int compare(const byte* k1,size_t k1l, const byte* k2, size_t k2l) {
-		// This function handles ASCII and UTF-8 correctly.
-    	// It also handles a Sherpa LSM-Tree specific encoding, where multiple utf-8 strings
-    	// are concatenated with \254., and the \254 is replaced with a \255 for 'max value in range'.
 
-    	size_t min_l = k1l < k2l ? k1l : k2l;
+      const size_t ts_sz = sizeof(int64_t)+1;
+      if(k1l > ts_sz && ! k1[k1l-ts_sz]) {
+        k1l -= ts_sz;
+      }
+      if(k2l > ts_sz && ! k2[k2l-ts_sz]) {
+        k2l -= ts_sz;
+      }
 
-    	int ret = memcmp(k1,k2, min_l);
-    	if(ret)        return ret;
-    	if(k1l < k2l)  return -1;
-    	if(k1l == k2l) return 0;
-    	return 1;
+      size_t min_l = k1l < k2l ? k1l : k2l;
 
-		//for testing with char* ending with \0
-    	/*assert(strlen((char*)k1) == k1l - 1);
-		  assert(strlen((char*)k2) == k2l - 1);
-	      return strcmp((char*)k1,(char*)k2); */
-	}
+      int ret = memcmp(k1,k2, min_l);
+      if(ret)        return ret;
+      if(k1l < k2l)  return -1;
+      if(k1l == k2l) return 0;
+      return 1;
+    }
+
+    uint64_t timestamp() {
+      const size_t ts_sz = sizeof(uint64_t)+1;
+      size_t al = keylen();
+      if(al <= ts_sz || key()[al-ts_sz]!=0) { return (uint64_t)-1; }
+      return *(uint64_t*)(key()+1+al-ts_sz);
+    }
 
     static int compare_obj(const datatuple * a, const datatuple* b) {
-    	return compare(a->key(), a->keylen(), b->key(), b->keylen());
+      return compare(a->key(), a->keylen(), b->key(), b->keylen());
     }
 
     inline void setDelete() {
