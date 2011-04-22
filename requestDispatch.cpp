@@ -473,6 +473,15 @@ int requestDispatch<HANDLE>::dispatch_request(HANDLE f, logtable<datatuple>*ltab
 template<class HANDLE>
 int requestDispatch<HANDLE>::dispatch_request(network_op_t opcode, datatuple * tuple, datatuple * tuple2, logtable<datatuple> * ltable, HANDLE fd) {
     int err = 0;
+#if 0
+    if(tuple) {
+        char * printme = (char*)malloc(tuple->keylen()+1);
+        memcpy(printme, tuple->key(), tuple->keylen());
+        printme[tuple->keylen()] = 0;
+        printf("\nop = %d, key = %s, isdelete = %d\n", opcode, printme, tuple->isDelete());
+        free(printme);
+    } 
+#endif
     if(opcode == OP_INSERT)
     {
         err = op_insert(ltable, fd, tuple);
