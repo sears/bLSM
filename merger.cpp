@@ -391,9 +391,11 @@ void merge_iterators(int xid,
         while(t1 != 0 && datatuple::compare(t1->key(), t1->keylen(), t2->key(), t2->keylen()) < 0) // t1 is less than t2
         {
             //insert t1
-            scratch_tree->insertTuple(xid, t1);
-            i+=t1->byte_length();
-            ltable->merge_mgr->wrote_tuple(stats->merge_level, t1);
+            if((!t1->isDelete()) || !dropDeletes) {
+              scratch_tree->insertTuple(xid, t1);
+              i+=t1->byte_length();
+              ltable->merge_mgr->wrote_tuple(stats->merge_level, t1);
+            }
             datatuple::freetuple(t1);
 
             //advance itrA
@@ -409,12 +411,12 @@ void merge_iterators(int xid,
             stats->merged_tuples(mtuple, t2, t1); // this looks backwards, but is right.
 
             //insert merged tuple, drop deletes
-            if(dropDeletes && !mtuple->isDelete()) {
+            if((!mtuple->isDelete()) || !dropDeletes) {
               scratch_tree->insertTuple(xid, mtuple);
               i+=mtuple->byte_length();
+              ltable->merge_mgr->wrote_tuple(stats->merge_level, mtuple);
             }
             datatuple::freetuple(t1);
-            ltable->merge_mgr->wrote_tuple(stats->merge_level, mtuple);
             t1 = itrA->next_callerFrees();  //advance itrA
             ltable->merge_mgr->read_tuple_from_large_component(stats->merge_level, t1);
             datatuple::freetuple(mtuple);
@@ -423,10 +425,11 @@ void merge_iterators(int xid,
         else
         {
             //insert t2
-            scratch_tree->insertTuple(xid, t2);
-            i+=t2->byte_length();
-
-            ltable->merge_mgr->wrote_tuple(stats->merge_level, t2);
+            if((!t2->isDelete()) || !dropDeletes) {
+              scratch_tree->insertTuple(xid, t2);
+              i+=t2->byte_length();
+              ltable->merge_mgr->wrote_tuple(stats->merge_level, t2);
+            }
             periodically_force(xid, &i, forceMe, log);
             // cannot free any tuples here; they may still be read through a lookup
         }
@@ -444,10 +447,12 @@ void merge_iterators(int xid,
 
     }
 
-    while(t1 != 0) {// t1 is less than t2
-      scratch_tree->insertTuple(xid, t1);
-      ltable->merge_mgr->wrote_tuple(stats->merge_level, t1);
-      i += t1->byte_length();
+    while(t1 != 0) {// t2 is empty, but t1 still has stuff in it.
+      if((!t1->isDelete()) || !dropDeletes) {
+        scratch_tree->insertTuple(xid, t1);
+        ltable->merge_mgr->wrote_tuple(stats->merge_level, t1);
+        i += t1->byte_length();
+      }
       datatuple::freetuple(t1);
 
       //advance itrA
