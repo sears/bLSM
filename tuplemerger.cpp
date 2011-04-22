@@ -1,7 +1,8 @@
 #include "tuplemerger.h"
 #include "logstore.h"
 
-// XXX test / reason about this...
+// t2 is the newer tuple.
+// we return deletes here.  our caller decides what to do with them.
 datatuple* tuplemerger::merge(const datatuple *t1, const datatuple *t2)
 {
     datatuple *t;
@@ -21,9 +22,7 @@ datatuple* tuplemerger::merge(const datatuple *t1, const datatuple *t2)
     }
     
     return t;
-    
 }
-
 /**
  * appends the data in t2 to data from t1
  * 
