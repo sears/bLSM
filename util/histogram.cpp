@@ -37,13 +37,13 @@ int main(int argc, char * argv[]) {
     	bool first = true;
     	while(( ret = logstore_client_next_tuple(l) )) {
     		if(first) {
-    			assert(ret->keylen() == sizeof(uint64_t));
-    			uint64_t stride = *(uint64_t*)ret->key();
+    			assert(ret->rawkeylen() == sizeof(uint64_t));
+    			uint64_t stride = *(uint64_t*)ret->rawkey();
     			printf("Stride: %lld\n", (long long)stride);
     			first = false;
     		} else {
-    			assert(ret->key()[ret->keylen()-1] == 0); // check for null terminator.
-    			printf("\t%s\n", (char*)ret->key());
+    			assert(ret->strippedkey()[ret->strippedkeylen()-1] == 0); // check for null terminator.
+    			printf("\t%s\n", (char*)ret->strippedkey());
     		}
     		datatuple::freetuple(ret);
     	}

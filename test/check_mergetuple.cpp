@@ -213,14 +213,14 @@ void insertProbeIter(size_t NUM_ENTRIES)
             assert(dt!=0);
             assert(!dt->isDelete());
             found_tuples++;
-            assert(dt->keylen() == (*key_arr)[ri].length()+1);
+            assert(dt->rawkeylen() == (*key_arr)[ri].length()+1);
             datatuple::freetuple(dt);
         }
         else
         {
             if(dt!=0)
             {
-                assert(dt->keylen() == (*key_arr)[ri].length()+1);
+                assert(dt->rawkeylen() == (*key_arr)[ri].length()+1);
                 assert(dt->isDelete());
                 datatuple::freetuple(dt);
             }

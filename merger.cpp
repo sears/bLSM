@@ -26,6 +26,17 @@ void merge_scheduler::start() {
   pthread_create(&disk_merge_thread_, 0, diskMerge_thr, this);
 }
 
+bool insert_filter(logtable<datatuple> * ltable, datatuple * t, bool dropDeletes) {
+  if(t->isDelete()) {
+    if(dropDeletes || ! ltable->mightBeAfterMemMerge(t)) {
+      return false;
+    }
+  }
+  if(!ltable->expiry) { return true; }
+  if(t->timestamp() > ltable->current_timestamp + ltable->expiry) { return false; }
+  return true;
+}
+
 template <class ITA, class ITB>
 void merge_iterators(int xid, diskTreeComponent * forceMe,
                     ITA *itrA,
@@ -189,7 +200,7 @@ void * merge_scheduler::memMergeThread() {
           stats->handed_off_tree();
 
           // 8: c1 = new empty.
-          ltable_->set_tree_c1(new diskTreeComponent(xid, ltable_->internal_region_size, ltable_->datapage_region_size, ltable_->datapage_size, stats));
+          ltable_->set_tree_c1(new diskTreeComponent(xid, ltable_->internal_region_size, ltable_->datapage_region_size, ltable_->datapage_size, stats, 10));
 
           pthread_cond_signal(&ltable_->c1_ready);
           ltable_->update_persistent_header(xid);
@@ -388,10 +399,10 @@ void merge_iterators(int xid,
         DEBUG("tuple\t%lld: keylen %d datalen %d\n",
                ntuples, *(t2->keylen),*(t2->datalen) );
 
-        while(t1 != 0 && datatuple::compare(t1->key(), t1->keylen(), t2->key(), t2->keylen()) < 0) // t1 is less than t2
+        while(t1 != 0 && datatuple::compare(t1->rawkey(), t1->rawkeylen(), t2->rawkey(), t2->rawkeylen()) < 0) // t1 is less than t2
         {
             //insert t1
-            if((!t1->isDelete()) || !dropDeletes) {
+            if(insert_filter(ltable, t1, dropDeletes)) {
               scratch_tree->insertTuple(xid, t1);
               i+=t1->byte_length();
               ltable->merge_mgr->wrote_tuple(stats->merge_level, t1);
@@ -405,13 +416,13 @@ void merge_iterators(int xid,
             periodically_force(xid, &i, forceMe, log);
         }
 
-        if(t1 != 0 && datatuple::compare(t1->key(), t1->keylen(), t2->key(), t2->keylen()) == 0)
+        if(t1 != 0 && datatuple::compare(t1->strippedkey(), t1->strippedkeylen(), t2->strippedkey(), t2->strippedkeylen()) == 0)
         {
             datatuple *mtuple = ltable->gettuplemerger()->merge(t1,t2);
             stats->merged_tuples(mtuple, t2, t1); // this looks backwards, but is right.
 
             //insert merged tuple, drop deletes
-            if((!mtuple->isDelete()) || !dropDeletes) {
+            if(insert_filter(ltable, mtuple, dropDeletes)) {
               scratch_tree->insertTuple(xid, mtuple);
               i+=mtuple->byte_length();
               ltable->merge_mgr->wrote_tuple(stats->merge_level, mtuple);
@@ -425,7 +436,7 @@ void merge_iterators(int xid,
         else
         {
             //insert t2
-            if((!t2->isDelete()) || !dropDeletes) {
+            if(insert_filter(ltable, t2, dropDeletes)) {
               scratch_tree->insertTuple(xid, t2);
               i+=t2->byte_length();
               ltable->merge_mgr->wrote_tuple(stats->merge_level, t2);
@@ -448,7 +459,7 @@ void merge_iterators(int xid,
     }
 
     while(t1 != 0) {// t2 is empty, but t1 still has stuff in it.
-      if((!t1->isDelete()) || !dropDeletes) {
+      if(insert_filter(ltable, t1, dropDeletes)) {
         scratch_tree->insertTuple(xid, t1);
         ltable->merge_mgr->wrote_tuple(stats->merge_level, t1);
         i += t1->byte_length();

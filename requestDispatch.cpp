@@ -48,7 +48,7 @@ inline int requestDispatch<HANDLE>::op_bulk_insert(logtable<datatuple> *ltable, 
 template<class HANDLE>
 inline int requestDispatch<HANDLE>::op_find(logtable<datatuple> * ltable, HANDLE fd, datatuple * tuple) {
     //find the tuple
-    datatuple *dt = ltable->findTuple_first(-1, tuple->key(), tuple->keylen());
+    datatuple *dt = ltable->findTuple_first(-1, tuple->strippedkey(), tuple->strippedkeylen());
 
     #ifdef STATS_ENABLED
 
@@ -403,12 +403,12 @@ inline int requestDispatch<HANDLE>::op_dbg_drop_database(logtable<datatuple> * l
         ltable->insertTuple(del);
         n++;
         if(!(n % 1000)) {
-          printf("X %lld %s\n", n, (char*)del->key()); fflush(stdout);
+          printf("X %lld %s\n", n, (char*)del->rawkey()); fflush(stdout);
         }
       } else {
         n++;
         if(!(n % 1000)) {
-          printf("? %lld %s\n", n, (char*)del->key()); fflush(stdout);
+          printf("? %lld %s\n", n, (char*)del->rawkey()); fflush(stdout);
         }
       }
       datatuple::freetuple(del);
@@ -423,12 +423,12 @@ inline int requestDispatch<HANDLE>::op_dbg_noop(logtable<datatuple> * ltable, HA
 }
 template<class HANDLE>
 inline int requestDispatch<HANDLE>::op_dbg_set_log_mode(logtable<datatuple> * ltable, HANDLE fd, datatuple * tuple) {
-  if(tuple->keylen() != sizeof(int)) {
+  if(tuple->rawkeylen() != sizeof(int)) {
 	  abort();
 	  return writeoptosocket(fd, LOGSTORE_PROTOCOL_ERROR);
   } else {
 	  int old_mode = ltable->log_mode;
-	  ltable->log_mode = *(int*)tuple->key();
+	  ltable->log_mode = *(int*)tuple->rawkey();
 	  fprintf(stderr, "\n\nChanged log mode from %d to %d\n\n", old_mode, ltable->log_mode);
 	  return writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
   }
@@ -475,12 +475,12 @@ int requestDispatch<HANDLE>::dispatch_request(network_op_t opcode, datatuple * t
     int err = 0;
 #if 0
     if(tuple) {
-        char * printme = (char*)malloc(tuple->keylen()+1);
-        memcpy(printme, tuple->key(), tuple->keylen());
-        printme[tuple->keylen()] = 0;
-        printf("\nop = %d, key = %s, isdelete = %d\n", opcode, printme, tuple->isDelete());
+        char * printme = (char*)malloc(tuple->rawkeylen()+1);
+        memcpy(printme, tuple->rawkey(), tuple->rawkeylen());
+        printme[tuple->rawkeylen()] = 0;
+        printf("\nop = %d, key = ->%s<-, isdelete = %d\n", opcode, printme, tuple->isDelete());
         free(printme);
-    } 
+    }
 #endif
     if(opcode == OP_INSERT)
     {

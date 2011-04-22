@@ -22,7 +22,7 @@ public:
 	if(key) {
 	  len_t old_off = read_offset_;
 	  TUPLE * t = getnext();
-	  while(t && TUPLE::compare(key->key(), key->keylen(), t->key(), t->keylen()) > 0) {
+	  while(t && TUPLE::compare(key->strippedkey(), key->strippedkeylen(), t->strippedkey(), t->strippedkeylen()) > 0) {
 	    TUPLE::freetuple(t);
 	    old_off = read_offset_;
 	    t = getnext();
@@ -39,7 +39,7 @@ public:
       }
     public:
       iterator(DataPage *dp, TUPLE * key=NULL) : read_offset_(0), dp(dp) {
-    	  scan_to_key(key);
+        scan_to_key(key);
       }
 
         void operator=(const iterator &rhs)

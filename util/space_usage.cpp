@@ -23,9 +23,9 @@ int main(int argc, char * argv[]) {
     }
 
     logstore_client_close(l);
-    assert(ret->keylen() == sizeof(uint64_t));
+    assert(ret->rawkeylen() == sizeof(uint64_t));
     assert(ret->datalen() == sizeof(uint64_t));
-    printf("Tree is %llu MB Store file is %llu MB\n", (unsigned long long)(*(uint64_t*)ret->key()) / (1024*1024), (unsigned long long)(*(uint64_t*)ret->data()) / (1024*1024));
+    printf("Tree is %llu MB Store file is %llu MB\n", (unsigned long long)(*(uint64_t*)ret->rawkey()) / (1024*1024), (unsigned long long)(*(uint64_t*)ret->data()) / (1024*1024));
 	datatuple::freetuple(ret);
     		;
     return 0;

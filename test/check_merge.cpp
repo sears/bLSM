@@ -126,7 +126,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         //if(dt!=0)
         {
 			found_tuples++;
-			assert(dt->keylen() == (*key_arr)[ri].length()+1);
+			assert(dt->rawkeylen() == (*key_arr)[ri].length()+1);
 			assert(dt->datalen() == (*data_arr)[ri].length()+1);
 			datatuple::freetuple(dt);
         }

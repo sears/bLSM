@@ -98,7 +98,7 @@ void insertWithConcurrentReads(size_t NUM_ENTRIES) {
         DataPage<datatuple>::iterator it = dp->begin();
         datatuple * dt;
         while((dt = it.getnext()) != NULL) {
-          if(!strcmp((char*)dt->key(), key_arr[j].c_str())) {
+          if(!strcmp((char*)dt->rawkey(), key_arr[j].c_str())) {
             found = true;
           }
           datatuple::freetuple(dt);
@@ -209,7 +209,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         datatuple *dt=0;
         while( (dt=itr.getnext()) != NULL)
             {
-                assert(dt->keylen() == key_arr[tuplenum].length()+1);
+                assert(dt->rawkeylen() == key_arr[tuplenum].length()+1);
                 assert(dt->datalen() == data_arr[tuplenum].length()+1);
                 tuplenum++;
                 datatuple::freetuple(dt);

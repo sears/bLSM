@@ -86,7 +86,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     datatuple *dt=0;
     while( (dt=tree_itr->next_callerFrees()) != NULL)
     {
-        assert(dt->keylen() == key_arr[tuplenum].length()+1);
+        assert(dt->rawkeylen() == key_arr[tuplenum].length()+1);
         assert(dt->datalen() == data_arr[tuplenum].length()+1);
         tuplenum++;
         datatuple::freetuple(dt);
@@ -108,7 +108,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 		datatuple *dt = ltable_c1->findTuple(xid, (const datatuple::key_t) key_arr[ri].c_str(), (size_t)key_arr[ri].length()+1);
 
         assert(dt!=0);
-        assert(dt->keylen() == key_arr[ri].length()+1);
+        assert(dt->rawkeylen() == key_arr[ri].length()+1);
         assert(dt->datalen() == data_arr[ri].length()+1);
         datatuple::freetuple(dt);
         dt = 0;        

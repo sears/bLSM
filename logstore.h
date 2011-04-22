@@ -160,6 +160,9 @@ public:
     bool c0_flushing;
     bool c1_flushing; // this needs to be set to true at shutdown, or when the c0-c1 merger is waiting for c1-c2 to finish its merge
 
+    lsn_t current_timestamp;
+    lsn_t expiry;
+
     //DATA PAGE SETTINGS
     pageid_t internal_region_size; // in number of pages
     pageid_t datapage_region_size; // "
@@ -171,6 +174,33 @@ private:
 
 public:
     bool shutting_down_;
+
+    bool mightBeOnDisk(datatuple * t) {
+      if(tree_c1) {
+        if(!tree_c1->bloom_filter) { printf("no c1 bloom filter\n"); return true; }
+        if(bloom_filter_lookup(tree_c1->bloom_filter,           (const char*)t->strippedkey(), t->strippedkeylen())) { printf("in c1\n"); return true; }
+      }
+      if(tree_c1_prime) {
+        if(!tree_c1_prime->bloom_filter) { printf("no c1' bloom filter\n");  return true; }
+        if(bloom_filter_lookup(tree_c1_prime->bloom_filter,     (const char*)t->strippedkey(), t->strippedkeylen())) { printf("in c1'\n"); return true; }
+      }
+      return mightBeAfterMemMerge(t);
+    }
+
+    bool mightBeAfterMemMerge(datatuple * t) {
+
+      if(tree_c1_mergeable) {
+        if(!tree_c1_mergeable->bloom_filter) { printf("no c1m bloom filter\n"); return true; }
+        if(bloom_filter_lookup(tree_c1_mergeable->bloom_filter,     (const char*)t->strippedkey(), t->strippedkeylen())) { printf("in c1m'\n");return true; }
+      }
+
+
+      if(tree_c2) {
+        if(!tree_c2->bloom_filter) { printf("no c2 bloom filter\n");  return true; }
+        if(bloom_filter_lookup(tree_c2->bloom_filter,           (const char*)t->strippedkey(), t->strippedkeylen())) { printf("in c2\n");return true; }
+      }
+      return false;
+    }
 
     template<class ITRA, class ITRN>
     class mergeManyIterator {
@@ -325,7 +355,7 @@ public:
           revalidate();
           TUPLE * tmp = merge_it_->next_callerFrees();
           if(last_returned && tmp) {
-              assert(TUPLE::compare(last_returned->key(), last_returned->keylen(), tmp->key(), tmp->keylen()) < 0);
+              assert(TUPLE::compare(last_returned->strippedkey(), last_returned->strippedkeylen(), tmp->strippedkey(), tmp->strippedkeylen()) < 0);
               TUPLE::freetuple(last_returned);
           }
           last_returned = tmp;
@@ -433,7 +463,7 @@ public:
         merge_it_ = new merge_it_t(inner_merge_it, disk_it, 4, NULL, TUPLE::compare_obj); // XXX Hardcodes comparator, and does not handle merges
         if(last_returned) {
           TUPLE * junk = merge_it_->peek();
-          if(junk && !TUPLE::compare(junk->key(), junk->keylen(), last_returned->key(), last_returned->keylen())) {
+          if(junk && !TUPLE::compare(junk->strippedkey(), junk->strippedkeylen(), last_returned->strippedkey(), last_returned->strippedkeylen())) {
             // we already returned junk
             TUPLE::freetuple(merge_it_->next_callerFrees());
           }

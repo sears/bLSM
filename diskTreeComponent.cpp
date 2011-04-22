@@ -65,7 +65,7 @@ void diskTreeComponent::writes_done() {
 int diskTreeComponent::insertTuple(int xid, datatuple *t)
 {
   if(bloom_filter) {
-    bloom_filter_insert(bloom_filter, (const char*)t->key(), t->keylen());
+    bloom_filter_insert(bloom_filter, (const char*)t->strippedkey(), t->strippedkeylen());
   }
   int ret = 0; // no error.
   if(dp==0) {
@@ -106,8 +106,8 @@ DataPage<datatuple>* diskTreeComponent::insertDataPage(int xid, datatuple *tuple
 
 
     ltree->appendPage(xid,
-                        tuple->key(),
-                        tuple->keylen(),
+                        tuple->strippedkey(),
+                        tuple->strippedkeylen(),
                         dp->get_start_pid()
                         );
 
@@ -896,7 +896,7 @@ void diskTreeComponent::iterator::init_iterators(datatuple * key1, datatuple * k
         lsmIterator_ = NULL;
     } else {
         if(key1) {
-            lsmIterator_ = new diskTreeComponent::internalNodes::iterator(-1, ro_alloc_, tree_, key1->key(), key1->keylen());
+            lsmIterator_ = new diskTreeComponent::internalNodes::iterator(-1, ro_alloc_, tree_, key1->strippedkey(), key1->strippedkeylen());
         } else {
             lsmIterator_ = new diskTreeComponent::internalNodes::iterator(-1, ro_alloc_, tree_);
         }

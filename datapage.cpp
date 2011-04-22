@@ -339,7 +339,7 @@ bool DataPage<TUPLE>::recordRead(const typename TUPLE::key_t key, size_t keySize
     int match = -1;
     while((*buf=itr.getnext()) != 0)
         {
-	  match = TUPLE::compare((*buf)->key(), (*buf)->keylen(), key, keySize);
+	  match = TUPLE::compare((*buf)->strippedkey(), (*buf)->strippedkeylen(), key, keySize);
             
             if(match<0) //keep searching
             {

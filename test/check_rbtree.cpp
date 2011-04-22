@@ -77,7 +77,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
             datatuple *tuple = *rbitr;
 
             found_tuples++;
-            assert(tuple->keylen() == key_arr[ri].length()+1);
+            assert(tuple->rawkeylen() == key_arr[ri].length()+1);
             assert(tuple->datalen() == data_arr[ri].length()+1);
         }
         else

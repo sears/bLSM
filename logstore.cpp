@@ -43,6 +43,8 @@ logtable<TUPLE>::logtable(int log_mode, pageid_t max_c0_size, pageid_t internal_
     this->shutting_down_ = false;
     c0_flushing = false;
     c1_flushing = false;
+    current_timestamp = 0;
+    expiry = 0;
     this->merge_mgr = 0;
     tmerger = new tuplemerger(&replace_merger);
 
@@ -110,10 +112,10 @@ recordid logtable<TUPLE>::allocTable(int xid)
     table_rec = Talloc(xid, sizeof(tbl_header));
     mergeStats * stats = 0;
     //create the big tree
-    tree_c2 = new diskTreeComponent(xid, internal_region_size, datapage_region_size, datapage_size, stats);
+    tree_c2 = new diskTreeComponent(xid, internal_region_size, datapage_region_size, datapage_size, stats, 10);
 
     //create the small tree
-    tree_c1 = new diskTreeComponent(xid, internal_region_size, datapage_region_size, datapage_size, stats);
+    tree_c1 = new diskTreeComponent(xid, internal_region_size, datapage_region_size, datapage_size, stats, 10);
 
     merge_mgr = new mergeManager(this);
     merge_mgr->set_c0_size(max_c0_size);
@@ -544,18 +546,17 @@ datatuple * logtable<TUPLE>::insertTupleHelper(datatuple *tuple)
       datatuple *new_t = tmerger->merge(pre_t, tuple);
       merge_mgr->get_merge_stats(0)->merged_tuples(new_t, tuple, pre_t);
       t = new_t;
+
       tree_c0->erase(pre_t); //remove the previous tuple
-
       tree_c0->insert(new_t); //insert the new tuple
-
   }
   else //no tuple with same key exists in mem-tree
   {
 
-      t = tuple->create_copy();
+    t = tuple->create_copy();
 
-      //insert tuple into the rbtree
-      tree_c0->insert(t);
+    //insert tuple into the rbtree
+    tree_c0->insert(t);
   }
 
   return pre_t;
@@ -626,7 +627,7 @@ bool logtable<TUPLE>::testAndSetTuple(datatuple *tuple, datatuple *tuple2)
     static pthread_mutex_t test_and_set_mut = PTHREAD_MUTEX_INITIALIZER;
     pthread_mutex_lock(&test_and_set_mut);
 
-    datatuple * exists = findTuple_first(-1, tuple2 ? tuple2->key() : tuple->key(), tuple2 ? tuple2->keylen() : tuple->keylen());
+    datatuple * exists = findTuple_first(-1, tuple2 ? tuple2->rawkey() : tuple->rawkey(), tuple2 ? tuple2->rawkeylen() : tuple->rawkeylen());
 
     if(!tuple2 || tuple2->isDelete()) {
       if(!exists || exists->isDelete()) {

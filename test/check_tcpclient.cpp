@@ -166,7 +166,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         assert(dt!=0);
         assert(!dt->isDelete());
         found_tuples++;
-        assert(dt->keylen() == (*key_arr)[ri].length()+1);
+        assert(dt->rawkeylen() == (*key_arr)[ri].length()+1);
 
         //free dt
         datatuple::freetuple(dt);
@@ -184,8 +184,8 @@ void insertProbeIter(size_t NUM_ENTRIES)
     size_t i = 0;
     while((tup = logstore_client_next_tuple(l))) {
       assert(!tup->isDelete());
-      assert(tup->keylen() == (*key_arr)[i].length()+1);
-      assert(!memcmp(tup->key(), (*key_arr)[i].c_str(), (*key_arr)[i].length()));
+      assert(tup->rawkeylen() == (*key_arr)[i].length()+1);
+      assert(!memcmp(tup->rawkey(), (*key_arr)[i].c_str(), (*key_arr)[i].length()));
       datatuple::freetuple(tup);
       i++;
     }
