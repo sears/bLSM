@@ -31,8 +31,8 @@ int main(int argc, char *argv[])
     		c0_size = 1024 * 1024 * 100;
     		printf("warning: running w/ tiny c0 for testing\n"); // XXX build a separate test server and deployment server?
     	} else if(!strcmp(argv[i], "--benchmark")) {
-    	      stasis_buffer_manager_size = (1024L * 1024L * 1024L * 2L) / PAGE_SIZE;  // 4GB total
-    	      c0_size =                     1024L * 1024L * 1024L * 2L;
+    	      stasis_buffer_manager_size = (1024LL * 1024LL * 1024LL * 2LL) / PAGE_SIZE;  // 4GB total
+    	      c0_size =                     1024LL * 1024LL * 1024LL * 2LL;
     	      printf("note: running w/ 2GB c0 for benchmarking\n"); // XXX build a separate test server and deployment server?
     	} else if(!strcmp(argv[i], "--log-mode")) {
     		i++;
