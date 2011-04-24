@@ -131,7 +131,7 @@ void * merge_scheduler::memMergeThread() {
         rwlc_writelock(ltable_->header_mut);
 
         //force write the new tree to disk
-        c1_prime->force(xid);
+        c1_prime->force(xid);  // XXX put before the writelock?
 
         merge_count++;        
         DEBUG("mmt:\tmerge_count %lld #bytes written %lld\n", stats.stats_merge_count, stats.output_size());
