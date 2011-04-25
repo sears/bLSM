@@ -145,8 +145,10 @@ void logtable<TUPLE>::openTable(int xid, recordid rid) {
 
 template<class TUPLE>
 void logtable<TUPLE>::logUpdate(datatuple * tup) {
-  LogEntry * e = stasis_log_write_update(log_file, 0, INVALID_PAGE, 0/*Page**/, 0/*op*/, tup->to_bytes(), tup->byte_length());
+  byte * buf = tup->to_bytes();
+  LogEntry * e = stasis_log_write_update(log_file, 0, INVALID_PAGE, 0/*Page**/, 0/*op*/, buf, tup->byte_length());
   log_file->write_entry_done(log_file,e);
+  free(buf);
 }
 
 template<class TUPLE>
@@ -165,6 +167,7 @@ void logtable<TUPLE>::replayLog() {
     default: assert(e->type == UPDATELOG); abort();
     }
   }
+  freeLogHandle(lh);
   recovering = false;
   printf("\nLog replay complete.\n");
 

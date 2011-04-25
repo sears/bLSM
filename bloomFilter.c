@@ -68,6 +68,7 @@ bloom_filter_t * bloom_filter_create(uint64_t(*func_a)(const char*,int),
 }
 void bloom_filter_destroy(bloom_filter_t* bf) {
   free(bf->buckets);
+  free(bf->result_scratch_space);
   free(bf);
 }
 // XXX this uses %.  It would be better if it used &, but that would potentially double the memory we use.  #define a flag.
