@@ -33,7 +33,7 @@ bool insert_filter(logtable<datatuple> * ltable, datatuple * t, bool dropDeletes
     }
   }
   if(!ltable->expiry) { return true; }
-  if(t->timestamp() > ltable->current_timestamp + ltable->expiry) { return false; }
+  if(t->timestamp() < ltable->current_timestamp - ltable->expiry) { return false; }
   return true;
 }
 

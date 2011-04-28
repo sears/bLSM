@@ -538,7 +538,21 @@ datatuple * logtable<TUPLE>::findTuple_first(int xid, datatuple::key_t key, size
 template<class TUPLE>
 datatuple * logtable<TUPLE>::insertTupleHelper(datatuple *tuple)
 {
-  //find the previous tuple with same key in the memtree if exists
+  bool need_free = true;
+  if(!tuple->isDelete() && expiry != 0) {
+    // XXX hack for paper experiment
+    current_timestamp++;
+    size_t ts_sz = sizeof(int64_t);
+    int64_t ts = current_timestamp;
+    int64_t kl = tuple->strippedkeylen();
+    byte * newkey = (byte*)malloc(kl + 1 + ts_sz);
+    memcpy(newkey, tuple->strippedkey(), kl);
+    newkey[kl] = 0;
+    memcpy(newkey+kl+1, &ts, ts_sz);
+    tuple = datatuple::create(newkey, kl+ 1+ ts_sz, tuple->data(), tuple->datalen());
+    free(newkey);
+    need_free = true;
+  }  //find the previous tuple with same key in the memtree if exists
   memTreeComponent<datatuple>::rbtree_t::iterator rbitr = tree_c0->find(tuple);
   datatuple * t  = 0;
   datatuple * pre_t = 0;
@@ -561,6 +575,8 @@ datatuple * logtable<TUPLE>::insertTupleHelper(datatuple *tuple)
     //insert tuple into the rbtree
     tree_c0->insert(t);
   }
+
+  if(need_free) { TUPLE::freetuple(tuple); }
 
   return pre_t;
 }

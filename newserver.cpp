@@ -23,6 +23,7 @@ int main(int argc, char *argv[])
     signal(SIGPIPE, SIG_IGN);
     int64_t c0_size = 1024 * 1024 * 512 * 1;
     int log_mode = 0; // do not log by default.
+    int64_t expiry_delta = 0;  // do not gc by default
     stasis_buffer_manager_size = 1 * 1024 * 1024 * 1024 / PAGE_SIZE;  // 1.5GB total
 
     for(int i = 1; i < argc; i++) {
@@ -37,8 +38,11 @@ int main(int argc, char *argv[])
     	} else if(!strcmp(argv[i], "--log-mode")) {
     		i++;
     		log_mode = atoi(argv[i]);
+        } else if(!strcmp(argv[i], "--expiry-delta")) {
+            i++;
+            expiry_delta = atoi(argv[i]);
     	} else {
-    		fprintf(stderr, "Usage: %s [--test|--benchmark] [--log-mode <int>]", argv[0]);
+    		fprintf(stderr, "Usage: %s [--test|--benchmark] [--log-mode <int>] [--expiry-delta <int>]", argv[0]);
     		abort();
     	}
     }
@@ -51,6 +55,7 @@ int main(int argc, char *argv[])
       recordid table_root = ROOT_RECORD;
     {
 		logtable<datatuple> ltable(log_mode, c0_size);
+		ltable.expiry = expiry_delta;
 
 		if(TrecordType(xid, ROOT_RECORD) == INVALID_SLOT) {
 			printf("Creating empty logstore\n");
