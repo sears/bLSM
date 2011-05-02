@@ -177,12 +177,12 @@ public:
 
     bool mightBeOnDisk(datatuple * t) {
       if(tree_c1) {
-        if(!tree_c1->bloom_filter) { printf("no c1 bloom filter\n"); return true; }
-        if(bloom_filter_lookup(tree_c1->bloom_filter,           (const char*)t->strippedkey(), t->strippedkeylen())) { printf("in c1\n"); return true; }
+        if(!tree_c1->bloom_filter) { DEBUG("no c1 bloom filter\n"); return true; }
+        if(bloom_filter_lookup(tree_c1->bloom_filter,           (const char*)t->strippedkey(), t->strippedkeylen())) { DEBUG("in c1\n"); return true; }
       }
       if(tree_c1_prime) {
-        if(!tree_c1_prime->bloom_filter) { printf("no c1' bloom filter\n");  return true; }
-        if(bloom_filter_lookup(tree_c1_prime->bloom_filter,     (const char*)t->strippedkey(), t->strippedkeylen())) { printf("in c1'\n"); return true; }
+        if(!tree_c1_prime->bloom_filter) { DEBUG("no c1' bloom filter\n");  return true; }
+        if(bloom_filter_lookup(tree_c1_prime->bloom_filter,     (const char*)t->strippedkey(), t->strippedkeylen())) { DEBUG("in c1'\n"); return true; }
       }
       return mightBeAfterMemMerge(t);
     }
@@ -190,14 +190,14 @@ public:
     bool mightBeAfterMemMerge(datatuple * t) {
 
       if(tree_c1_mergeable) {
-        if(!tree_c1_mergeable->bloom_filter) { printf("no c1m bloom filter\n"); return true; }
-        if(bloom_filter_lookup(tree_c1_mergeable->bloom_filter,     (const char*)t->strippedkey(), t->strippedkeylen())) { printf("in c1m'\n");return true; }
+        if(!tree_c1_mergeable->bloom_filter) { DEBUG("no c1m bloom filter\n"); return true; }
+        if(bloom_filter_lookup(tree_c1_mergeable->bloom_filter,     (const char*)t->strippedkey(), t->strippedkeylen())) { DEBUG("in c1m'\n");return true; }
       }
 
 
       if(tree_c2) {
-        if(!tree_c2->bloom_filter) { printf("no c2 bloom filter\n");  return true; }
-        if(bloom_filter_lookup(tree_c2->bloom_filter,           (const char*)t->strippedkey(), t->strippedkeylen())) { printf("in c2\n");return true; }
+        if(!tree_c2->bloom_filter) { DEBUG("no c2 bloom filter\n");  return true; }
+        if(bloom_filter_lookup(tree_c2->bloom_filter,           (const char*)t->strippedkey(), t->strippedkeylen())) { DEBUG("in c2\n");return true; }
       }
       return false;
     }
@@ -355,7 +355,23 @@ public:
           revalidate();
           TUPLE * tmp = merge_it_->next_callerFrees();
           if(last_returned && tmp) {
-              assert(TUPLE::compare(last_returned->strippedkey(), last_returned->strippedkeylen(), tmp->strippedkey(), tmp->strippedkeylen()) < 0);
+              int res = TUPLE::compare(last_returned->strippedkey(), last_returned->strippedkeylen(), tmp->strippedkey(), tmp->strippedkeylen());
+              if(res >= 0) {
+		  int al = last_returned->strippedkeylen();
+                  char * a =(char*)malloc(al + 1);
+                  memcpy(a, last_returned->strippedkey(), al);
+                  a[al] = 0;
+                  int bl = tmp->strippedkeylen();
+                  char * b =(char*)malloc(bl + 1);
+                  memcpy(b, tmp->strippedkey(), bl);
+                  b[bl] = 0;
+                  printf("logstore.h assert fail: out of order tuples %d should be < 0.  %s <=> %s\n", res, a, b);
+                  free(a);
+                  free(b);
+              }
+
+          }
+          if(last_returned) {
               TUPLE::freetuple(last_returned);
           }
           last_returned = tmp;
