@@ -29,14 +29,13 @@ public:
 		return data_ - rawkey();
 	}
 	inline len_t strippedkeylen() const {
-	  return rawkeylen();
 	  const size_t ts_sz = sizeof(uint64_t)+1;
-      size_t al = rawkeylen();
-      if(al <= ts_sz || rawkey()[al-ts_sz]!=0) {
-        return al;
-      } else {
-        return al - ts_sz;
-      }
+          size_t al = rawkeylen();
+          if(al <= ts_sz || rawkey()[al-ts_sz]!=0) {
+            return al;
+          } else {
+            return al - ts_sz;
+          }
 	}
 	inline len_t datalen() const {
 		return (datalen_ == DELETE) ? 0 : datalen_;
