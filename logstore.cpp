@@ -538,7 +538,7 @@ datatuple * logtable<TUPLE>::findTuple_first(int xid, datatuple::key_t key, size
 template<class TUPLE>
 datatuple * logtable<TUPLE>::insertTupleHelper(datatuple *tuple)
 {
-  bool need_free = true;
+  bool need_free = false;
   if(!tuple->isDelete() && expiry != 0) {
     // XXX hack for paper experiment
     current_timestamp++;
@@ -549,7 +549,10 @@ datatuple * logtable<TUPLE>::insertTupleHelper(datatuple *tuple)
     memcpy(newkey, tuple->strippedkey(), kl);
     newkey[kl] = 0;
     memcpy(newkey+kl+1, &ts, ts_sz);
+    TUPLE * old = tuple;
     tuple = datatuple::create(newkey, kl+ 1+ ts_sz, tuple->data(), tuple->datalen());
+    assert(tuple->strippedkeylen() == old->strippedkeylen());
+    assert(!TUPLE::compare_obj(tuple, old));
     free(newkey);
     need_free = true;
   }  //find the previous tuple with same key in the memtree if exists
@@ -646,7 +649,7 @@ bool logtable<TUPLE>::testAndSetTuple(datatuple *tuple, datatuple *tuple2)
     static pthread_mutex_t test_and_set_mut = PTHREAD_MUTEX_INITIALIZER;
     pthread_mutex_lock(&test_and_set_mut);
 
-    datatuple * exists = findTuple_first(-1, tuple2 ? tuple2->rawkey() : tuple->rawkey(), tuple2 ? tuple2->rawkeylen() : tuple->rawkeylen());
+    datatuple * exists = findTuple_first(-1, tuple2 ? tuple2->strippedkey() : tuple->strippedkey(), tuple2 ? tuple2->strippedkeylen() : tuple->strippedkeylen());
 
     if(!tuple2 || tuple2->isDelete()) {
       if(!exists || exists->isDelete()) {
