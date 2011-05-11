@@ -1,22 +1,38 @@
-# yinst i log4cpp_y_dev-1.4.2 
+ROOT=/home/y
+include $(ROOT)/share/yahoo_cfg/Make.defs
 
-SHERPA_DIR = /homes/sears/svndev/trunk/dht
+USE_OSE = no
 
-CPPFLAGS=-Wall -I${SHERPA_DIR}/common/include \
-			   -I${SHERPA_DIR}/storage/handler/src \
-			   -I${SHERPA_DIR}/storage/handler/include/ \
-			   -I${SHERPA_DIR}/framework/base/include/ \
-			   -I${SHERPA_DIR}/externals/fwcore/include \
-			   -I /home/y/include -I .. -c -fPIC
-CXXFLAGS=-m32 -g
-CFLAGS=-m32 -g
+LIB_NAME        = LSMServer
+SHLIB_VERSION   = 1
 
-libsherpalogstore.so : LSMPersistentStoreImpl.o tcpclient.o LSMPersistentParentImpl.o
-	gcc -m32 -g -shared -Wl,-soname,libsherpalogstore.so -o libsherpalogstore.so LSMPersistentStoreImpl.o tcpclient.o  LSMPersistentParentImpl.o
-	cp libsherpalogstore.so /homes/sears/sherpa-so/
+CXXSRC		= LSMServerHandler.cc
 
-tcpclient.cpp : ../tcpclient.cpp
-	ln -s ../tcpclient.cpp
+LCLEAN		+= *~ 
+WARN            += -Werror -Wall
+LINC		+= -I. -I /home/y/include/thrift -I /home/y/include64/stasis -I ..
 
-clean:
-	rm -f LSMPersistentStoreImpl.o tcpclient.o libsherpalogstore.so LSMPersistentParentImpl.o
+LDLIBS +=	-L/usr/local/lib
+LDFLAGS += -Wl,-rpath,/home/y/lib64 -Wl,-rpath,../build
+
+
+# Poor packaging for yicu
+LINC +=         -I/home/y/include/yicu
+
+LDLIBS		+= -lthrift -ldht_persistent_store -lstasis -llogstore -L ../build
+
+# Need to remove potential warnings in yapache.
+LDEF += -DEAPI
+LDEF += -D_FILE_OFFSET_BITS=64
+
+ifdef UNIT_TEST
+CXXFLAGS += -O0 -g -DUNIT_TEST
+endif
+
+ifdef DEBUG
+CXXFLAGS += -O0 -g
+endif
+
+include $(ROOT)/share/yahoo_cfg/Make.rules
+
+$(SOTARGET): $(OBJS)

@@ -46,11 +46,16 @@ ENDMACRO(CREATE_CLIENT_EXECUTABLE NAME)
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/../stasis/
 		    ${CMAKE_CURRENT_SOURCE_DIR}/../stasis/src/
 		    ${CMAKE_CURRENT_SOURCE_DIR}
+                    /home/y/include64
 		    /usr/include)
 # set linker path for this and all subdirs
-LINK_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/../stasis/build/src/stasis ${CMAKE_CURRENT_BINARY_DIR})
+LINK_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/../stasis/build/src/stasis 
+                 ${CMAKE_CURRENT_BINARY_DIR}
+                 /home/y/lib64)
 
-FIND_LIBRARY(HAVE_STASIS NAMES stasis PATHS ${CMAKE_CURRENT_SOURCE_DIR}/../stasis/build/src/stasis)
+FIND_LIBRARY(HAVE_STASIS NAMES stasis PATHS 
+             ${CMAKE_CURRENT_SOURCE_DIR}/../stasis/build/src/stasis
+             /home/y/lib64)
 if(NOT HAVE_STASIS)
   message(STATUS "stasis not found; only building client library")
 endif(NOT HAVE_STASIS)
