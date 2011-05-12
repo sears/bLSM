@@ -30,11 +30,14 @@ public:
 private:
     ResponseCode::type insert(datatuple* tuple);
     uint32_t getDatabaseId(const std::string& databaseName);
+    uint32_t nextDatabaseId();
     datatuple* get(uint32_t databaseId, const std::string& recordName);
     datatuple* get(datatuple* tuple);
     datatuple* buildTuple(uint32_t databaseId, const std::string& recordName);
     datatuple* buildTuple(uint32_t databaseId, const std::string& recordName, const std::string& recordBody);
     datatuple* buildTuple(uint32_t databaseId, const std::string& recordName, const void* body, uint32_t bodySize);
+    void initNextDatabaseId();
     logtable<datatuple>* ltable_;
     uint32_t nextDatabaseId_;
+    pthread_mutex_t mutex_;
 };

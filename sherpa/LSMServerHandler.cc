@@ -49,6 +49,7 @@ LSMServerHandler(int argc, char **argv)
         }
     }
 
+    pthread_mutex_init(&mutex_, 0);
     logtable<datatuple>::init_stasis();
 
     int xid = Tbegin();
@@ -85,7 +86,43 @@ LSMServerHandler(int argc, char **argv)
  */
     }
     //logtable<datatuple>::deinit_stasis();
+    initNextDatabaseId();
+}
+
+void LSMServerHandler::
+initNextDatabaseId() 
+{
     nextDatabaseId_ = 1;
+    uint32_t id = 0;
+    datatuple* start = buildTuple(id, "");
+    datatuple* end = buildTuple(id + 1, "");
+    logtable<datatuple>::iterator* itr = new logtable<datatuple>::iterator(ltable_, start);
+    datatuple* current;
+    while ((current = itr->getnext())) {
+        // are we at the end of range?
+        if (datatuple::compare_obj(current, end) >= 0) {
+            datatuple::freetuple(current);
+            break;
+        }
+        uint32_t currentId = *((uint32_t*)(current->data()));
+        if (currentId > nextDatabaseId_) {
+            nextDatabaseId_ = currentId;
+        }
+        datatuple::freetuple(current);
+    }
+    nextDatabaseId_++;
+    delete itr;
+}
+
+uint32_t LSMServerHandler::
+nextDatabaseId()
+{
+    uint32_t id;
+    pthread_mutex_lock(&mutex_);
+    nextDatabaseId_++;
+    id = nextDatabaseId_;
+    pthread_mutex_unlock(&mutex_);
+    return id;
 }
 
 ResponseCode::type LSMServerHandler::
@@ -104,8 +141,13 @@ insert(datatuple* tuple)
 ResponseCode::type LSMServerHandler::
 addDatabase(const std::string& databaseName) 
 {
-    
-    datatuple* tup = buildTuple(0, databaseName, (void*)&nextDatabaseId_, (uint32_t)(sizeof(nextDatabaseId_)));
+    uint32_t id = nextDatabaseId();
+    datatuple* tup = buildTuple(0, databaseName, (void*)&id, (uint32_t)(sizeof(id)));
+    datatuple* ret = get(tup);
+    if (ret) {
+        datatuple::freetuple(ret);
+        return sherpa::ResponseCode::DatabaseExists;
+    }
     return insert(tup);
 }
 
@@ -141,44 +183,62 @@ scan(RecordListResponse& _return, const std::string& databaseName, const ScanOrd
             const std::string& endKey, const bool endKeyIncluded,
             const int32_t maxRecords, const int32_t maxBytes)
 {
-#if 0
-    BdbIterator itr;
-    uint32_t id;
-    _return.responseCode = getDatabaseId(databaseName, id);
-    if (_return.responseCode != sherpa::ResponseCode::Ok) {
+    uint32_t id = getDatabaseId(databaseName);
+    if (id == 0) {
+        // database not found
+        _return.responseCode = sherpa::ResponseCode::DatabaseNotFound;
         return;
     }
-    boost::thread_specific_ptr<RecordBuffer> buffer;
-    if (buffer.get() == NULL) {
-        buffer.reset(new RecordBuffer(keyBufferSizeBytes_, valueBufferSizeBytes_));
-    }
+ 
+    datatuple* start = buildTuple(id, startKey);
+    datatuple* end;
     if (endKey.empty()) {
-        insertDatabaseId(const_cast<std::string&>(endKey), id + 1);
+        end = buildTuple(id + 1, endKey);
     } else {
-        insertDatabaseId(const_cast<std::string&>(endKey), id);
+        end = buildTuple(id, endKey);
     }
-    insertDatabaseId(const_cast<std::string&>(startKey), id);
-    itr.init(db_[id % numPartitions_], const_cast<std::string&>(startKey), startKeyIncluded, const_cast<std::string&>(endKey), endKeyIncluded, order, *buffer);
+    logtable<datatuple>::iterator* itr = new logtable<datatuple>::iterator(ltable_, start);
 
     int32_t resultSize = 0;
-    _return.responseCode = sherpa::ResponseCode::Ok;
+
     while ((maxRecords == 0 || (int32_t)(_return.records.size()) < maxRecords) && 
            (maxBytes == 0 || resultSize < maxBytes)) {
-        BdbIterator::ResponseCode rc = itr.next(*buffer);
-        if (rc == BdbIterator::ScanEnded) {
+        datatuple* current = itr->getnext();
+        if (current == NULL) {
             _return.responseCode = sherpa::ResponseCode::ScanEnded;
             break;
-        } else if (rc != BdbIterator::Ok) {
-            _return.responseCode = sherpa::ResponseCode::Error;
-            break;
         }
+
+        int cmp = datatuple::compare_obj(current, start);
+        std::cout << "start   key: (" << std::string((const char*)(start->strippedkey()), start->strippedkeylen()) << ")" << std::endl;
+        std::cout << "current key: (" << std::string((const char*)(current->strippedkey()), current->strippedkeylen()) << ")" << std::endl;
+        std::cout << "start key: " << startKey << " cmp: " << cmp << std::endl;
+        if ((!startKeyIncluded) && cmp == 0) {
+            datatuple::freetuple(current);
+            continue;
+        } 
+
+        // are we at the end of range?
+        cmp = datatuple::compare_obj(current, end);
+        std::cout << "end key: " << endKey << " cmp: " << cmp << std::endl;
+        if ((!endKeyIncluded && cmp >= 0) ||
+                (endKeyIncluded && cmp > 0)) {
+            datatuple::freetuple(current);
+            _return.responseCode = sherpa::ResponseCode::ScanEnded;
+            break;
+        } 
+
         Record rec;
-        rec.key.assign(buffer->getKeyBuffer() + sizeof(id), buffer->getKeySize() - sizeof(id));
-        rec.value.assign(buffer->getValueBuffer(), buffer->getValueSize());
+        int32_t keySize =  current->strippedkeylen() - sizeof(id);
+        int32_t dataSize = current->datalen();
+
+        rec.key.assign((char*)(current->strippedkey()) + sizeof(id), keySize);
+        rec.value.assign((char*)(current->data()), dataSize);
         _return.records.push_back(rec);
-        resultSize += buffer->getKeySize() + buffer->getValueSize();
-    } 
-#endif
+        resultSize += keySize + dataSize;
+        datatuple::freetuple(current);
+    }
+    delete itr;
 }
 
 datatuple* LSMServerHandler::
@@ -288,24 +348,19 @@ update(const std::string& databaseName,
        const std::string& recordName, 
        const std::string& recordBody) 
 {
-/*
-    uint32_t id;
-    ResponseCode::type rc = getDatabaseId(databaseName, id);
-    if (rc != sherpa::ResponseCode::Ok) {
-        return rc;
+    uint32_t id = getDatabaseId(databaseName);
+    std::cout << "michim: enter update" << std::endl;
+    if (id == 0) {
+        return sherpa::ResponseCode::DatabaseNotFound;
     }
-
-    insertDatabaseId(const_cast<std::string&>(recordName), id);
-    Bdb::ResponseCode dbrc = db_[id % numPartitions_]->update(recordName, recordBody);
-    if (dbrc == Bdb::Ok) {
-        return sherpa::ResponseCode::Ok;
-    } else if (dbrc == Bdb::KeyNotFound) {
+    datatuple* oldRecordBody = get(id, recordName);
+    if (oldRecordBody == NULL) {
         return sherpa::ResponseCode::RecordNotFound;
-    } else {
-        return sherpa::ResponseCode::Error;
     }
-    */
-    return sherpa::ResponseCode::Error;
+    std::cout << "michim: updating record" << std::endl;
+    datatuple::freetuple(oldRecordBody);
+    datatuple* tup = buildTuple(id, recordName, recordBody);
+    return insert(tup);
 }
 
 ResponseCode::type LSMServerHandler::
@@ -365,6 +420,6 @@ buildTuple(uint32_t databaseId, const std::string& recordName, const void* body,
     *(uint32_t*)key = databaseId;
     memcpy(((uint32_t*)key) + 1, recordName.c_str(), recordName.size());
     datatuple *tup = datatuple::create(key, keySize, body, bodySize);
+    std::cout << "built tuple: key: (" << std::string((const char*)(tup->strippedkey()), tup->strippedkeylen()) << ")" << std::endl;
     return tup;
-
 }

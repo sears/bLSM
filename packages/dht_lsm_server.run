@@ -1,0 +1,9 @@
+#!/bin/sh
+#
+# This is the 'run' script used by daemontools to start dht_lsm_server. 
+# See the dist page for more details about daemontools.
+#
+# http://dist.corp.yahoo.com/by-package/daemontools_y/
+#
+cd /home/y/var/dht_lsm_server/data
+exec /home/y/bin/setuidgid nobody /home/y/bin64/lsm_server 2>&1
