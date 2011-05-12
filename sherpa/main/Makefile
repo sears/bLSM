@@ -9,7 +9,7 @@ CXXSRC		= $(addsuffix .cc, $(EXETARGET))
 LCLEAN		+= *~ 
 WARN            += -Werror -Wall
 
-LINC		+= -I../ -I /home/y/include/thrift -I /home/y/include/boost/tr1/
+LINC		+= -I../ -I /home/y/include/thrift -I /home/y/include/boost/tr1/ -I ../../
 LDLIBS		+= -L../ -ldht_persistent_store -lLSMServer
 LDFLAGS += -Wl,-rpath,/home/y/lib64 -Wl,-rpath,../../build
 

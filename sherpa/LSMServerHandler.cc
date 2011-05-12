@@ -4,6 +4,7 @@
 #undef try
 #undef begin
 
+#include <iostream>
 #include <signal.h>
 #include "merger.h"
 #include "logstore.h"
@@ -84,6 +85,7 @@ LSMServerHandler(int argc, char **argv)
  */
     }
     //logtable<datatuple>::deinit_stasis();
+    nextDatabaseId_ = 1;
 }
 
 ResponseCode::type LSMServerHandler::
@@ -93,23 +95,18 @@ ping()
 }
 
 ResponseCode::type LSMServerHandler::
+insert(datatuple* tuple)
+{
+    ltable_->insertTuple(tuple);
+    return sherpa::ResponseCode::Ok;
+}
+
+ResponseCode::type LSMServerHandler::
 addDatabase(const std::string& databaseName) 
 {
-#if 0
-    LOG_DEBUG(__FUNCTION__);
-    uint32_t databaseId;
-    seq_.get(databaseId);
-    databaseId = databaseId;
-    std::stringstream out;
-    out << databaseId;
-    LOG_DEBUG("ID for tablet " << databaseName<< ": " << databaseId);
-    Bdb::ResponseCode rc = databaseIds_.insert(databaseName, out.str());
-    if (rc == Bdb::KeyExists) {
-        LOG_DEBUG("Database " << databaseName << " already exists");
-        return sherpa::ResponseCode::DatabaseExists;
-    }
-#endif
-    return sherpa::ResponseCode::Ok;
+    
+    datatuple* tup = buildTuple(0, databaseName, (void*)&nextDatabaseId_, (uint32_t)(sizeof(nextDatabaseId_)));
+    return insert(tup);
 }
 
 /**
@@ -184,32 +181,59 @@ scan(RecordListResponse& _return, const std::string& databaseName, const ScanOrd
 #endif
 }
 
+datatuple* LSMServerHandler::
+get(datatuple* tuple)
+{
+    // -1 is invalid txn id 
+    //return ltable_->findTuple_first(-1, tuple->strippedkey(), tuple->strippedkeylen());
+    return ltable_->findTuple_first(-1, tuple->rawkey(), tuple->rawkeylen());
+}
+
 void LSMServerHandler::
 get(BinaryResponse& _return, const std::string& databaseName, const std::string& recordName) 
 {
-#if 0
-    LOG_DEBUG(__FUNCTION__);
-    uint32_t id;
-    _return.responseCode = getDatabaseId(databaseName, id);
-    if (_return.responseCode != sherpa::ResponseCode::Ok) {
+    uint32_t id = getDatabaseId(databaseName);
+    if (id == 0) {
+        // database not found
+        _return.responseCode = sherpa::ResponseCode::DatabaseNotFound;
         return;
     }
-    insertDatabaseId(const_cast<std::string&>(recordName), id);
-
-    boost::thread_specific_ptr<RecordBuffer> buffer;
-    if (buffer.get() == NULL) {
-        buffer.reset(new RecordBuffer(keyBufferSizeBytes_, valueBufferSizeBytes_));
-    }
-    Bdb::ResponseCode dbrc = db_[id % numPartitions_]->get(recordName, _return.value, *buffer);
-    if (dbrc == Bdb::Ok) {
-        _return.responseCode = sherpa::ResponseCode::Ok;
-    } else if (dbrc == Bdb::KeyNotFound) {
+    
+    datatuple* recordBody = get(id, recordName);
+    if (recordBody == NULL) {
+        // record not found
         _return.responseCode = sherpa::ResponseCode::RecordNotFound;
-    } else {
-        _return.responseCode = sherpa::ResponseCode::Error;
+        return;
     }
-#endif
-    _return.responseCode = sherpa::ResponseCode::Error;
+    _return.responseCode = sherpa::ResponseCode::Ok;
+    _return.value.assign((const char*)(recordBody->data()), recordBody->datalen());
+    datatuple::freetuple(recordBody);
+}
+
+uint32_t LSMServerHandler::
+getDatabaseId(const std::string& databaseName)
+{
+    datatuple* tup = buildTuple(0, databaseName);
+    datatuple* databaseId = get(tup);
+    datatuple::freetuple(tup);
+    std::cout << "db name: " << databaseName << std::endl;
+    if (databaseId == NULL) {
+        // database not found
+        std::cout << "db not found" << std::endl;
+        return 0;
+    }
+    uint32_t id = *((uint32_t*)(databaseId->data()));
+    std::cout << "michim: id: " << id << std::endl;
+    datatuple::freetuple(databaseId);
+    return id;
+}
+
+
+datatuple* LSMServerHandler::
+get(uint32_t databaseId, const std::string& recordName)
+{
+    datatuple* recordKey = buildTuple(databaseId, recordName);
+    return get(recordKey);
 }
 
 /*
@@ -239,25 +263,18 @@ insert(const std::string& databaseName,
        const std::string& recordName, 
        const std::string& recordBody) 
 {
-/*
-    LOG_DEBUG(__FUNCTION__);
-    uint32_t id;
-    ResponseCode::type rc = getDatabaseId(databaseName, id);
-    if (rc != sherpa::ResponseCode::Ok) {
-        return rc;
+    uint32_t id = getDatabaseId(databaseName);
+    if (id == 0) {
+        return sherpa::ResponseCode::DatabaseNotFound;
     }
-    insertDatabaseId(const_cast<std::string&>(recordName), id);
-    LOG_DEBUG("id=" << id);
-    LOG_DEBUG("numPartitions=" << numPartitions_);
-    LOG_DEBUG("id % numPartitions=" << id % numPartitions_);
-    Bdb::ResponseCode dbrc = db_[id % numPartitions_]->insert(recordName, recordBody);
-    if (dbrc == Bdb::KeyExists) {
+    datatuple* oldRecordBody = get(id, recordName);
+    if (oldRecordBody != NULL) {
+        datatuple::freetuple(oldRecordBody);
         return sherpa::ResponseCode::RecordExists;
-    } else if (dbrc != Bdb::Ok) {
-        return sherpa::ResponseCode::Error;
     }
-    */
-    return sherpa::ResponseCode::Ok;
+
+    datatuple* tup = buildTuple(id, recordName, recordBody);
+    return insert(tup);
 }
 
 ResponseCode::type LSMServerHandler::
@@ -310,4 +327,44 @@ remove(const std::string& databaseName, const std::string& recordName)
     }
 */
     return sherpa::ResponseCode::Error;
+}
+
+/*
+void BdbServerHandler::
+insertDatabaseId(std::string& str, uint32_t id)
+{
+    LOG_DEBUG("prepending id: " << id);
+    uint32_t newid = htonl(id);
+    LOG_DEBUG(
+            (int)(((uint8_t*)(&newid))[0]) << " " << 
+            (int)(((uint8_t*)(&newid))[1]) << " " << 
+            (int)(((uint8_t*)(&newid))[2]) <<" " << 
+            (int)(((uint8_t*)(&newid))[3])
+    );
+    str.insert(0, (const char*)&newid, sizeof(newid));
+}
+*/
+
+datatuple* LSMServerHandler::
+buildTuple(uint32_t databaseId, const std::string& recordName)
+{
+    return buildTuple(databaseId, recordName, NULL, DELETE);
+}
+
+datatuple* LSMServerHandler::
+buildTuple(uint32_t databaseId, const std::string& recordName, const std::string& recordBody)
+{
+    return buildTuple(databaseId, recordName, recordBody.c_str(), recordBody.size());
+}
+
+datatuple* LSMServerHandler::
+buildTuple(uint32_t databaseId, const std::string& recordName, const void* body, uint32_t bodySize)
+{
+    uint32_t keySize = sizeof(databaseId) + recordName.size();
+    unsigned char* key = (unsigned char*)malloc(keySize);
+    *(uint32_t*)key = databaseId;
+    memcpy(((uint32_t*)key) + 1, recordName.c_str(), recordName.size());
+    datatuple *tup = datatuple::create(key, keySize, body, bodySize);
+    return tup;
+
 }

@@ -28,6 +28,13 @@ public:
     ResponseCode::type remove(const std::string& databaseName, const std::string& recordName);
 
 private:
+    ResponseCode::type insert(datatuple* tuple);
+    uint32_t getDatabaseId(const std::string& databaseName);
+    datatuple* get(uint32_t databaseId, const std::string& recordName);
+    datatuple* get(datatuple* tuple);
+    datatuple* buildTuple(uint32_t databaseId, const std::string& recordName);
+    datatuple* buildTuple(uint32_t databaseId, const std::string& recordName, const std::string& recordBody);
+    datatuple* buildTuple(uint32_t databaseId, const std::string& recordName, const void* body, uint32_t bodySize);
     logtable<datatuple>* ltable_;
-
+    uint32_t nextDatabaseId_;
 };

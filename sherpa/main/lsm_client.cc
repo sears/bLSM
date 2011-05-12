@@ -20,13 +20,27 @@ int main(int argc, char **argv) {
     sherpa::BinaryResponse getResponse;
     sherpa::RecordListResponse scanResponse;
 
-    cout << client.addDatabase("michi") << endl;;
-    cout << client.insert("michi", "k1", "v1") << endl;
-    cout << client.insert("michi", "k1", "v1") << endl;
-    cout << client.insert("michi", "k11", "v11") << endl;
-    client.get(getResponse, "michi", "k1");
+    cout << client.addDatabase("michi0") << endl;;
+    cout << client.insert("michi0", "k1", "v1") << endl;
+    cout << client.insert("michi0", "k2", "v1") << endl;
+    cout << client.insert("michi0", "k3", "v1") << endl;
+    client.get(getResponse, "michi0", "k1");
     cout << getResponse.responseCode << endl;
     cout << getResponse.value << endl;
+    client.get(getResponse, "michi0", "k2");
+    cout << getResponse.responseCode << endl;
+    cout << getResponse.value << endl;
+    client.get(getResponse, "michi0", "k3");
+    cout << getResponse.responseCode << endl;
+    cout << getResponse.value << endl;
+
+    client.get(getResponse, "fdsafdasfdasfdsaf", "k3");
+    cout << getResponse.responseCode << endl;
+
+    client.get(getResponse, "michi0", "k4");
+    cout << getResponse.responseCode << endl;
+    return 0;
+
 
     client.scan(scanResponse, "michi", sherpa::ScanOrder::Ascending, "", true, "", true, 100, 100);
     std::vector<sherpa::Record>::iterator itr;

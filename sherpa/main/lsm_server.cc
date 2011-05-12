@@ -1,5 +1,4 @@
 #include <dht_persistent_store/PersistentStore.h>
-#include "LSMServerHandler.h"
 #include <protocol/TBinaryProtocol.h>
 #include <server/TSimpleServer.h>
 #include <server/TThreadPoolServer.h>
@@ -7,6 +6,9 @@
 #include <transport/TBufferTransports.h>
 #include <thrift/concurrency/ThreadManager.h>
 #include <thrift/concurrency/PosixThreadFactory.h>
+#include "logstore.h"
+#include "datatuple.h"
+#include "LSMServerHandler.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
