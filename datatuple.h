@@ -29,13 +29,17 @@ public:
 		return data_ - rawkey();
 	}
 	inline len_t strippedkeylen() const {
-	  const size_t ts_sz = sizeof(uint64_t)+1;
+	  //const size_t ts_sz = sizeof(uint64_t)+1;
           size_t al = rawkeylen();
+          return al;
+          #if 0
+          // hack for gc
           if(al <= ts_sz || rawkey()[al-ts_sz]!=0) {
             return al;
           } else {
             return al - ts_sz;
           }
+          #endif
 	}
 	inline len_t datalen() const {
 		return (datalen_ == DELETE) ? 0 : datalen_;
@@ -86,9 +90,9 @@ public:
      */
     static int compare(const byte* k1,size_t k1l, const byte* k2, size_t k2l) {
 
-      const size_t ts_sz = sizeof(int64_t)+1;
 #if 0
       // hack for gc
+      const size_t ts_sz = sizeof(int64_t)+1;
       if(k1l > ts_sz && ! k1[k1l-ts_sz]) {
         k1l -= ts_sz;
       }
