@@ -437,6 +437,11 @@ datatuple * logtable<TUPLE>::findTuple(int xid, const datatuple::key_t key, size
 
     rwlc_unlock(header_mut);
     datatuple::freetuple(search_tuple);
+    if (ret_tuple != NULL && ret_tuple->isDelete()) {
+        // this is a tombstone. don't return it
+        datatuple::freetuple(ret_tuple);
+        return NULL;
+    }
     return ret_tuple;
 
 }
@@ -529,7 +534,13 @@ datatuple * logtable<TUPLE>::findTuple_first(int xid, datatuple::key_t key, size
     }
 
     datatuple::freetuple(search_tuple);
-    
+
+    if (ret_tuple != NULL && ret_tuple->isDelete()) {
+        // this is a tombstone. don't return it
+        datatuple::freetuple(ret_tuple);
+        return NULL;
+    }
+   
     return ret_tuple;
 
 }

@@ -103,6 +103,12 @@ int main(int argc, char **argv) {
     client.get(getResponse, db, "new key");
     cout << getResponse.responseCode << endl;
     cout << getResponse.value << endl;
+
+    cout << client.remove(db1, "new key") << endl;
+    client.get(getResponse, db1, "new key");
+    cout << getResponse.responseCode << endl;
+    cout << client.remove(db1, "new key") << endl;
+
     return 0;
 
     /*

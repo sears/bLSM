@@ -246,7 +246,8 @@ get(datatuple* tuple)
 {
     // -1 is invalid txn id 
     //return ltable_->findTuple_first(-1, tuple->strippedkey(), tuple->strippedkeylen());
-    return ltable_->findTuple_first(-1, tuple->rawkey(), tuple->rawkeylen());
+    datatuple* tup = ltable_->findTuple_first(-1, tuple->rawkey(), tuple->rawkeylen());
+    return tup;
 }
 
 void LSMServerHandler::
@@ -349,7 +350,6 @@ update(const std::string& databaseName,
        const std::string& recordBody) 
 {
     uint32_t id = getDatabaseId(databaseName);
-    std::cout << "michim: enter update" << std::endl;
     if (id == 0) {
         return sherpa::ResponseCode::DatabaseNotFound;
     }
@@ -357,7 +357,6 @@ update(const std::string& databaseName,
     if (oldRecordBody == NULL) {
         return sherpa::ResponseCode::RecordNotFound;
     }
-    std::cout << "michim: updating record" << std::endl;
     datatuple::freetuple(oldRecordBody);
     datatuple* tup = buildTuple(id, recordName, recordBody);
     return insert(tup);
@@ -366,22 +365,17 @@ update(const std::string& databaseName,
 ResponseCode::type LSMServerHandler::
 remove(const std::string& databaseName, const std::string& recordName) 
 {
-/*
-    uint32_t id;
-    ResponseCode::type rc = getDatabaseId(databaseName, id);
-    if (rc != sherpa::ResponseCode::Ok) {
-        return rc;
+    uint32_t id = getDatabaseId(databaseName);
+    if (id == 0) {
+        return sherpa::ResponseCode::DatabaseNotFound;
     }
-    insertDatabaseId(const_cast<std::string&>(recordName), id);
-    Bdb::ResponseCode dbrc = db_[id % numPartitions_]->remove(recordName);
-    if (dbrc == Bdb::Ok) {
-        return sherpa::ResponseCode::Ok;
-    } else if (dbrc == Bdb::KeyNotFound) {
+    datatuple* oldRecordBody = get(id, recordName);
+    if (oldRecordBody == NULL) {
         return sherpa::ResponseCode::RecordNotFound;
-    } else {
     }
-*/
-    return sherpa::ResponseCode::Error;
+    datatuple::freetuple(oldRecordBody);
+    datatuple* tup = buildTuple(id, recordName);
+    return insert(tup);
 }
 
 /*
