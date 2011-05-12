@@ -87,12 +87,15 @@ public:
     static int compare(const byte* k1,size_t k1l, const byte* k2, size_t k2l) {
 
       const size_t ts_sz = sizeof(int64_t)+1;
+#if 0
+      // hack for gc
       if(k1l > ts_sz && ! k1[k1l-ts_sz]) {
         k1l -= ts_sz;
       }
       if(k2l > ts_sz && ! k2[k2l-ts_sz]) {
         k2l -= ts_sz;
       }
+#endif
 
       size_t min_l = k1l < k2l ? k1l : k2l;
 
