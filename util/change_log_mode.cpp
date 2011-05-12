@@ -11,7 +11,7 @@
 #include "../datatuple.h"
 
 void usage(char * argv[]) {
-    fprintf(stderr, "usage %s [host [port]]\n", argv[0]);
+    fprintf(stderr, "usage %s mode [host [port]]\n", argv[0]);
 }
 #include "util_main.h"
 int main(int argc, char * argv[]) {
