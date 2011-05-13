@@ -411,7 +411,7 @@ buildTuple(uint32_t databaseId, const std::string& recordName, const void* body,
 {
     uint32_t keySize = sizeof(databaseId) + recordName.size();
     unsigned char* key = (unsigned char*)malloc(keySize);
-    *(uint32_t*)key = databaseId;
+    *(uint32_t*)key = htonl(databaseId);
     memcpy(((uint32_t*)key) + 1, recordName.c_str(), recordName.size());
     datatuple *tup = datatuple::create(key, keySize, body, bodySize);
     std::cout << "built tuple: key: (" << std::string((const char*)(tup->strippedkey()), tup->strippedkeylen()) << ")" << std::endl;

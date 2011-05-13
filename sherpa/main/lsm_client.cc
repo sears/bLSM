@@ -57,6 +57,23 @@ int main(int argc, char **argv) {
     cout << getResponse.responseCode << endl;
     */
 
+    cout << "adding db one more time" << endl;
+    cout << client.addDatabase(db) << endl;;
+
+    cout << client.addDatabase(db1) << endl;;
+    cout << client.insert(db1, "new key", "new value") << endl;
+    client.get(getResponse, db1, "new key");
+    cout << getResponse.responseCode << endl;
+    cout << getResponse.value << endl;
+
+    client.get(getResponse, db, "new key");
+    cout << getResponse.responseCode << endl;
+    cout << getResponse.value << endl;
+
+    cout << client.remove(db1, "new key") << endl;
+    client.get(getResponse, db1, "new key");
+    cout << getResponse.responseCode << endl;
+    cout << client.remove(db1, "new key") << endl;
 
     client.scan(scanResponse, db, sherpa::ScanOrder::Ascending, "", true, "", true, 100, 100);
     std::vector<sherpa::Record>::iterator itr;
@@ -88,34 +105,5 @@ int main(int argc, char **argv) {
     for (itr = scanResponse.records.begin(); itr != scanResponse.records.end(); itr++) {
         cout << itr->key << " " << itr->value << endl;
     }
-    std::cout << std::endl;
-
-
-    cout << "adding db one more time" << endl;
-    cout << client.addDatabase(db) << endl;;
-
-    cout << client.addDatabase(db1) << endl;;
-    cout << client.insert(db1, "new key", "new value") << endl;
-    client.get(getResponse, db1, "new key");
-    cout << getResponse.responseCode << endl;
-    cout << getResponse.value << endl;
-
-    client.get(getResponse, db, "new key");
-    cout << getResponse.responseCode << endl;
-    cout << getResponse.value << endl;
-
-    cout << client.remove(db1, "new key") << endl;
-    client.get(getResponse, db1, "new key");
-    cout << getResponse.responseCode << endl;
-    cout << client.remove(db1, "new key") << endl;
-
-    return 0;
-
-    /*
-    cout << client.remove("michi", "k1") << endl;
-    client.get(getResponse, "michi", "k1");
-    cout << getResponse.responseCode << endl;
-    transport->close();
-    */
     return 0;
 }
