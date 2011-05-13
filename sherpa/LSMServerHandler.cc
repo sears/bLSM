@@ -277,14 +277,12 @@ getDatabaseId(const std::string& databaseName)
     datatuple* tup = buildTuple(0, databaseName);
     datatuple* databaseId = get(tup);
     datatuple::freetuple(tup);
-    std::cout << "db name: " << databaseName << std::endl;
     if (databaseId == NULL) {
         // database not found
         std::cout << "db not found" << std::endl;
         return 0;
     }
     uint32_t id = *((uint32_t*)(databaseId->data()));
-    std::cout << "michim: id: " << id << std::endl;
     datatuple::freetuple(databaseId);
     return id;
 }
@@ -296,28 +294,6 @@ get(uint32_t databaseId, const std::string& recordName)
     datatuple* recordKey = buildTuple(databaseId, recordName);
     return get(recordKey);
 }
-
-/*
-ResponseCode::type LSMServerHandler::
-getDatabaseId(const std::string& databaseName, uint32_t& id)
-{
-    std::string idString;
-    boost::thread_specific_ptr<RecordBuffer> buffer;
-    if (buffer.get() == NULL) {
-        buffer.reset(new RecordBuffer(keyBufferSizeBytes_, valueBufferSizeBytes_));
-    }
-    Bdb::ResponseCode rc = databaseIds_.get(databaseName, idString, *buffer);
-    if (rc == Bdb::KeyNotFound) {
-        return sherpa::ResponseCode::DatabaseNotFound;
-    }
-    std::istringstream iss(idString);
-    if ((iss >> id).fail()) {
-        return sherpa::ResponseCode::Error;
-    }
-    LOG_DEBUG("database id for " << databaseName << "=" << id);
-    return sherpa::ResponseCode::Ok;
-}
-*/
 
 ResponseCode::type LSMServerHandler::
 insert(const std::string& databaseName, 
@@ -414,6 +390,5 @@ buildTuple(uint32_t databaseId, const std::string& recordName, const void* body,
     *(uint32_t*)key = htonl(databaseId);
     memcpy(((uint32_t*)key) + 1, recordName.c_str(), recordName.size());
     datatuple *tup = datatuple::create(key, keySize, body, bodySize);
-    std::cout << "built tuple: key: (" << std::string((const char*)(tup->strippedkey()), tup->strippedkeylen()) << ")" << std::endl;
     return tup;
 }
