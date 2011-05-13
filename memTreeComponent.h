@@ -52,8 +52,8 @@ public:
   private:
     void init_iterators(rbtree_t * s, TUPLE * key1, TUPLE * key2) {
       if(s) {
-        it_    = key1 ? new MTITER(s->find(key1))  : new MTITER(s->begin());
-        itend_ = key2 ? new MTITER(s->find(key2)) : new MTITER(s->end());
+        it_    = key1 ? new MTITER(s->lower_bound(key1))  : new MTITER(s->begin());
+        itend_ = key2 ? new MTITER(s->upper_bound(key2)) : new MTITER(s->end());
         if(*it_ == *itend_) { done_ = true; }
         if(key1) {
           if(done_) {
@@ -166,7 +166,7 @@ public:
         it++;
       }
     }
-    void populate_next_ret(TUPLE *key=NULL) {
+    void populate_next_ret(TUPLE *key=NULL, bool include_key=false) {
       if(cur_off_ == num_batched_) {
         if(mut_) pthread_mutex_lock(mut_);
         if(mgr_) {
@@ -179,7 +179,7 @@ public:
           }
         }
         if(key) {
-          populate_next_ret_impl(s_->upper_bound(key));
+          populate_next_ret_impl(include_key ? s_->lower_bound(key) : s_->upper_bound(key));
         } else {
           populate_next_ret_impl(s_->begin());
         }
@@ -194,7 +194,7 @@ public:
     }
       batchedRevalidatingIterator( rbtree_t *s, int batch_size, pthread_mutex_t * rb_mut, TUPLE *&key ) : s_(s), mgr_(NULL), target_size_(0), flushing_(0), batch_size_(batch_size), num_batched_(batch_size), cur_off_(batch_size), mut_(rb_mut) {
       next_ret_ = (TUPLE**)malloc(sizeof(next_ret_[0]) * batch_size_);
-      populate_next_ret(key);
+      populate_next_ret(key, true);
     }
 
     ~batchedRevalidatingIterator() {
