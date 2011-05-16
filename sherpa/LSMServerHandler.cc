@@ -135,6 +135,7 @@ ResponseCode::type LSMServerHandler::
 insert(datatuple* tuple)
 {
     ltable_->insertTuple(tuple);
+    datatuple::freetuple(tuple);
     return sherpa::ResponseCode::Ok;
 }
 
@@ -292,7 +293,9 @@ datatuple* LSMServerHandler::
 get(uint32_t databaseId, const std::string& recordName)
 {
     datatuple* recordKey = buildTuple(databaseId, recordName);
-    return get(recordKey);
+    datatuple* ret = get(recordKey);
+    datatuple::freetuple(recordKey);
+    return ret;
 }
 
 ResponseCode::type LSMServerHandler::
@@ -390,5 +393,6 @@ buildTuple(uint32_t databaseId, const std::string& recordName, const void* body,
     *(uint32_t*)key = htonl(databaseId);
     memcpy(((uint32_t*)key) + 1, recordName.c_str(), recordName.size());
     datatuple *tup = datatuple::create(key, keySize, body, bodySize);
+    free(key);
     return tup;
 }
