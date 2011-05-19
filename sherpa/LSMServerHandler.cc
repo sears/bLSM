@@ -211,9 +211,6 @@ scan(RecordListResponse& _return, const std::string& databaseName, const ScanOrd
         }
 
         int cmp = datatuple::compare_obj(current, start);
-        std::cout << "start   key: (" << std::string((const char*)(start->strippedkey()), start->strippedkeylen()) << ")" << std::endl;
-        std::cout << "current key: (" << std::string((const char*)(current->strippedkey()), current->strippedkeylen()) << ")" << std::endl;
-        std::cout << "start key: " << startKey << " cmp: " << cmp << std::endl;
         if ((!startKeyIncluded) && cmp == 0) {
             datatuple::freetuple(current);
             continue;
@@ -221,7 +218,6 @@ scan(RecordListResponse& _return, const std::string& databaseName, const ScanOrd
 
         // are we at the end of range?
         cmp = datatuple::compare_obj(current, end);
-        std::cout << "end key: " << endKey << " cmp: " << cmp << std::endl;
         if ((!endKeyIncluded && cmp >= 0) ||
                 (endKeyIncluded && cmp > 0)) {
             datatuple::freetuple(current);
