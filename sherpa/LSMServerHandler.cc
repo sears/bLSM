@@ -132,6 +132,13 @@ ping()
 }
 
 ResponseCode::type LSMServerHandler::
+shutdown()
+{
+  exit(0); // xxx hack
+  return sherpa::ResponseCode::Ok;
+}
+
+ResponseCode::type LSMServerHandler::
 insert(datatuple* tuple)
 {
     ltable_->insertTuple(tuple);
@@ -299,14 +306,19 @@ insert(const std::string& databaseName,
        const std::string& recordName, 
        const std::string& recordBody) 
 {
+//  std::cerr << "inserting " << databaseName << "." << recordName << std::endl;
     uint32_t id = getDatabaseId(databaseName);
     if (id == 0) {
         return sherpa::ResponseCode::DatabaseNotFound;
     }
     datatuple* oldRecordBody = get(id, recordName);
     if (oldRecordBody != NULL) {
-        datatuple::freetuple(oldRecordBody);
-        return sherpa::ResponseCode::RecordExists;
+        if(oldRecordBody->isDelete()) {
+          datatuple::freetuple(oldRecordBody);
+        } else {
+          datatuple::freetuple(oldRecordBody);
+          return sherpa::ResponseCode::RecordExists;
+        }
     }
 
     datatuple* tup = buildTuple(id, recordName, recordBody);

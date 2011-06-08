@@ -14,6 +14,7 @@ class LSMServerHandler : virtual public PersistentStoreIf {
 public:
     LSMServerHandler(int argc, char **argv);
     ResponseCode::type ping();
+    ResponseCode::type shutdown();
     ResponseCode::type addDatabase(const std::string& databaseName);
     ResponseCode::type dropDatabase(const std::string& databaseName);
     void listDatabases(StringListResponse& _return);
