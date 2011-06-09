@@ -8,10 +8,13 @@ BEGIN_C_DECLS
 typedef struct bloom_filter_t bloom_filter_t;
 
 /**
-   @return 0 if there is not enough memory, or some other error occurred; a pointer to the new bloom filter otherwise.
+   @return 0 if there is not enough memory, or some other error occurred; a
+             pointer to the new bloom filter otherwise.
  */
-bloom_filter_t * bloom_filter_create(uint64_t(*hash_func_a)(const char*,int), uint64_t(*hash_func_b)(const char*,int),
-				     uint64_t num_expected_items, double false_positive_rate);
+bloom_filter_t * bloom_filter_create(uint64_t(*hash_func_a)(const char*,int),
+                                     uint64_t(*hash_func_b)(const char*,int),
+                                     uint64_t num_expected_items,
+                                     double false_positive_rate);
 
 void bloom_filter_destroy(bloom_filter_t*);
 

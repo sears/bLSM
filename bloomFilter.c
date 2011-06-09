@@ -9,32 +9,37 @@
      k: number of hash functions = ln(2) * (m/n)
      c: m/n
      f: false positive rate =               (1/2)^k ~= 0.6185)^(m/n)  ;
-            taking lof_0.6185 of both sides: k log_0.6185(1/2) = m/n ; 
+            taking log_0.6185 of both sides: k log_0.6185(1/2) = m/n ;
             applying change of base:         k log(1/2) / log(6.128) = m / n
-	    (but that's not useful; this is:)
+        (but that's not useful; this is:)
 
-                 f ~= 0.6185 ^ (m/n)
-		 log_0.6185(f) = m/n
-		 log(f) / log(0.6185) = m / n
-		 m = n log f / log 0.6185
+                           f ~= 0.6185 ^ (m/n)
+                log_0.6185(f) = m/n
+         log(f) / log(0.6185) = m / n
+                            m = n log f / log 0.6185
      p: probability a given bit is 1 ~= e^(-kn/m)
  */
 
-static uint64_t bloom_filter_calc_num_buckets(uint64_t num_expected_items, double false_positive_rate) {
-  //m = n log f / log 0.6185
-  return ((uint64_t) ceil(((double)num_expected_items) * log(false_positive_rate) / log(0.6185)));
+static uint64_t bloom_filter_calc_num_buckets(uint64_t num_expected_items,
+                                              double false_positive_rate) {
+  // m = n log f / log 0.6185
+  return ((uint64_t) ceil(((double)num_expected_items) *
+                          log(false_positive_rate) / log(0.6185)));
   // m = - n ln f / ln 2 ^ 2 = - n ln f / 0.4804 = - n log f / (0.4343 * 0.4804) = -n log f / 0.2086
 }
-static int bloom_filter_calc_num_functions(uint64_t num_expected_items, uint64_t num_buckets) {
+static int bloom_filter_calc_num_functions(uint64_t num_expected_items,
+                                           uint64_t num_buckets) {
   // k = ln(2) * (m/n)
-  int ret = floor((log(2) / log(exp(1.0))) * ((double) num_buckets) / (double) num_expected_items);
+  int ret = floor((log(2) / log(exp(1.0)))
+                  * ((double) num_buckets) / (double) num_expected_items);
   if(ret == 0) {
     return 1;
   } else {
     return ret;
   }
 }
-static double bloom_filter_current_false_positive_rate(uint64_t actual_number_of_items, uint64_t num_buckets) {
+static double bloom_filter_current_false_positive_rate(uint64_t actual_number_of_items,
+                                                       uint64_t num_buckets) {
   // 0.6185^(m/n)
   return pow(0.6185, ((double)num_buckets)/(double)actual_number_of_items);
 }
@@ -71,7 +76,7 @@ void bloom_filter_destroy(bloom_filter_t* bf) {
   free(bf->result_scratch_space);
   free(bf);
 }
-// XXX this uses %.  It would be better if it used &, but that would potentially double the memory we use.  #define a flag.
+// TODO this uses %.  It would be better if it used &, but that would potentially double the memory we use.  #define a flag.
 static void bloom_filter_calc_functions(bloom_filter_t * bf, uint64_t* results, const char * key, int keylen) {
   uint64_t fa = bf->func_a(key, keylen);
   uint64_t fb = bf->func_b(key, keylen);
@@ -125,8 +130,11 @@ void bloom_filter_print_stats(bloom_filter_t * bf) {
   printf("Design capacity %lld design false positive %f\n"
          "Current item count %lld current false positive %f\n"
          "Number of buckets %lld (%f MB), number of hash functions %lld\n",
-         bf->num_expected_items, bf->desired_false_positive_rate,
-         bf->actual_number_of_items,
-         bloom_filter_current_false_positive_rate(bf->actual_number_of_items, bf->num_buckets),
-         bf->num_buckets, ((double)bf->num_buckets) / (8.0 * 1024.0 * 1024.0), bf->num_functions);
+         (long long)bf->num_expected_items, bf->desired_false_positive_rate,
+         (long long)bf->actual_number_of_items,
+         bloom_filter_current_false_positive_rate(bf->actual_number_of_items,
+                                             bf->num_buckets),
+         (long long)bf->num_buckets,
+         ((double)bf->num_buckets) / (8.0 * 1024.0 * 1024.0),
+         (long long)bf->num_functions);
 }
