@@ -50,14 +50,14 @@ LSMServerHandler(int argc, char **argv)
     }
 
     pthread_mutex_init(&mutex_, 0);
-    logtable<datatuple>::init_stasis();
+    logtable::init_stasis();
 
     int xid = Tbegin();
 
 
     recordid table_root = ROOT_RECORD;
     {
-        ltable_ = new logtable<datatuple>(log_mode, c0_size);
+        ltable_ = new logtable(log_mode, c0_size);
         ltable_->expiry = expiry_delta;
 
         if(TrecordType(xid, ROOT_RECORD) == INVALID_SLOT) {
@@ -85,7 +85,7 @@ LSMServerHandler(int argc, char **argv)
         fflush(stdout);
  */
     }
-    //logtable<datatuple>::deinit_stasis();
+    //logtable::deinit_stasis();
     initNextDatabaseId();
 }
 
@@ -96,7 +96,7 @@ initNextDatabaseId()
     uint32_t id = 0;
     datatuple* start = buildTuple(id, "");
     datatuple* end = buildTuple(id + 1, "");
-    logtable<datatuple>::iterator* itr = new logtable<datatuple>::iterator(ltable_, start);
+    logtable::iterator* itr = new logtable::iterator(ltable_, start);
     datatuple* current;
     while ((current = itr->getnext())) {
         // are we at the end of range?
@@ -205,7 +205,7 @@ scan(RecordListResponse& _return, const std::string& databaseName, const ScanOrd
     } else {
         end = buildTuple(id, endKey);
     }
-    logtable<datatuple>::iterator* itr = new logtable<datatuple>::iterator(ltable_, start);
+    logtable::iterator* itr = new logtable::iterator(ltable_, start);
 
     int32_t resultSize = 0;
 

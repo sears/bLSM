@@ -38,7 +38,7 @@ private:
     datatuple* buildTuple(uint32_t databaseId, const std::string& recordName, const std::string& recordBody);
     datatuple* buildTuple(uint32_t databaseId, const std::string& recordName, const void* body, uint32_t bodySize);
     void initNextDatabaseId();
-    logtable<datatuple>* ltable_;
+    logtable* ltable_;
     uint32_t nextDatabaseId_;
     pthread_mutex_t mutex_;
 };
