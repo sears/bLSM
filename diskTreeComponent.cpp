@@ -82,14 +82,14 @@ int diskTreeComponent::insertTuple(int xid, datatuple *t)
   return ret;
 }
 
-DataPage<datatuple>* diskTreeComponent::insertDataPage(int xid, datatuple *tuple) {
+DataPage* diskTreeComponent::insertDataPage(int xid, datatuple *tuple) {
     //create a new data page -- either the last region is full, or the last data page doesn't want our tuple.  (or both)
 
-    DataPage<datatuple> * dp = 0;
+    DataPage * dp = 0;
     int count = 0;
     while(dp==0)
     {
-      dp = new DataPage<datatuple>(xid, datapage_size, ltree->get_datapage_alloc());
+      dp = new DataPage(xid, datapage_size, ltree->get_datapage_alloc());
 
         //insert the record into the data page
         if(!dp->append(tuple))
@@ -131,7 +131,7 @@ datatuple * diskTreeComponent::findTuple(int xid, datatuple::key_t key, size_t k
 
     if(pid!=-1)
     {
-        DataPage<datatuple> * dp = new DataPage<datatuple>(xid, 0, pid);
+        DataPage * dp = new DataPage(xid, 0, pid);
         dp->recordRead(key, keySize, &tup);
         delete dp;
     }
@@ -974,7 +974,7 @@ void diskTreeComponent::iterator::init_helper(datatuple* key1)
             lsmIterator_->value((byte**)hack);
 
             curr_pageid = *pid_tmp;
-            curr_page = new DataPage<datatuple>(-1, ro_alloc_, curr_pageid);
+            curr_page = new DataPage(-1, ro_alloc_, curr_pageid);
 
             DEBUG("opening datapage iterator %lld at key %s\n.", curr_pageid, key1 ? (char*)key1->key() : "NULL");
             dp_itr = new DPITR_T(curr_page, key1);
@@ -1008,7 +1008,7 @@ datatuple * diskTreeComponent::iterator::next_callerFrees()
             size_t ret = lsmIterator_->value((byte**)hack);
             assert(ret == sizeof(pageid_t));
             curr_pageid = *pid_tmp;
-            curr_page = new DataPage<datatuple>(-1, ro_alloc_, curr_pageid);
+            curr_page = new DataPage(-1, ro_alloc_, curr_pageid);
             DEBUG("opening datapage iterator %lld at beginning\n.", curr_pageid);
             dp_itr = new DPITR_T(curr_page->begin());
 

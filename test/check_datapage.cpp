@@ -20,9 +20,6 @@
 #undef begin
 #undef end
 
-template class DataPage<datatuple>;
-
-
 void insertWithConcurrentReads(size_t NUM_ENTRIES) {
   srand(1001);
   unlink("storefile.txt");
@@ -58,7 +55,7 @@ void insertWithConcurrentReads(size_t NUM_ENTRIES) {
 
   int pcount = 1000;
   int dpages = 0;
-  DataPage<datatuple> *dp=0;
+  DataPage *dp=0;
   int64_t datasize = 0;
   std::vector<pageid_t> dsp;
   size_t last_i = 0;
@@ -84,7 +81,7 @@ void insertWithConcurrentReads(size_t NUM_ENTRIES) {
           xid = Tbegin();
           alloc = new RegionAllocator(xid, 10000);
 
-          dp = new DataPage<datatuple>(xid, pcount, alloc);
+          dp = new DataPage(xid, pcount, alloc);
 //          printf("%lld\n", dp->get_start_pid());
           bool succ = dp->append(newtuple);
           assert(succ);
@@ -95,7 +92,7 @@ void insertWithConcurrentReads(size_t NUM_ENTRIES) {
       if(j >= key_arr.size()) { j = key_arr.size()-1; }
       bool found = 0;
       {
-        DataPage<datatuple>::iterator it = dp->begin();
+        DataPage::iterator it = dp->begin();
         datatuple * dt;
         while((dt = it.getnext()) != NULL) {
           if(!strcmp((char*)dt->rawkey(), key_arr[j].c_str())) {
@@ -160,7 +157,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
       
     int pcount = 1000;
     int dpages = 0;
-    DataPage<datatuple> *dp=0;
+    DataPage *dp=0;
     int64_t datasize = 0;
     std::vector<pageid_t> dsp;
     for(size_t i = 0; i < NUM_ENTRIES; i++)
@@ -176,7 +173,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
                 dp->writes_done();
                 delete dp;
 
-            dp = new DataPage<datatuple>(xid, pcount, alloc);
+            dp = new DataPage(xid, pcount, alloc);
 
 			bool succ = dp->append(newtuple);
 			assert(succ);
@@ -204,8 +201,8 @@ void insertProbeIter(size_t NUM_ENTRIES)
     int tuplenum = 0;
     for(int i = 0; i < dpages ; i++)
     {
-        DataPage<datatuple> dp(xid, 0, dsp[i]);
-        DataPage<datatuple>::iterator itr = dp.begin();
+        DataPage dp(xid, 0, dsp[i]);
+        DataPage::iterator itr = dp.begin();
         datatuple *dt=0;
         while( (dt=itr.getnext()) != NULL)
             {

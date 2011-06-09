@@ -174,7 +174,7 @@ class mergeStats {
     }
     void merged_tuples(datatuple * merged, datatuple * small, datatuple * large) {
     }
-    void wrote_datapage(DataPage<datatuple> *dp) {
+    void wrote_datapage(DataPage *dp) {
 #if EXTENDED_STATS
       stats_num_datapages_out++;
       stats_bytes_out_with_overhead += (PAGE_SIZE * dp->get_page_count());

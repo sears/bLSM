@@ -87,10 +87,10 @@ class diskTreeComponent {
 
 
  private:
-  DataPage<datatuple>* insertDataPage(int xid, datatuple *tuple);
+  DataPage* insertDataPage(int xid, datatuple *tuple);
 
   internalNodes * ltree;
-  DataPage<datatuple>* dp;
+  DataPage* dp;
   pageid_t datapage_size;
   /*mergeManager::mergeStats*/ void *stats; // XXX hack to work around circular includes.
 
@@ -226,8 +226,8 @@ class diskTreeComponent {
     diskTreeComponent::internalNodes::iterator* lsmIterator_;
 
     pageid_t curr_pageid; //current page id
-    DataPage<datatuple>    *curr_page;   //current page
-    typedef DataPage<datatuple>::iterator DPITR_T;
+    DataPage *curr_page;   //current page
+    typedef DataPage::iterator DPITR_T;
     DPITR_T *dp_itr;
 
   };

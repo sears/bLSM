@@ -24,6 +24,7 @@ int main(int argc, char *argv[])
     int64_t c0_size = 1024 * 1024 * 512 * 1;
     int log_mode = 0; // do not log by default.
     int64_t expiry_delta = 0;  // do not gc by default
+    int port = simpleServer::DEFAULT_PORT;
     stasis_buffer_manager_size = 1 * 1024 * 1024 * 1024 / PAGE_SIZE;  // 1.5GB total
 
     for(int i = 1; i < argc; i++) {
@@ -41,8 +42,11 @@ int main(int argc, char *argv[])
         } else if(!strcmp(argv[i], "--expiry-delta")) {
             i++;
             expiry_delta = atoi(argv[i]);
+        } else if(!strcmp(argv[i], "--port")) {
+            i++;
+            port = atoi(argv[i]);
     	} else {
-    		fprintf(stderr, "Usage: %s [--test|--benchmark] [--log-mode <int>] [--expiry-delta <int>]", argv[0]);
+    		fprintf(stderr, "Usage: %s [--test|--benchmark] [--log-mode <int>] [--expiry-delta <int>] [--port <int>]", argv[0]);
     		abort();
     	}
     }
@@ -73,7 +77,7 @@ int main(int argc, char *argv[])
 		mscheduler->start();
 		ltable.replayLog();
 
-		simpleServer *lserver = new simpleServer(&ltable);
+		simpleServer *lserver = new simpleServer(&ltable, simpleServer::DEFAULT_THREADS, port);
 
 		lserver->acceptLoop();
 

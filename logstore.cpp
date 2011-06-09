@@ -97,7 +97,7 @@ logtable<TUPLE>::~logtable()
 template<class TUPLE>
 void logtable<TUPLE>::init_stasis() {
 
-  DataPage<datatuple>::register_stasis_page_impl();
+  DataPage::register_stasis_page_impl();
   stasis_buffer_manager_hint_writes_are_sequential = 1;
   Tinit();
 
