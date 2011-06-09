@@ -33,16 +33,17 @@ class diskTreeComponent {
     ltree(new diskTreeComponent::internalNodes(xid, internal_region_size, datapage_region_size, datapage_size)),
     dp(0),
     datapage_size(datapage_size),
-    stats(stats), 
-      bloom_filter(bloom_filter_size == 0 ? 0 : 
-		   bloom_filter_create(diskTreeComponent_hash_func_a, diskTreeComponent_hash_func_b, bloom_filter_size, 0.01)
-		   )  {
-	if(bloom_filter) bloom_filter_print_stats(bloom_filter);
-	}
+    stats(stats),
+    bloom_filter(bloom_filter_size == 0
+                ? 0
+                : bloom_filter_create(diskTreeComponent_hash_func_a,
+                                      diskTreeComponent_hash_func_b,
+                                      bloom_filter_size, 0.01))  {
+    if(bloom_filter) bloom_filter_print_stats(bloom_filter);
+  }
 
-
-  diskTreeComponent(int xid, recordid root, recordid internal_node_state, recordid datapage_state,
-                    mergeStats* stats) :
+  diskTreeComponent(int xid, recordid root, recordid internal_node_state,
+                    recordid datapage_state, mergeStats* stats) :
     ltree(new diskTreeComponent::internalNodes(xid, root, internal_node_state, datapage_state)),
     dp(0),
     datapage_size(-1),
@@ -83,8 +84,6 @@ class diskTreeComponent {
   void print_tree(int xid) {
     ltree->print_tree(xid);
   }
-
-
 
  private:
   DataPage* insertDataPage(int xid, datatuple *tuple);
