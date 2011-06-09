@@ -15,11 +15,11 @@ int main(int argc, char **argv)
 
     sync();
 
-    logtable<datatuple>::init_stasis();
+    logtable::init_stasis();
 
     int xid = Tbegin();
 
-    logtable<datatuple> *ltable = new logtable<datatuple>(1000, 10000, 5);
+    logtable *ltable = new logtable(1000, 10000, 5);
 
     recordid table_root = ltable->allocTable(xid);
 
@@ -34,7 +34,7 @@ int main(int argc, char **argv)
     delete ro_alloc;
     Tcommit(xid);
     delete ltable;
-    logtable<datatuple>::deinit_stasis();
+    logtable::deinit_stasis();
 
 
 

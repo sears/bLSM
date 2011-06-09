@@ -28,7 +28,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     sync();
 
-    logtable<datatuple>::init_stasis();
+    logtable::init_stasis();
 
     double delete_freq = .05;
     double update_freq = .15;
@@ -103,7 +103,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     int xid = Tbegin();
 
-    logtable<datatuple> *ltable = new logtable<datatuple>(10 * 1024 * 1024, 1000, 1000, 40);
+    logtable *ltable = new logtable(10 * 1024 * 1024, 1000, 1000, 40);
     merge_scheduler mscheduler(ltable);
 
     recordid table_root = ltable->allocTable(xid);
@@ -248,7 +248,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     Tcommit(xid);
     delete ltable;
-    logtable<datatuple>::deinit_stasis();
+    logtable::deinit_stasis();
 }
 
 

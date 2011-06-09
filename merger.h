@@ -2,7 +2,6 @@
 #define _MERGER_H_
 
 #include "logstore.h"
-#include "datatuple.h"
 
 #include <stasis/common.h>
 #undef try
@@ -10,7 +9,7 @@
 
 class merge_scheduler {
 public:
-  merge_scheduler(logtable<datatuple> * ltable);
+  merge_scheduler(logtable * ltable);
   ~merge_scheduler();
 
   void start();
@@ -22,7 +21,7 @@ public:
 private:
   pthread_t mem_merge_thread_;
   pthread_t disk_merge_thread_;
-  logtable<datatuple> * ltable_;
+  logtable * ltable_;
   const double MIN_R;
 };
 

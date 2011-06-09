@@ -51,14 +51,14 @@ int main(int argc, char *argv[])
     	}
     }
 
-    logtable<datatuple>::init_stasis();
+    logtable::init_stasis();
 
       int xid = Tbegin();
 
 
       recordid table_root = ROOT_RECORD;
     {
-		logtable<datatuple> ltable(log_mode, c0_size);
+		logtable ltable(log_mode, c0_size);
 		ltable.expiry = expiry_delta;
 
 		if(TrecordType(xid, ROOT_RECORD) == INVALID_SLOT) {
@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
 		printf("Deinitializing stasis...\n");
 		fflush(stdout);
     }
-    logtable<datatuple>::deinit_stasis();
+    logtable::deinit_stasis();
 
     printf("Shutdown complete\n");
 }

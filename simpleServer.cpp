@@ -53,7 +53,7 @@ void * simpleServer::worker(int self) {
   }
 }
 
-simpleServer::simpleServer(logtable<datatuple> * ltable, int max_threads, int port):
+simpleServer::simpleServer(logtable * ltable, int max_threads, int port):
   ltable(ltable),
   port(port),
   max_threads(max_threads),

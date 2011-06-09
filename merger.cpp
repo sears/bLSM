@@ -12,7 +12,7 @@ static void* diskMerge_thr(void* arg) {
   return ((merge_scheduler*)arg)->diskMergeThread();
 }
 
-merge_scheduler::merge_scheduler(logtable<datatuple> *ltable) : ltable_(ltable), MIN_R(3.0) { }
+merge_scheduler::merge_scheduler(logtable *ltable) : ltable_(ltable), MIN_R(3.0) { }
 merge_scheduler::~merge_scheduler() { }
 
 void merge_scheduler::shutdown() {
@@ -26,7 +26,7 @@ void merge_scheduler::start() {
   pthread_create(&disk_merge_thread_, 0, diskMerge_thr, this);
 }
 
-bool insert_filter(logtable<datatuple> * ltable, datatuple * t, bool dropDeletes) {
+bool insert_filter(logtable * ltable, datatuple * t, bool dropDeletes) {
   if(t->isDelete()) {
     if(dropDeletes || ! ltable->mightBeAfterMemMerge(t)) {
       return false;
@@ -41,7 +41,7 @@ template <class ITA, class ITB>
 void merge_iterators(int xid, diskTreeComponent * forceMe,
                     ITA *itrA,
                     ITB *itrB,
-                    logtable<datatuple> *ltable,
+                    logtable *ltable,
                     diskTreeComponent *scratch_tree,
                     mergeStats * stats,
                     bool dropDeletes);
@@ -339,7 +339,7 @@ static void periodically_force(int xid, int *i, diskTreeComponent * forceMe, sta
   }
 }
 
-static int garbage_collect(logtable<datatuple> * ltable_, datatuple ** garbage, int garbage_len, int next_garbage, bool force = false) {
+static int garbage_collect(logtable * ltable_, datatuple ** garbage, int garbage_len, int next_garbage, bool force = false) {
   if(next_garbage == garbage_len || force) {
     pthread_mutex_lock(&ltable_->rb_mut);
     for(int i = 0; i < next_garbage; i++) {
@@ -375,7 +375,7 @@ void merge_iterators(int xid,
                         diskTreeComponent * forceMe,
                         ITA *itrA, //iterator on c1 or c2
                         ITB *itrB, //iterator on c0 or c1, respectively
-                        logtable<datatuple> *ltable,
+                        logtable *ltable,
                         diskTreeComponent *scratch_tree, mergeStats * stats,
                         bool dropDeletes  // should be true iff this is biggest component
                         )

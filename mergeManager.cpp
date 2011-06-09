@@ -499,7 +499,7 @@ void mergeManager::init_helper(void) {
   pthread_create(&pp_thread, 0, merge_manager_pretty_print_thread, (void*)this);
 }
 
-mergeManager::mergeManager(logtable<datatuple> *ltable):
+mergeManager::mergeManager(logtable *ltable):
   UPDATE_PROGRESS_PERIOD(0.005),
   ltable(ltable) {
   c0 = new mergeStats(0, ltable ? ltable->max_c0_size : 10000000);
@@ -507,7 +507,7 @@ mergeManager::mergeManager(logtable<datatuple> *ltable):
   c2 = new mergeStats(2, 0);
   init_helper();
 }
-mergeManager::mergeManager(logtable<datatuple> *ltable, int xid, recordid rid):
+mergeManager::mergeManager(logtable *ltable, int xid, recordid rid):
   UPDATE_PROGRESS_PERIOD(0.005),
   ltable(ltable) {
   marshalled_header h;
@@ -537,7 +537,7 @@ void mergeManager::marshal(int xid, recordid rid) {
 void mergeManager::pretty_print(FILE * out) {
 
 #if EXTENDED_STATS
-  logtable<datatuple> * lt = (logtable<datatuple>*)ltable;
+  logtable * lt = ltable;
   bool have_c0  = false;
   bool have_c0m = false;
   bool have_c1  = false;

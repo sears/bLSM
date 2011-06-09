@@ -19,7 +19,7 @@
 #include <fcntl.h>
 
 void *serverLoop(void *args);
-void logserver::startserver(logtable<datatuple> *ltable)
+void logserver::startserver(logtable *ltable)
 {
     sys_alive = true;
     this->ltable = ltable;

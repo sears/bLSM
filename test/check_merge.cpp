@@ -26,7 +26,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     unlink("logfile.txt");
     system("rm -rf stasis_log/");
 
-    logtable<datatuple>::init_stasis();
+    logtable::init_stasis();
 
     //data generation
     std::vector<std::string> * data_arr = new std::vector<std::string>;
@@ -51,7 +51,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     int xid = Tbegin();
 
-    logtable<datatuple> * ltable = new logtable<datatuple>(10 * 1024 * 1024, 1000, 10000, 5);
+    logtable * ltable = new logtable(10 * 1024 * 1024, 1000, 10000, 5);
     merge_scheduler mscheduler(ltable);
 
     recordid table_root = ltable->allocTable(xid);
@@ -149,7 +149,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     Tcommit(xid);
     delete ltable;
-    logtable<datatuple>::deinit_stasis();
+    logtable::deinit_stasis();
 }
 
 

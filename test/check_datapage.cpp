@@ -28,7 +28,7 @@ void insertWithConcurrentReads(size_t NUM_ENTRIES) {
 
   sync();
 
-  logtable<datatuple>::init_stasis();
+  logtable::init_stasis();
 
   int xid = Tbegin();
 
@@ -120,7 +120,7 @@ void insertWithConcurrentReads(size_t NUM_ENTRIES) {
 
   Tcommit(xid);
 
-  logtable<datatuple>::deinit_stasis();
+  logtable::deinit_stasis();
 }
 
 void insertProbeIter(size_t NUM_ENTRIES)
@@ -131,7 +131,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     sync();
 
-    logtable<datatuple>::init_stasis();
+    logtable::init_stasis();
 
     int xid = Tbegin();
 
@@ -219,7 +219,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
   
 	Tcommit(xid);
 
-	logtable<datatuple>::deinit_stasis();
+	logtable::deinit_stasis();
 }
 
 

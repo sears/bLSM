@@ -22,8 +22,7 @@ static inline double tv_to_double(struct timeval tv)
 // LOG TABLE IMPLEMENTATION
 /////////////////////////////////////////////////////////////////
 
-template<class TUPLE>
-logtable<TUPLE>::logtable(int log_mode, pageid_t max_c0_size, pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size)
+logtable::logtable(int log_mode, pageid_t max_c0_size, pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size)
 {
     recovering = true;
     this->max_c0_size = max_c0_size;
@@ -68,8 +67,7 @@ logtable<TUPLE>::logtable(int log_mode, pageid_t max_c0_size, pageid_t internal_
     									 stasis_log_file_permissions);
 }
 
-template<class TUPLE>
-logtable<TUPLE>::~logtable()
+logtable::~logtable()
 {
     delete merge_mgr; // shuts down pretty print thread.
 
@@ -94,8 +92,7 @@ logtable<TUPLE>::~logtable()
     delete tmerger;
 }
 
-template<class TUPLE>
-void logtable<TUPLE>::init_stasis() {
+void logtable::init_stasis() {
 
   DataPage::register_stasis_page_impl();
   stasis_buffer_manager_hint_writes_are_sequential = 1;
@@ -103,11 +100,9 @@ void logtable<TUPLE>::init_stasis() {
 
 }
 
-template<class TUPLE>
-void logtable<TUPLE>::deinit_stasis() { Tdeinit(); }
+void logtable::deinit_stasis() { Tdeinit(); }
 
-template<class TUPLE>
-recordid logtable<TUPLE>::allocTable(int xid)
+recordid logtable::allocTable(int xid)
 {
     table_rec = Talloc(xid, sizeof(tbl_header));
     mergeStats * stats = 0;
@@ -128,8 +123,8 @@ recordid logtable<TUPLE>::allocTable(int xid)
 
     return table_rec;
 }
-template<class TUPLE>
-void logtable<TUPLE>::openTable(int xid, recordid rid) {
+
+void logtable::openTable(int xid, recordid rid) {
   table_rec = rid;
   Tread(xid, table_rec, &tbl_header);
   tree_c2 = new diskTreeComponent(xid, tbl_header.c2_root, tbl_header.c2_state, tbl_header.c2_dp_state, 0);
@@ -143,16 +138,14 @@ void logtable<TUPLE>::openTable(int xid, recordid rid) {
 
 }
 
-template<class TUPLE>
-void logtable<TUPLE>::logUpdate(datatuple * tup) {
+void logtable::logUpdate(datatuple * tup) {
   byte * buf = tup->to_bytes();
   LogEntry * e = stasis_log_write_update(log_file, 0, INVALID_PAGE, 0/*Page**/, 0/*op*/, buf, tup->byte_length());
   log_file->write_entry_done(log_file,e);
   free(buf);
 }
 
-template<class TUPLE>
-void logtable<TUPLE>::replayLog() {
+void logtable::replayLog() {
   lsn_t start = tbl_header.log_trunc;
   LogHandle * lh = start ? getLSNHandle(log_file, start) : getLogHandle(log_file);
   const LogEntry * e;
@@ -173,13 +166,12 @@ void logtable<TUPLE>::replayLog() {
 
 }
 
-template<class TUPLE>
-lsn_t logtable<TUPLE>::get_log_offset() {
+lsn_t logtable::get_log_offset() {
   if(recovering || !log_mode) { return INVALID_LSN; }
   return log_file->next_available_lsn(log_file);
 }
-template<class TUPLE>
-void logtable<TUPLE>::truncate_log() {
+
+void logtable::truncate_log() {
   if(recovering) {
     printf("Not truncating log until recovery is complete.\n");
   } else {
@@ -190,8 +182,7 @@ void logtable<TUPLE>::truncate_log() {
   }
 }
 
-template<class TUPLE>
-void logtable<TUPLE>::update_persistent_header(int xid, lsn_t trunc_lsn) {
+void logtable::update_persistent_header(int xid, lsn_t trunc_lsn) {
 
     tbl_header.c2_root = tree_c2->get_root_rid();
     tbl_header.c2_dp_state = tree_c2->get_datapage_allocator_rid();
@@ -210,8 +201,7 @@ void logtable<TUPLE>::update_persistent_header(int xid, lsn_t trunc_lsn) {
     Tset(xid, table_rec, &tbl_header);    
 }
 
-template<class TUPLE>
-void logtable<TUPLE>::flushTable()
+void logtable::flushTable()
 {
     struct timeval start_tv, stop_tv;
     double start, stop;
@@ -269,8 +259,7 @@ void logtable<TUPLE>::flushTable()
     c0_flushing = false;
 }
 
-template<class TUPLE>
-datatuple * logtable<TUPLE>::findTuple(int xid, const datatuple::key_t key, size_t keySize)
+datatuple * logtable::findTuple(int xid, const datatuple::key_t key, size_t keySize)
 {
     //prepare a search tuple
     datatuple *search_tuple = datatuple::create(key, keySize);
@@ -450,8 +439,7 @@ datatuple * logtable<TUPLE>::findTuple(int xid, const datatuple::key_t key, size
  * returns the first record found with the matching key
  * (not to be used together with diffs)
  **/
-template<class TUPLE>
-datatuple * logtable<TUPLE>::findTuple_first(int xid, datatuple::key_t key, size_t keySize)
+datatuple * logtable::findTuple_first(int xid, datatuple::key_t key, size_t keySize)
 {
     //prepare a search tuple
     datatuple * search_tuple = datatuple::create(key, keySize);
@@ -545,9 +533,7 @@ datatuple * logtable<TUPLE>::findTuple_first(int xid, datatuple::key_t key, size
 
 }
 
-
-template<class TUPLE>
-datatuple * logtable<TUPLE>::insertTupleHelper(datatuple *tuple)
+datatuple * logtable::insertTupleHelper(datatuple *tuple)
 {
   bool need_free = false;
   if(!tuple->isDelete() && expiry != 0) {
@@ -560,10 +546,10 @@ datatuple * logtable<TUPLE>::insertTupleHelper(datatuple *tuple)
     memcpy(newkey, tuple->strippedkey(), kl);
     newkey[kl] = 0;
     memcpy(newkey+kl+1, &ts, ts_sz);
-    TUPLE * old = tuple;
+    datatuple * old = tuple;
     tuple = datatuple::create(newkey, kl+ 1+ ts_sz, tuple->data(), tuple->datalen());
     assert(tuple->strippedkeylen() == old->strippedkeylen());
-    assert(!TUPLE::compare_obj(tuple, old));
+    assert(!datatuple::compare_obj(tuple, old));
     free(newkey);
     need_free = true;
   }  //find the previous tuple with same key in the memtree if exists
@@ -590,12 +576,12 @@ datatuple * logtable<TUPLE>::insertTupleHelper(datatuple *tuple)
     tree_c0->insert(t);
   }
 
-  if(need_free) { TUPLE::freetuple(tuple); }
+  if(need_free) { datatuple::freetuple(tuple); }
 
   return pre_t;
 }
-template<class TUPLE>
-void logtable<TUPLE>::insertManyTuples(datatuple ** tuples, int tuple_count) {
+
+void logtable::insertManyTuples(datatuple ** tuples, int tuple_count) {
   for(int i = 0; i < tuple_count; i++) {
     merge_mgr->read_tuple_from_small_component(0, tuples[i]);
   }
@@ -625,8 +611,7 @@ void logtable<TUPLE>::insertManyTuples(datatuple ** tuples, int tuple_count) {
   merge_mgr->read_tuple_from_large_component(0, num_old_tups, sum_old_tup_lens);
 }
 
-template<class TUPLE>
-void logtable<TUPLE>::insertTuple(datatuple *tuple)
+void logtable::insertTuple(datatuple *tuple)
 {
     if(log_mode && !recovering) {
         logUpdate(tuple);
@@ -653,8 +638,7 @@ void logtable<TUPLE>::insertTuple(datatuple *tuple)
     DEBUG("tree size %d tuples %lld bytes.\n", tsize, tree_bytes);
 }
 
-template<class TUPLE>
-bool logtable<TUPLE>::testAndSetTuple(datatuple *tuple, datatuple *tuple2)
+bool logtable::testAndSetTuple(datatuple *tuple, datatuple *tuple2)
 {
     bool succ = false;
     static pthread_mutex_t test_and_set_mut = PTHREAD_MUTEX_INITIALIZER;
@@ -682,12 +666,11 @@ bool logtable<TUPLE>::testAndSetTuple(datatuple *tuple, datatuple *tuple2)
     return succ;
 }
 
-template<class TUPLE>
-void logtable<TUPLE>::registerIterator(iterator * it) {
+void logtable::registerIterator(iterator * it) {
   its.push_back(it);
 }
-template<class TUPLE>
-void logtable<TUPLE>::forgetIterator(iterator * it) {
+
+void logtable::forgetIterator(iterator * it) {
   for(unsigned int i = 0; i < its.size(); i++) {
     if(its[i] == it) {
       its.erase(its.begin()+i);
@@ -695,11 +678,10 @@ void logtable<TUPLE>::forgetIterator(iterator * it) {
     }
   }
 }
-template<class TUPLE>
-void logtable<TUPLE>::bump_epoch() {
+
+void logtable::bump_epoch() {
   epoch++;
   for(unsigned int i = 0; i < its.size(); i++) {
     its[i]->invalidate();
   }
 }
-template class logtable<datatuple>;

@@ -36,7 +36,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
     system("rm -rf stasis_log/");
     sync();
 
-    logtable<datatuple>::init_stasis();
+    logtable::init_stasis();
 
     int xid = Tbegin();
 
@@ -138,7 +138,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
     delete it;
     delete ro_alloc;
 	Tcommit(xid);
-	logtable<datatuple>::deinit_stasis();
+	logtable::deinit_stasis();
 }
 
 

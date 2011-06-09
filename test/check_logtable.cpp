@@ -28,7 +28,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     sync();
 
-    logtable<datatuple>::init_stasis();
+    logtable::init_stasis();
 
     int xid = Tbegin();
 
@@ -116,7 +116,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     printf("Random Reads completed.\n");
     Tcommit(xid);
-    logtable<datatuple>::deinit_stasis();
+    logtable::deinit_stasis();
 }
 
 /** @test
