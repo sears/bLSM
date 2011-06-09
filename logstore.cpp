@@ -80,7 +80,7 @@ logtable<TUPLE>::~logtable()
 
     if(tree_c0 != NULL)
     {
-      memTreeComponent<datatuple>::tearDownTree(tree_c0);
+      memTreeComponent::tearDownTree(tree_c0);
     }
 
     log_file->close(log_file);
@@ -121,7 +121,7 @@ recordid logtable<TUPLE>::allocTable(int xid)
     merge_mgr->set_c0_size(max_c0_size);
     merge_mgr->new_merge(0);
 
-    tree_c0 = new memTreeComponent<datatuple>::rbtree_t;
+    tree_c0 = new memTreeComponent::rbtree_t;
     tbl_header.merge_manager = merge_mgr->talloc(xid);
     tbl_header.log_trunc = 0;
     update_persistent_header(xid);
@@ -134,7 +134,7 @@ void logtable<TUPLE>::openTable(int xid, recordid rid) {
   Tread(xid, table_rec, &tbl_header);
   tree_c2 = new diskTreeComponent(xid, tbl_header.c2_root, tbl_header.c2_state, tbl_header.c2_dp_state, 0);
   tree_c1 = new diskTreeComponent(xid, tbl_header.c1_root, tbl_header.c1_state, tbl_header.c1_dp_state, 0);
-  tree_c0 = new memTreeComponent<datatuple>::rbtree_t;
+  tree_c0 = new memTreeComponent::rbtree_t;
 
   merge_mgr = new mergeManager(this, xid, tbl_header.merge_manager);
   merge_mgr->set_c0_size(max_c0_size);
@@ -281,7 +281,7 @@ datatuple * logtable<TUPLE>::findTuple(int xid, const datatuple::key_t key, size
     datatuple *ret_tuple=0; 
 
     //step 1: look in tree_c0
-    memTreeComponent<datatuple>::rbtree_t::iterator rbitr = get_tree_c0()->find(search_tuple);
+    memTreeComponent::rbtree_t::iterator rbitr = get_tree_c0()->find(search_tuple);
     if(rbitr != get_tree_c0()->end())
     {
         DEBUG("tree_c0 size %d\n", get_tree_c0()->size());
@@ -462,7 +462,7 @@ datatuple * logtable<TUPLE>::findTuple_first(int xid, datatuple::key_t key, size
 
     pthread_mutex_lock(&rb_mut);
 
-    memTreeComponent<datatuple>::rbtree_t::iterator rbitr = get_tree_c0()->find(search_tuple);
+    memTreeComponent::rbtree_t::iterator rbitr = get_tree_c0()->find(search_tuple);
     if(rbitr != get_tree_c0()->end())
     {
         DEBUG("tree_c0 size %d\n", tree_c0->size());
@@ -567,7 +567,7 @@ datatuple * logtable<TUPLE>::insertTupleHelper(datatuple *tuple)
     free(newkey);
     need_free = true;
   }  //find the previous tuple with same key in the memtree if exists
-  memTreeComponent<datatuple>::rbtree_t::iterator rbitr = tree_c0->find(tuple);
+  memTreeComponent::rbtree_t::iterator rbitr = tree_c0->find(tuple);
   datatuple * t  = 0;
   datatuple * pre_t = 0;
   if(rbitr != tree_c0->end())

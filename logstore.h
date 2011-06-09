@@ -88,13 +88,13 @@ public:
     pthread_cond_t c1_needed;
     pthread_cond_t c1_ready;
 
-    inline memTreeComponent<datatuple>::rbtree_ptr_t get_tree_c0(){return tree_c0;}
-    inline memTreeComponent<datatuple>::rbtree_ptr_t get_tree_c0_mergeable(){return tree_c0_mergeable;}
-    void set_tree_c0(memTreeComponent<datatuple>::rbtree_ptr_t newtree){tree_c0 = newtree;                     bump_epoch(); }
+    inline memTreeComponent::rbtree_ptr_t get_tree_c0(){return tree_c0;}
+    inline memTreeComponent::rbtree_ptr_t get_tree_c0_mergeable(){return tree_c0_mergeable;}
+    void set_tree_c0(memTreeComponent::rbtree_ptr_t newtree){tree_c0 = newtree;                     bump_epoch(); }
 
     bool get_c0_is_merging() { return c0_is_merging; }
     void set_c0_is_merging(bool is_merging) { c0_is_merging = is_merging; }
-    void set_tree_c0_mergeable(memTreeComponent<datatuple>::rbtree_ptr_t newtree){tree_c0_mergeable = newtree; bump_epoch(); }
+    void set_tree_c0_mergeable(memTreeComponent::rbtree_ptr_t newtree){tree_c0_mergeable = newtree; bump_epoch(); }
     lsn_t get_log_offset();
     void truncate_log();
 
@@ -152,8 +152,8 @@ private:
     diskTreeComponent *tree_c1; //small tree
     diskTreeComponent *tree_c1_mergeable; //small tree: ready to be merged with c2
     diskTreeComponent *tree_c1_prime; //small tree: ready to be merged with c2
-    memTreeComponent<datatuple>::rbtree_ptr_t tree_c0; // in-mem red black tree
-    memTreeComponent<datatuple>::rbtree_ptr_t tree_c0_mergeable; // in-mem red black tree: ready to be merged with c1.
+    memTreeComponent::rbtree_ptr_t tree_c0; // in-mem red black tree
+    memTreeComponent::rbtree_ptr_t tree_c0_mergeable; // in-mem red black tree: ready to be merged with c1.
     bool c0_is_merging;
 
 public:
@@ -415,8 +415,8 @@ public:
       logtable * ltable;
       uint64_t epoch;
       typedef mergeManyIterator<
-        typename memTreeComponent<TUPLE>::batchedRevalidatingIterator,
-        typename memTreeComponent<TUPLE>::iterator> inner_merge_it_t;
+        typename memTreeComponent::batchedRevalidatingIterator,
+        typename memTreeComponent::iterator> inner_merge_it_t;
       typedef mergeManyIterator<
         inner_merge_it_t,
         diskTreeComponent::iterator> merge_it_t;
@@ -445,8 +445,8 @@ public:
 
 
       void validate() {
-        typename memTreeComponent<TUPLE>::batchedRevalidatingIterator * c0_it;
-        typename memTreeComponent<TUPLE>::iterator *c0_mergeable_it[1];
+        typename memTreeComponent::batchedRevalidatingIterator * c0_it;
+        typename memTreeComponent::iterator *c0_mergeable_it[1];
         diskTreeComponent::iterator * disk_it[4];
         epoch = ltable->get_epoch();
 
@@ -459,8 +459,8 @@ public:
           t = NULL;
         }
 
-        c0_it              = new typename memTreeComponent<TUPLE>::batchedRevalidatingIterator(ltable->get_tree_c0(), 100, &ltable->rb_mut,  t);
-        c0_mergeable_it[0] = new typename memTreeComponent<TUPLE>::iterator            (ltable->get_tree_c0_mergeable(),                            t);
+        c0_it              = new typename memTreeComponent::batchedRevalidatingIterator(ltable->get_tree_c0(), 100, &ltable->rb_mut,  t);
+        c0_mergeable_it[0] = new typename memTreeComponent::iterator            (ltable->get_tree_c0_mergeable(),                            t);
         if(ltable->get_tree_c1_prime()) {
           disk_it[0] = ltable->get_tree_c1_prime()->open_iterator(t);
         } else {

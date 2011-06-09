@@ -1,16 +1,15 @@
 #include "memTreeComponent.h"
 #include "datatuple.h"
 
-template<class TUPLE>
-void memTreeComponent<TUPLE>::tearDownTree(rbtree_ptr_t tree) {
-    TUPLE * t = 0;
+void memTreeComponent::tearDownTree(rbtree_ptr_t tree) {
+    datatuple * t = 0;
     typename rbtree_t::iterator old;
     for(typename rbtree_t::iterator delitr  = tree->begin();
                            delitr != tree->end();
                            delitr++) {
     	if(t) {
     		tree->erase(old);
-    		TUPLE::freetuple(t);
+    		datatuple::freetuple(t);
     		t = 0;
     	}
     	t = *delitr;
@@ -18,8 +17,7 @@ void memTreeComponent<TUPLE>::tearDownTree(rbtree_ptr_t tree) {
     }
 	if(t) {
 		tree->erase(old);
-		TUPLE::freetuple(t);
+		datatuple::freetuple(t);
 	}
     delete tree;
 }
-template class memTreeComponent<datatuple>;

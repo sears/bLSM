@@ -115,8 +115,8 @@ void * merge_scheduler::memMergeThread() {
         rwlc_unlock(ltable_->header_mut);
 
         // needs to be past the rwlc_unlock...
-        memTreeComponent<datatuple>::batchedRevalidatingIterator *itrB =
-            new memTreeComponent<datatuple>::batchedRevalidatingIterator(ltable_->get_tree_c0(), ltable_->merge_mgr, ltable_->max_c0_size, &ltable_->c0_flushing, 100, &ltable_->rb_mut);
+        memTreeComponent::batchedRevalidatingIterator *itrB =
+            new memTreeComponent::batchedRevalidatingIterator(ltable_->get_tree_c0(), ltable_->merge_mgr, ltable_->max_c0_size, &ltable_->c0_flushing, 100, &ltable_->rb_mut);
 
         //: do the merge
         DEBUG("mmt:\tMerging:\n");
@@ -345,7 +345,7 @@ static int garbage_collect(logtable<datatuple> * ltable_, datatuple ** garbage, 
     for(int i = 0; i < next_garbage; i++) {
       datatuple * t2tmp = NULL;
       {
-      memTreeComponent<datatuple>::rbtree_t::iterator rbitr = ltable_->get_tree_c0()->find(garbage[i]);
+      memTreeComponent::rbtree_t::iterator rbitr = ltable_->get_tree_c0()->find(garbage[i]);
         if(rbitr != ltable_->get_tree_c0()->end()) {
           t2tmp = *rbitr;
           if((t2tmp->datalen() == garbage[i]->datalen()) &&
