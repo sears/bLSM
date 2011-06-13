@@ -414,8 +414,8 @@ public:
       logtable * ltable;
       uint64_t epoch;
       typedef mergeManyIterator<
-        typename memTreeComponent::batchedRevalidatingIterator,
-        typename memTreeComponent::iterator> inner_merge_it_t;
+         memTreeComponent::batchedRevalidatingIterator,
+         memTreeComponent::iterator> inner_merge_it_t;
       typedef mergeManyIterator<
         inner_merge_it_t,
         diskTreeComponent::iterator> merge_it_t;
@@ -444,8 +444,8 @@ public:
 
 
       void validate() {
-        typename memTreeComponent::batchedRevalidatingIterator * c0_it;
-        typename memTreeComponent::iterator *c0_mergeable_it[1];
+         memTreeComponent::batchedRevalidatingIterator * c0_it;
+         memTreeComponent::iterator *c0_mergeable_it[1];
         diskTreeComponent::iterator * disk_it[4];
         epoch = ltable->get_epoch();
 
@@ -458,8 +458,8 @@ public:
           t = NULL;
         }
 
-        c0_it              = new typename memTreeComponent::batchedRevalidatingIterator(ltable->get_tree_c0(), 100, &ltable->rb_mut,  t);
-        c0_mergeable_it[0] = new typename memTreeComponent::iterator            (ltable->get_tree_c0_mergeable(),                            t);
+        c0_it              = new  memTreeComponent::batchedRevalidatingIterator(ltable->get_tree_c0(), 100, &ltable->rb_mut,  t);
+        c0_mergeable_it[0] = new  memTreeComponent::iterator            (ltable->get_tree_c0_mergeable(),                            t);
         if(ltable->get_tree_c1_prime()) {
           disk_it[0] = ltable->get_tree_c1_prime()->open_iterator(t);
         } else {

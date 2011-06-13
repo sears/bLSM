@@ -20,7 +20,7 @@ public:
   class iterator
   {
   private:
-    typedef typename rbtree_t::const_iterator MTITER;
+    typedef rbtree_t::const_iterator MTITER;
 
   public:
     iterator( rbtree_t *s )
@@ -84,7 +84,7 @@ public:
   class revalidatingIterator
   {
   private:
-    typedef typename rbtree_t::const_iterator MTITER;
+    typedef rbtree_t::const_iterator MTITER;
 
   public:
     revalidatingIterator( rbtree_t *s, pthread_mutex_t * rb_mut ) : s_(s), mut_(rb_mut) {
@@ -153,7 +153,7 @@ public:
   class batchedRevalidatingIterator
   {
   private:
-    typedef typename rbtree_t::const_iterator MTITER;
+    typedef rbtree_t::const_iterator MTITER;
 
 
     void populate_next_ret_impl(std::_Rb_tree_const_iterator<datatuple*>/*MTITER*/ it) {

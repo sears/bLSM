@@ -82,7 +82,7 @@ public:
   }
 
   bool append(datatuple const * dat);
-  bool recordRead(const typename datatuple::key_t key, size_t keySize,  datatuple ** buf);
+  bool recordRead(const  datatuple::key_t key, size_t keySize,  datatuple ** buf);
 
   inline uint16_t recordCount();
 

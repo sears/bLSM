@@ -323,7 +323,7 @@ bool DataPage::append(datatuple const * dat)
   return succ;
 }
 
-bool DataPage::recordRead(const typename datatuple::key_t key, size_t keySize,  datatuple ** buf)
+bool DataPage::recordRead(const datatuple::key_t key, size_t keySize,  datatuple ** buf)
 {
   iterator itr(this, NULL);
 
