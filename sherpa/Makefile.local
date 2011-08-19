@@ -1,0 +1,23 @@
+CPPFLAGS =-I../../stasis -I.. -I. -I /usr/local/include/thrift
+CXXFLAGS =-g -O0 
+LDFLAGS=-lprofiler -ltcmalloc -lpthread -llogstore -lstasis -L ../build -L ../../stasis/build/src/stasis -lthrift -Wl,-rpath,../build,-rpath,../../stasis/build/src/stasis,-rpath,/usr/local/lib
+
+THRIFT_SRC = dht_persistent_store/persistent_store_constants.cpp dht_persistent_store/persistent_store_types.cpp dht_persistent_store/PersistentStore.cpp
+
+all: main/lsm_client main/lsm_server main/lsm_shutdown
+
+dht_thrift.jar :
+	cd ../thrift/gen-java;
+	bash -c 'javac \`find . -name *.java\` -cp /usr/local/lib/libthrift.jar:/usr/share/java/slf4j-api-1.5.11.jar'
+	cd ../../sherpa
+
+main/lsm_client : $(THRIFT_SRC)
+
+main/lsm_shutdown : $(THRIFT_SRC)
+
+main/lsm_server : LSMServerHandler.cc $(THRIFT_SRC)
+
+clean:
+	rm -f main/lsm_client main/lsm_server
+
+#		 $(CXX) $(CXXFLAGS) $(CPPFLAGS) -o $@ $^ $(LDFLAGS)
