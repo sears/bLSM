@@ -12,7 +12,7 @@
 #include "datatuple.h"
 #include "mergeStats.h"
 #include "bloomFilter.h"
-#include <stasis/crc32.h>
+#include <stasis/util/crc32.h>
 
 extern "C" {
   static uint64_t diskTreeComponent_hash_func_a(const char* a, int len) {
