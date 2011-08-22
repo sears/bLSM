@@ -9,7 +9,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <sys/time.h>
-#include <stasis/crc32.h>
+#include <stasis/util/crc32.h>
 
 /*
  * This file can test CRC and FNV-1 based hash functions.  Based on early experiments:
