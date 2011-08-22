@@ -17,8 +17,7 @@
 #include "regionAllocator.h"
 
 #include <stasis/transactional.h>
-#undef begin
-#undef end
+#include <stasis/util/time.h>
 
 void insertWithConcurrentReads(size_t NUM_ENTRIES) {
   srand(1001);
@@ -59,6 +58,7 @@ void insertWithConcurrentReads(size_t NUM_ENTRIES) {
   int64_t datasize = 0;
   std::vector<pageid_t> dsp;
   size_t last_i = 0;
+
   for(size_t i = 0; i < NUM_ENTRIES; i++)
   {
       //prepare the key
@@ -108,16 +108,17 @@ void insertWithConcurrentReads(size_t NUM_ENTRIES) {
         assert(i < j);
       }
   }
+
   if(dp) {
     dp->writes_done();
     delete dp;
   }
 
+
   printf("Total data set length: %lld\n", (long long)datasize);
   printf("Storage utilization: %.2f\n", (datasize+.0) / (PAGE_SIZE * pcount * dpages));
   printf("Number of datapages: %d\n", dpages);
   printf("Writes complete.\n");
-
   Tcommit(xid);
 
   logtable::deinit_stasis();
@@ -154,6 +155,10 @@ void insertProbeIter(size_t NUM_ENTRIES)
     RegionAllocator * alloc = new RegionAllocator(xid, 10000); // ~ 10 datapages per region.
 
     printf("Stage 1: Writing %llu keys\n", (unsigned long long)NUM_ENTRIES);
+    struct timeval start, stop;
+
+    gettimeofday(&start, 0);
+
       
     int pcount = 1000;
     int dpages = 0;
@@ -181,16 +186,19 @@ void insertProbeIter(size_t NUM_ENTRIES)
             dsp.push_back(dp->get_start_pid());
         }
     }
+
+    gettimeofday(&stop, 0);
     if(dp) {
       dp->writes_done();
       delete dp;
     }
-
     printf("Total data set length: %lld\n", (long long)datasize);
     printf("Storage utilization: %.2f\n", (datasize+.0) / (PAGE_SIZE * pcount * dpages));
     printf("Number of datapages: %d\n", dpages);
     printf("Writes complete.\n");
-    
+    double elapsed = stasis_timeval_to_double(stasis_subtract_timeval(stop, start));
+    printf("Writes took %f seconds; %f mb/sec\n", elapsed, ((double)datasize)/(1024.0*1024.0*elapsed));
+
     Tcommit(xid);
     xid = Tbegin();
 
