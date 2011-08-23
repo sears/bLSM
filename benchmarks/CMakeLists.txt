@@ -1,1 +1,2 @@
 CREATE_CLIENT_EXECUTABLE(tcpclient_noop)
+CREATE_EXECUTABLE(lsm_microbenchmarks)
