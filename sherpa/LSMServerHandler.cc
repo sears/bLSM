@@ -34,8 +34,8 @@ LSMServerHandler(int argc, char **argv)
             c0_size = 1024 * 1024 * 100;
             printf("warning: running w/ tiny c0 for testing\n"); // XXX build a separate test server and deployment server?
         } else if(!strcmp(argv[i], "--benchmark")) {
-            stasis_buffer_manager_size = (1024LL * 1024LL * 1024LL * 2LL) / PAGE_SIZE;  // 4GB total
-            c0_size =                     1024LL * 1024LL * 1024LL * 2LL;
+            stasis_buffer_manager_size = (1024LL * 1024LL * 1024LL * 1LL) / PAGE_SIZE;  // 4GB total
+            c0_size =                     1024LL * 1024LL * 1024LL * 1LL;
             printf("note: running w/ 2GB c0 for benchmarking\n"); // XXX build a separate test server and deployment server?
         } else if(!strcmp(argv[i], "--log-mode")) {
             i++;
@@ -128,14 +128,14 @@ nextDatabaseId()
 ResponseCode::type LSMServerHandler::
 ping() 
 {
-    return sherpa::ResponseCode::Ok;
+    return mapkeeper::ResponseCode::Success;
 }
 
 ResponseCode::type LSMServerHandler::
 shutdown()
 {
   exit(0); // xxx hack
-  return sherpa::ResponseCode::Ok;
+  return mapkeeper::ResponseCode::Success;
 }
 
 ResponseCode::type LSMServerHandler::
@@ -143,18 +143,18 @@ insert(datatuple* tuple)
 {
     ltable_->insertTuple(tuple);
     datatuple::freetuple(tuple);
-    return sherpa::ResponseCode::Ok;
+    return mapkeeper::ResponseCode::Success;
 }
 
 ResponseCode::type LSMServerHandler::
-addDatabase(const std::string& databaseName) 
+addMap(const std::string& databaseName) 
 {
     uint32_t id = nextDatabaseId();
     datatuple* tup = buildTuple(0, databaseName, (void*)&id, (uint32_t)(sizeof(id)));
     datatuple* ret = get(tup);
     if (ret) {
         datatuple::freetuple(ret);
-        return sherpa::ResponseCode::DatabaseExists;
+        return mapkeeper::ResponseCode::MapExists;
     }
     return insert(tup);
 }
@@ -165,23 +165,23 @@ addDatabase(const std::string& databaseName)
  * all the records!
  */
 ResponseCode::type LSMServerHandler::
-dropDatabase(const std::string& databaseName) 
+dropMap(const std::string& databaseName) 
 {
 #if 0
     Bdb::ResponseCode rc = databaseIds_.remove(databaseName);
     if (rc == Bdb::KeyNotFound) {
-        return sherpa::ResponseCode::DatabaseNotFound;
-    } else if (rc != Bdb::Ok) {
-        return sherpa::ResponseCode::Error;
+        return mapkeeper::ResponseCode::MapNotFound;
+    } else if (rc != Bdb::Success) {
+        return mapkeeper::ResponseCode::Error;
     } else {
-        return sherpa::ResponseCode::Ok;
+        return mapkeeper::ResponseCode::Success;
     }
 #endif
-        return sherpa::ResponseCode::Ok;
+        return mapkeeper::ResponseCode::Success;
 }
 
 void LSMServerHandler::
-listDatabases(StringListResponse& _return) 
+listMaps(StringListResponse& _return) 
 {
 }
 
@@ -194,7 +194,7 @@ scan(RecordListResponse& _return, const std::string& databaseName, const ScanOrd
     uint32_t id = getDatabaseId(databaseName);
     if (id == 0) {
         // database not found
-        _return.responseCode = sherpa::ResponseCode::DatabaseNotFound;
+        _return.responseCode = mapkeeper::ResponseCode::MapNotFound;
         return;
     }
  
@@ -213,7 +213,7 @@ scan(RecordListResponse& _return, const std::string& databaseName, const ScanOrd
            (maxBytes == 0 || resultSize < maxBytes)) {
         datatuple* current = itr->getnext();
         if (current == NULL) {
-            _return.responseCode = sherpa::ResponseCode::ScanEnded;
+            _return.responseCode = mapkeeper::ResponseCode::ScanEnded;
             break;
         }
 
@@ -228,7 +228,7 @@ scan(RecordListResponse& _return, const std::string& databaseName, const ScanOrd
         if ((!endKeyIncluded && cmp >= 0) ||
                 (endKeyIncluded && cmp > 0)) {
             datatuple::freetuple(current);
-            _return.responseCode = sherpa::ResponseCode::ScanEnded;
+            _return.responseCode = mapkeeper::ResponseCode::ScanEnded;
             break;
         } 
 
@@ -260,17 +260,17 @@ get(BinaryResponse& _return, const std::string& databaseName, const std::string&
     uint32_t id = getDatabaseId(databaseName);
     if (id == 0) {
         // database not found
-        _return.responseCode = sherpa::ResponseCode::DatabaseNotFound;
+        _return.responseCode = mapkeeper::ResponseCode::MapNotFound;
         return;
     }
     
     datatuple* recordBody = get(id, recordName);
     if (recordBody == NULL) {
         // record not found
-        _return.responseCode = sherpa::ResponseCode::RecordNotFound;
+        _return.responseCode = mapkeeper::ResponseCode::RecordNotFound;
         return;
     }
-    _return.responseCode = sherpa::ResponseCode::Ok;
+    _return.responseCode = mapkeeper::ResponseCode::Success;
     _return.value.assign((const char*)(recordBody->data()), recordBody->datalen());
     datatuple::freetuple(recordBody);
 }
@@ -302,6 +302,14 @@ get(uint32_t databaseId, const std::string& recordName)
 }
 
 ResponseCode::type LSMServerHandler::
+put(const std::string& databaseName, 
+       const std::string& recordName, 
+       const std::string& recordBody) 
+{
+    return mapkeeper::ResponseCode::Success;
+}
+
+ResponseCode::type LSMServerHandler::
 insert(const std::string& databaseName, 
        const std::string& recordName, 
        const std::string& recordBody) 
@@ -309,7 +317,7 @@ insert(const std::string& databaseName,
 //  std::cerr << "inserting " << databaseName << "." << recordName << std::endl;
     uint32_t id = getDatabaseId(databaseName);
     if (id == 0) {
-        return sherpa::ResponseCode::DatabaseNotFound;
+        return mapkeeper::ResponseCode::MapNotFound;
     }
     datatuple* oldRecordBody = get(id, recordName);
     if (oldRecordBody != NULL) {
@@ -317,7 +325,7 @@ insert(const std::string& databaseName,
           datatuple::freetuple(oldRecordBody);
         } else {
           datatuple::freetuple(oldRecordBody);
-          return sherpa::ResponseCode::RecordExists;
+          return mapkeeper::ResponseCode::RecordExists;
         }
     }
 
@@ -328,7 +336,7 @@ insert(const std::string& databaseName,
 ResponseCode::type LSMServerHandler::
 insertMany(const std::string& databaseName, const std::vector<Record> & records)
 {
-    return sherpa::ResponseCode::Error;
+    return mapkeeper::ResponseCode::Error;
 }
 
 ResponseCode::type LSMServerHandler::
@@ -338,11 +346,11 @@ update(const std::string& databaseName,
 {
     uint32_t id = getDatabaseId(databaseName);
     if (id == 0) {
-        return sherpa::ResponseCode::DatabaseNotFound;
+        return mapkeeper::ResponseCode::MapNotFound;
     }
     datatuple* oldRecordBody = get(id, recordName);
     if (oldRecordBody == NULL) {
-        return sherpa::ResponseCode::RecordNotFound;
+        return mapkeeper::ResponseCode::RecordNotFound;
     }
     datatuple::freetuple(oldRecordBody);
     datatuple* tup = buildTuple(id, recordName, recordBody);
@@ -354,11 +362,11 @@ remove(const std::string& databaseName, const std::string& recordName)
 {
     uint32_t id = getDatabaseId(databaseName);
     if (id == 0) {
-        return sherpa::ResponseCode::DatabaseNotFound;
+        return mapkeeper::ResponseCode::MapNotFound;
     }
     datatuple* oldRecordBody = get(id, recordName);
     if (oldRecordBody == NULL) {
-        return sherpa::ResponseCode::RecordNotFound;
+        return mapkeeper::ResponseCode::RecordNotFound;
     }
     datatuple::freetuple(oldRecordBody);
     datatuple* tup = buildTuple(id, recordName);

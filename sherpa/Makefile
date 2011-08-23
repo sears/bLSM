@@ -10,7 +10,7 @@ CXXSRC		= LSMServerHandler.cc
 
 LCLEAN		+= *~ 
 WARN            += -Werror -Wall
-LINC		+= -I. -I /home/y/include/thrift -I /home/y/include64/stasis -I ..
+LINC		+= -I. -I /usr/local/include/thrift -I /home/y/include64/stasis -I .. -I ../../thrift/gen-cpp
 
 LDLIBS +=	-L/usr/local/lib
 LDFLAGS += -Wl,-rpath,/home/y/lib64 -Wl,-rpath,../build
@@ -19,7 +19,7 @@ LDFLAGS += -Wl,-rpath,/home/y/lib64 -Wl,-rpath,../build
 # Poor packaging for yicu
 LINC +=         -I/home/y/include/yicu
 
-LDLIBS		+= -lthrift -ldht_persistent_store -lstasis -llogstore -L ../build
+LDLIBS		+= -lthrift -lmapkeeper -lstasis -llogstore -L ../build -L ../../thrift/gen-cpp
 
 # Need to remove potential warnings in yapache.
 LDEF += -DEAPI

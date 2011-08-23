@@ -1,4 +1,4 @@
-#include <dht_persistent_store/PersistentStore.h>
+#include "MapKeeper.h"
 #include <transport/TSocket.h>
 #include <transport/TBufferTransports.h>
 #include <protocol/TBinaryProtocol.h>
@@ -14,14 +14,14 @@ int main(int argc, char **argv) {
     boost::shared_ptr<TTransport> transport(new TFramedTransport(socket));
     boost::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
 
-    sherpa::PersistentStoreClient client(protocol);
+    mapkeeper::MapKeeperClient client(protocol);
     transport->open();
     socket->setNoDelay(true);
-    sherpa::BinaryResponse getResponse;
-    sherpa::RecordListResponse scanResponse;
+    mapkeeper::BinaryResponse getResponse;
+    mapkeeper::RecordListResponse scanResponse;
     std::string db = "db";
     std::string db1 = "db1";
-    cout << client.addDatabase(db) << endl;;
+    cout << client.addMap(db) << endl;;
     cout << client.insert(db, "kkkkkkkkkkkkk1", "v1") << endl;
     cout << client.insert(db, "kkkkkkkkkkkkk2", "v2") << endl;
     cout << client.insert(db, "kkkkkkkkkkkkk3", "v3") << endl;
@@ -58,9 +58,9 @@ int main(int argc, char **argv) {
     */
 
     cout << "adding db one more time" << endl;
-    cout << client.addDatabase(db) << endl;;
+    cout << client.addMap(db) << endl;;
 
-    cout << client.addDatabase(db1) << endl;;
+    cout << client.addMap(db1) << endl;;
     cout << client.insert(db1, "new key", "new value") << endl;
     client.get(getResponse, db1, "new key");
     cout << getResponse.responseCode << endl;
@@ -75,33 +75,33 @@ int main(int argc, char **argv) {
     cout << getResponse.responseCode << endl;
     cout << client.remove(db1, "new key") << endl;
 
-    client.scan(scanResponse, db, sherpa::ScanOrder::Ascending, "", true, "", true, 100, 100);
-    std::vector<sherpa::Record>::iterator itr;
+    client.scan(scanResponse, db, mapkeeper::ScanOrder::Ascending, "", true, "", true, 100, 100);
+    std::vector<mapkeeper::Record>::iterator itr;
     for (itr = scanResponse.records.begin(); itr != scanResponse.records.end(); itr++) {
         cout << itr->key << " " << itr->value << endl;
     }
     std::cout << std::endl;
 
 
-    client.scan(scanResponse, db, sherpa::ScanOrder::Ascending, "kkkkkkkkkkkkk1", false, "kkkkkkkkkkkkk3", false, 100, 100);
+    client.scan(scanResponse, db, mapkeeper::ScanOrder::Ascending, "kkkkkkkkkkkkk1", false, "kkkkkkkkkkkkk3", false, 100, 100);
     for (itr = scanResponse.records.begin(); itr != scanResponse.records.end(); itr++) {
         cout << itr->key << " " << itr->value << endl;
     }
     std::cout << std::endl;
 
-    client.scan(scanResponse, db, sherpa::ScanOrder::Ascending, "kkkkkkkkkkkkk1", true, "kkkkkkkkkkkkk3", true, 100, 100);
+    client.scan(scanResponse, db, mapkeeper::ScanOrder::Ascending, "kkkkkkkkkkkkk1", true, "kkkkkkkkkkkkk3", true, 100, 100);
     for (itr = scanResponse.records.begin(); itr != scanResponse.records.end(); itr++) {
         cout << itr->key << " " << itr->value << endl;
     }
     std::cout << std::endl;
 
-    client.scan(scanResponse, db, sherpa::ScanOrder::Ascending, "kkkkkkkkkkkkk2", true, "kkkkkkkkkkkkk2", true, 100, 100);
+    client.scan(scanResponse, db, mapkeeper::ScanOrder::Ascending, "kkkkkkkkkkkkk2", true, "kkkkkkkkkkkkk2", true, 100, 100);
     for (itr = scanResponse.records.begin(); itr != scanResponse.records.end(); itr++) {
         cout << itr->key << " " << itr->value << endl;
     }
     std::cout << std::endl;
 
-    client.scan(scanResponse, db, sherpa::ScanOrder::Ascending, "k", true, "kkkkkkkkkkkkk4", true, 100, 100);
+    client.scan(scanResponse, db, mapkeeper::ScanOrder::Ascending, "k", true, "kkkkkkkkkkkkk4", true, 100, 100);
     for (itr = scanResponse.records.begin(); itr != scanResponse.records.end(); itr++) {
         cout << itr->key << " " << itr->value << endl;
     }
