@@ -27,7 +27,7 @@ public:
         regionCount_ = TarrayListLength(xid, header_.region_list);
     }
   // Create a new region allocator.
-  RegionAllocator(int xid, pageid_t region_length) :
+  RegionAllocator(int xid, pageid_t region_page_count) :
       nextPage_(0),
       endOfRegion_(0),
       regionCount_(0),
@@ -36,7 +36,7 @@ public:
   {
       rid_ = Talloc(xid, sizeof(header_));
       header_.region_list = TarrayListAlloc(xid, 1, 2, sizeof(pageid_t));
-      header_.region_length = region_length;
+      header_.region_page_count = region_page_count;
       Tset(xid, rid_, &header_);
   }
   explicit RegionAllocator() :
@@ -58,14 +58,14 @@ public:
     pageid_t ret = nextPage_;
     nextPage_ += extent_length;
     if(nextPage_ >= endOfRegion_) {
-      ret = TregionAlloc(xid, header_.region_length, 42); // XXX assign a region allocator id
+      ret = TregionAlloc(xid, header_.region_page_count, 42); // XXX assign a region allocator id
       TarrayListExtend(xid, header_.region_list, 1);
       recordid rid = header_.region_list;
       rid.slot = regionCount_;
       Tset(xid, rid, &ret);
-      assert(extent_length <= header_.region_length); // XXX could handle this case if we wanted to.  Would remove this error case, and not be hard.
+      assert(extent_length <= header_.region_page_count); // XXX could handle this case if we wanted to.  Would remove this error case, and not be hard.
       nextPage_ = ret + extent_length;
-      endOfRegion_ = ret + header_.region_length;
+      endOfRegion_ = ret + header_.region_page_count;
       regionCount_++;
       assert(regionCount_ == TarrayListLength(xid, header_.region_list));
     }
@@ -110,7 +110,7 @@ public:
           rid.slot = i;
           Tread(xid, rid, &ret[i]);
       }
-      *region_length = header_.region_length;
+      *region_length = header_.region_page_count;
       return ret;
   }
   void done() {
@@ -131,7 +131,7 @@ public:
 private:
     typedef struct {
         recordid region_list;
-        pageid_t region_length;
+        pageid_t region_page_count;
     } persistent_state;
 
     recordid rid_;
