@@ -95,7 +95,7 @@ logtable::~logtable()
 void logtable::init_stasis() {
 
   DataPage::register_stasis_page_impl();
-  stasis_buffer_manager_hint_writes_are_sequential = 1;
+//  stasis_buffer_manager_hint_writes_are_sequential = 1;
   Tinit();
 
 }
