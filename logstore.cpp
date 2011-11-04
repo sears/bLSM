@@ -443,9 +443,8 @@ datatuple * logtable::findTuple_first(int xid, datatuple::key_t key, size_t keyS
 {
     //prepare a search tuple
     datatuple * search_tuple = datatuple::create(key, keySize);
-        
 
-    datatuple *ret_tuple=0; 
+    datatuple *ret_tuple=0;
     //step 1: look in tree_c0
 
     pthread_mutex_lock(&rb_mut);
@@ -464,6 +463,7 @@ datatuple * logtable::findTuple_first(int xid, datatuple::key_t key, size_t keyS
         DEBUG("Not in mem tree %d\n", tree_c0->size());
 
         pthread_mutex_unlock(&rb_mut);
+
         rwlc_readlock(header_mut); // XXX FIXME WITH OCC!!
 
         //step: 2 look into first in tree if exists (a first level merge going on)
@@ -553,6 +553,7 @@ datatuple * logtable::insertTupleHelper(datatuple *tuple)
     free(newkey);
     need_free = true;
   }  //find the previous tuple with same key in the memtree if exists
+  pthread_mutex_lock(&rb_mut);
   memTreeComponent::rbtree_t::iterator rbitr = tree_c0->find(tuple);
   datatuple * t  = 0;
   datatuple * pre_t = 0;
@@ -575,6 +576,7 @@ datatuple * logtable::insertTupleHelper(datatuple *tuple)
     //insert tuple into the rbtree
     tree_c0->insert(t);
   }
+  pthread_mutex_unlock(&rb_mut);
 
   if(need_free) { datatuple::freetuple(tuple); }
 
@@ -596,7 +598,6 @@ void logtable::insertManyTuples(datatuple ** tuples, int tuple_count) {
 	  }
   }
 
-  pthread_mutex_lock(&rb_mut);
   int num_old_tups = 0;
   pageid_t sum_old_tup_lens = 0;
   for(int i = 0; i < tuple_count; i++) {
@@ -607,7 +608,7 @@ void logtable::insertManyTuples(datatuple ** tuples, int tuple_count) {
       datatuple::freetuple(old_tup);
     }
   }
-  pthread_mutex_unlock(&rb_mut);
+
   merge_mgr->read_tuple_from_large_component(0, num_old_tups, sum_old_tup_lens);
 }
 
@@ -621,13 +622,10 @@ void logtable::insertTuple(datatuple *tuple)
         	batch_size = 0;
         }
     }
-    //lock the red-black tree
     merge_mgr->read_tuple_from_small_component(0, tuple);  // has to be before rb_mut, since it calls tick with block = true, and that releases header_mut.
     datatuple * pre_t = 0; // this is a pointer to any data tuples that we'll be deleting below.  We need to update the merge_mgr statistics with it, but have to do so outside of the rb_mut region.
 
-    pthread_mutex_lock(&rb_mut);
     pre_t = insertTupleHelper(tuple);
-    pthread_mutex_unlock(&rb_mut);
 
     if(pre_t) {
       // needs to be here; calls update_progress, which sometimes grabs mutexes..
