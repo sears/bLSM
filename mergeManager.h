@@ -60,6 +60,7 @@ public:
   void wrote_tuple(int merge_level, datatuple * tup);
   void pretty_print(FILE * out);
   void *pretty_print_thread();
+  void *update_progress_thread();
 
 private:
   /**
@@ -102,5 +103,7 @@ private:
   bool still_running;
   pthread_cond_t pp_cond;
   pthread_t pp_thread;
+  pthread_cond_t update_progress_cond;
+  pthread_t update_progress_pthread;
 };
 #endif /* MERGEMANAGER_H_ */
