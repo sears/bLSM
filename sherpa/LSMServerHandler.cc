@@ -10,6 +10,8 @@
 #include "logstore.h"
 #include "LSMServerHandler.h"
 
+int blind_update = 0; // updates check preimage by default.
+
 LSMServerHandler::
 LSMServerHandler(int argc, char **argv)
 {
@@ -23,7 +25,6 @@ LSMServerHandler(int argc, char **argv)
     // 2 -> sync on each 2 commits
     // ...
     int log_mode = 0; // do not log by default.
-
     int64_t expiry_delta = 0;  // do not gc by default
 
     stasis_buffer_manager_size = 1 * 1024 * 1024 * 1024 / PAGE_SIZE;  // 1.5GB total
@@ -34,12 +35,14 @@ LSMServerHandler(int argc, char **argv)
             c0_size = 1024 * 1024 * 100;
             printf("warning: running w/ tiny c0 for testing\n"); // XXX build a separate test server and deployment server?
         } else if(!strcmp(argv[i], "--benchmark")) {
-            stasis_buffer_manager_size = (1024LL * 1024LL * 1024LL * 1LL) / PAGE_SIZE;  // 4GB total
-            c0_size =                     1024LL * 1024LL * 1024LL * 1LL;
-            printf("note: running w/ 2GB c0 for benchmarking\n"); // XXX build a separate test server and deployment server?
+            stasis_buffer_manager_size = (1024LL * 1024LL * 1024LL * 2LL) / PAGE_SIZE;  // 10GB total
+            c0_size =                     1024LL * 1024LL * 1024LL * 8LL;
+            printf("note: running w/ 10GB of memory for benchmarking\n"); // XXX build a separate test server and deployment server?
         } else if(!strcmp(argv[i], "--log-mode")) {
             i++;
             log_mode = atoi(argv[i]);
+	} else if(!strcmp(argv[i], "--blind-update")) {
+	  blind_update = 1;
         } else if(!strcmp(argv[i], "--expiry-delta")) {
             i++;
             expiry_delta = atoi(argv[i]);
@@ -248,8 +251,7 @@ scan(RecordListResponse& _return, const std::string& databaseName, const ScanOrd
 datatuple* LSMServerHandler::
 get(datatuple* tuple)
 {
-    // -1 is invalid txn id 
-    //return ltable_->findTuple_first(-1, tuple->strippedkey(), tuple->strippedkeylen());
+    // -1 is invalid txn id
     datatuple* tup = ltable_->findTuple_first(-1, tuple->rawkey(), tuple->rawkeylen());
     return tup;
 }
@@ -314,19 +316,20 @@ insert(const std::string& databaseName,
        const std::string& recordName, 
        const std::string& recordBody) 
 {
-//  std::cerr << "inserting " << databaseName << "." << recordName << std::endl;
     uint32_t id = getDatabaseId(databaseName);
     if (id == 0) {
         return mapkeeper::ResponseCode::MapNotFound;
     }
-    datatuple* oldRecordBody = get(id, recordName);
-    if (oldRecordBody != NULL) {
+    if(!blind_update) {
+      datatuple* oldRecordBody = get(id, recordName);
+      if (oldRecordBody != NULL) {
         if(oldRecordBody->isDelete()) {
           datatuple::freetuple(oldRecordBody);
         } else {
           datatuple::freetuple(oldRecordBody);
           return mapkeeper::ResponseCode::RecordExists;
         }
+      }
     }
 
     datatuple* tup = buildTuple(id, recordName, recordBody);
@@ -348,11 +351,13 @@ update(const std::string& databaseName,
     if (id == 0) {
         return mapkeeper::ResponseCode::MapNotFound;
     }
-    datatuple* oldRecordBody = get(id, recordName);
-    if (oldRecordBody == NULL) {
+    if(!blind_update) {
+      datatuple* oldRecordBody = get(id, recordName);
+      if (oldRecordBody == NULL) {
         return mapkeeper::ResponseCode::RecordNotFound;
+      }
+      datatuple::freetuple(oldRecordBody);
     }
-    datatuple::freetuple(oldRecordBody);
     datatuple* tup = buildTuple(id, recordName, recordBody);
     return insert(tup);
 }
@@ -372,22 +377,6 @@ remove(const std::string& databaseName, const std::string& recordName)
     datatuple* tup = buildTuple(id, recordName);
     return insert(tup);
 }
-
-/*
-void BdbServerHandler::
-insertDatabaseId(std::string& str, uint32_t id)
-{
-    LOG_DEBUG("prepending id: " << id);
-    uint32_t newid = htonl(id);
-    LOG_DEBUG(
-            (int)(((uint8_t*)(&newid))[0]) << " " << 
-            (int)(((uint8_t*)(&newid))[1]) << " " << 
-            (int)(((uint8_t*)(&newid))[2]) <<" " << 
-            (int)(((uint8_t*)(&newid))[3])
-    );
-    str.insert(0, (const char*)&newid, sizeof(newid));
-}
-*/
 
 datatuple* LSMServerHandler::
 buildTuple(uint32_t databaseId, const std::string& recordName)
