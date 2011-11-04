@@ -128,10 +128,10 @@ void * merge_scheduler::memMergeThread() {
 
         // 5: force c1'
 
-        rwlc_writelock(ltable_->header_mut);
-
         //force write the new tree to disk
-        c1_prime->force(xid);  // XXX put before the writelock?
+        c1_prime->force(xid);
+
+        rwlc_writelock(ltable_->header_mut);
 
         merge_count++;        
         DEBUG("mmt:\tmerge_count %lld #bytes written %lld\n", stats.stats_merge_count, stats.output_size());
@@ -332,7 +332,7 @@ void * merge_scheduler::diskMergeThread()
 }
 
 static void periodically_force(int xid, int *i, diskTreeComponent * forceMe, stasis_log_t * log) {
-  if(*i > mergeManager::FORCE_INTERVAL) {
+  if(false && *i > mergeManager::FORCE_INTERVAL) {
     if(forceMe) forceMe->force(xid);
     log->force_tail(log, LOG_FORCE_WAL);
     *i = 0;
