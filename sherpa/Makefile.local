@@ -1,9 +1,9 @@
-THRIFT_DIR = /usr/local
+THRIFT_DIR = /home/sears/local/thrift
 
 CPPFLAGS =-I../../stasis -I.. -I. -I $(THRIFT_DIR)/include/thrift -I../../mapkeeper/thrift/gen-cpp
-CXXFLAGS =-g -O0 
+CXXFLAGS =-g -O3
 
-LDFLAGS=-lprofiler -ltcmalloc -lpthread -llogstore -lstasis -lmapkeeper -lthrift 	\
+LDFLAGS=-lpthread -llogstore -lstasis -lmapkeeper -lthrift 	\
 	   -L $(THRIFT_DIR)/lib -L ../../mapkeeper/thrift/gen-cpp	 		\
 	   -L ../build -L ../../stasis/build/src/stasis 				\
 	   -Wl,-rpath,\$$ORIGIN/../../build						\
