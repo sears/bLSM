@@ -69,13 +69,28 @@ typedef enum {
   LOGSTORE_SERVER_RESPONSE
 } logstore_opcode_type;
 
+#ifndef MYFREAD
+#ifdef HAVE_FREAD_UNLOCKED
+#define MYFREAD(a,b,c,d) fread_unlocked(a,b,c,d)
+#define MYFWRITE(a,b,c,d) fwrite_unlocked(a,b,c,d)
+#define MYFEOF(a) feof_unlocked(a)
+#define MYFERROR(a) ferror_unlocked(a)
+#define MYFFLUSH(a) fflush_unlocked(a)
+#else
+#define MYFREAD(a,b,c,d) fread(a,b,c,d)
+#define MYFWRITE(a,b,c,d) fwrite(a,b,c,d)
+#define MYFEOF(a) feof(a)
+#define MYFERROR(a) ferror(a)
+#define MYFFLUSH(a) fflush(a)
+#endif
+#endif
 static inline int readfromsocket(FILE * sockf, void *buf, ssize_t count) {
-  ssize_t i = fread_unlocked(buf, sizeof(byte), count, sockf);
+  ssize_t i = MYFREAD(buf, sizeof(byte), count, sockf);
   if(i != count) {
-    if(feof_unlocked(sockf)) {
+    if(MYFEOF(sockf)) {
       errno = EOF;
       return EOF;
-    } else if(ferror_unlocked(sockf)) {
+    } else if(MYFERROR(sockf)) {
       perror("readfromsocket failed");
       errno = -1;
       return -1;
@@ -108,12 +123,12 @@ static inline int readfromsocket(int sockd, void *buf, ssize_t count)
 }
 
 static inline int writetosocket(FILE * sockf, const void *buf, ssize_t count) {
-  ssize_t i = fwrite_unlocked((byte*)buf, sizeof(byte), count, sockf);
+  ssize_t i = MYFWRITE((byte*)buf, sizeof(byte), count, sockf);
   if(i != count) {
-    if(feof_unlocked(sockf)) {
+    if(MYFEOF(sockf)) {
       errno = EOF;
       return errno;
-    } else if(ferror_unlocked(sockf)) {
+    } else if(MYFERROR(sockf)) {
       perror("writetosocket failed");
       errno = -1;
       return -1;
@@ -155,8 +170,8 @@ static inline bool opisresponse(network_op_t op) {
 
 static inline network_op_t readopfromsocket(FILE * sockf, logstore_opcode_type type) {
   network_op_t ret;
-  fflush_unlocked(sockf); // our first read after a write is always (?) a readop, so fflush the write here.
-  ssize_t n = fread_unlocked(&ret, sizeof(network_op_t), 1, sockf);
+  MYFFLUSH(sockf); // our first read after a write is always (?) a readop, so fflush the write here.
+  ssize_t n = MYFREAD(&ret, sizeof(network_op_t), 1, sockf);
   if(n == sizeof(network_op_t)) {
     // done.
   } else if(n == 0) { // EOF
@@ -232,7 +247,7 @@ static inline int writeoptosocket(FILE * sockf, network_op_t op) {
   assert(opiserror(op) || opisrequest(op) || opisresponse(op));
   int ret = writetosocket(sockf, &op, sizeof(network_op_t));
   if(op == LOGSTORE_RESPONSE_RECEIVING_TUPLES) {
-    fflush_unlocked(sockf);
+    MYFFLUSH(sockf);
   }
   return ret;
 }
