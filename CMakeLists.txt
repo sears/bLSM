@@ -11,7 +11,7 @@ Project(Stasis)
 
 SET(PACKAGE_VERSION 1)
 
-SUBDIRS(test util benchmarks)
+SUBDIRS(test util benchmarks main)
 
 # Main decisions
 SET(BUILD_SHARED_LIBS ON)
@@ -79,10 +79,8 @@ ELSE( "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" )
 ENDIF ( "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" )
 
 #CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config.h)
-
 IF ( HAVE_STASIS )
   ADD_LIBRARY(logstore requestDispatch.cpp simpleServer.cpp logserver.cpp logstore.cpp diskTreeComponent.cpp memTreeComponent.cpp datapage.cpp merger.cpp tuplemerger.cpp mergeStats.cpp mergeManager.cpp bloomFilter.c)
-  CREATE_EXECUTABLE(server)
-  CREATE_EXECUTABLE(newserver)
 ENDIF ( HAVE_STASIS )
+
 ADD_LIBRARY(logstore_client tcpclient.cpp)

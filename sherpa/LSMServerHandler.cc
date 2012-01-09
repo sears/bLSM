@@ -38,6 +38,10 @@ LSMServerHandler(int argc, char **argv)
             stasis_buffer_manager_size = (1024LL * 1024LL * 1024LL * 2LL) / PAGE_SIZE;  // 10GB total
             c0_size =                     1024LL * 1024LL * 1024LL * 8LL;
             printf("note: running w/ 10GB of memory for benchmarking\n"); // XXX build a separate test server and deployment server?
+        } else if(!strcmp(argv[i], "--benchmark-small")) {
+            stasis_buffer_manager_size = (1024LL * 1024LL * 1024LL * 2LL) / PAGE_SIZE;  // 5GB total
+            c0_size =                     1024LL * 1024LL * 1024LL * 3LL;
+            printf("note: running w/ 5GB of memory for benchmarking on small box\n");
         } else if(!strcmp(argv[i], "--log-mode")) {
             i++;
             log_mode = atoi(argv[i]);
@@ -47,7 +51,7 @@ LSMServerHandler(int argc, char **argv)
             i++;
             expiry_delta = atoi(argv[i]);
         } else {
-            fprintf(stderr, "Usage: %s [--test|--benchmark] [--log-mode <int>] [--expiry-delta <int>]", argv[0]);
+            fprintf(stderr, "Usage: %s [--test|--benchmark|--benchmark-small] [--log-mode <int>] [--expiry-delta <int>]", argv[0]);
             abort();
         }
     }
@@ -162,30 +166,65 @@ addMap(const std::string& databaseName)
     return insert(tup);
 }
 
-/**
- * TODO:
- * Don't just remove database from databaseIds. You need to delete
- * all the records!
- */
 ResponseCode::type LSMServerHandler::
 dropMap(const std::string& databaseName) 
 {
-#if 0
-    Bdb::ResponseCode rc = databaseIds_.remove(databaseName);
-    if (rc == Bdb::KeyNotFound) {
-        return mapkeeper::ResponseCode::MapNotFound;
-    } else if (rc != Bdb::Success) {
-        return mapkeeper::ResponseCode::Error;
-    } else {
-        return mapkeeper::ResponseCode::Success;
+  uint32_t id = getDatabaseId(databaseName);
+  if(id == 0) {
+    return mapkeeper::ResponseCode::MapNotFound;
+  }
+  datatuple * tup = buildTuple(0, databaseName);
+  datatuple * exists = get(tup);
+
+  if(exists) {
+    datatuple::freetuple(exists);
+
+    datatuple * startKey = buildTuple(id, "");
+    logtable::iterator * itr = new logtable::iterator(ltable_, startKey);
+    datatuple::freetuple(startKey);
+    datatuple * current;
+
+    // insert tombstone; deletes metadata entry for map; frees tup
+    insert(tup);
+
+    while(NULL != (current = itr->getnext())) {
+      if(*((uint32_t*)current->strippedkey()) != id) {
+        datatuple::freetuple(current);
+        break;
+      }
+      datatuple * del = datatuple::create(current->strippedkey(), current->strippedkeylen());
+      ltable_->insertTuple(del);
+      datatuple::freetuple(del);
+      datatuple::freetuple(current);
     }
-#endif
-        return mapkeeper::ResponseCode::Success;
+    delete itr;
+    return mapkeeper::ResponseCode::Success;
+  } else {
+    datatuple::freetuple(tup);
+    return mapkeeper::ResponseCode::MapNotFound;
+  }
 }
 
 void LSMServerHandler::
 listMaps(StringListResponse& _return) 
 {
+  datatuple * startKey = buildTuple(0, "");
+  logtable::iterator * itr = new logtable::iterator(ltable_, startKey);
+  datatuple::freetuple(startKey);
+  datatuple * current;
+  while(NULL != (current = itr->getnext())) {
+    if(*((uint32_t*)current->strippedkey()) != 0) {
+      datatuple::freetuple(current);
+      break;
+    }
+    _return.values.push_back(
+        std::string((char*)(current->strippedkey()) + sizeof(uint32_t),
+                    current->strippedkeylen() - sizeof(uint32_t)));
+    datatuple::freetuple(current);
+  }
+  delete itr;
+
+    _return.responseCode = mapkeeper::ResponseCode::Success;
 }
 
 void LSMServerHandler::
@@ -308,7 +347,12 @@ put(const std::string& databaseName,
        const std::string& recordName, 
        const std::string& recordBody) 
 {
-    return mapkeeper::ResponseCode::Success;
+  uint32_t id = getDatabaseId(databaseName);
+  if (id == 0) {
+      return mapkeeper::ResponseCode::MapNotFound;
+  }
+  datatuple* tup = buildTuple(id, recordName, recordBody);
+  return insert(tup);
 }
 
 ResponseCode::type LSMServerHandler::
