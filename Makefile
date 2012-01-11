@@ -1,3 +1,4 @@
+
 include ../mapkeeper/Makefile.config
 
 INC = -I ../stasis 							\
@@ -9,8 +10,8 @@ INC = -I ../stasis 							\
 LIBSRC = $(wildcard *.c) $(wildcard *.cpp)
 LIBNAME = logstore
 
-ifeq (`uname`,"Linux")
-STATIC_LIBS= ./libstdc++.a ../mapkeeper/thrift/gen-cpp/libmapkeeper.a	\
+ifeq ($(shell uname),Linux)
+STATIC_LIBS= ../mapkeeper/thrift/gen-cpp/libmapkeeper.a	\
 	 -lrt sherpa/LSMServerHandler.cc bin/liblogstore.a		\
 	../stasis/bin/libstasis.a
 else
