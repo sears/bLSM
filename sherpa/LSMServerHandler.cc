@@ -19,13 +19,13 @@ LSMServerHandler(int argc, char **argv)
 
     // how big the in-memory tree should be (512MB).
     int64_t c0_size = 1024 * 1024 * 512 * 1;
-
     // write-ahead log
     // 1 -> sync on each commit
     // 2 -> sync on each 2 commits
     // ...
     int log_mode = 0; // do not log by default.
     int64_t expiry_delta = 0;  // do not gc by default
+    port = 9090;
 
     stasis_buffer_manager_size = 1 * 1024 * 1024 * 1024 / PAGE_SIZE;  // 1.5GB total
 
@@ -45,8 +45,11 @@ LSMServerHandler(int argc, char **argv)
         } else if(!strcmp(argv[i], "--log-mode")) {
             i++;
             log_mode = atoi(argv[i]);
-	} else if(!strcmp(argv[i], "--blind-update")) {
-	  blind_update = 1;
+        } else if(!strcmp(argv[i], "--port")) {
+            i++;
+            port = atoi(argv[i]);
+        } else if(!strcmp(argv[i], "--blind-update")) {
+            blind_update = 1;
         } else if(!strcmp(argv[i], "--expiry-delta")) {
             i++;
             expiry_delta = atoi(argv[i]);

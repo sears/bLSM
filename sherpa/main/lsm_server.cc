@@ -23,7 +23,7 @@ using namespace mapkeeper;
 int main(int argc, char **argv) {
     shared_ptr<LSMServerHandler> handler(new LSMServerHandler(argc, argv));
     shared_ptr<TProcessor> processor(new MapKeeperProcessor(handler));
-    shared_ptr<TServerTransport> serverTransport(new TServerSocket(9090));
+    shared_ptr<TServerTransport> serverTransport(new TServerSocket(handler->port));
     shared_ptr<TTransportFactory> transportFactory(new TFramedTransportFactory());
     shared_ptr<TProtocolFactory> protocolFactory(new TBinaryProtocolFactory());
     shared_ptr<ThreadManager> threadManager = ThreadManager::newSimpleThreadManager(32);

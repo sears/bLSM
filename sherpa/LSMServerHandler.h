@@ -28,6 +28,7 @@ public:
     ResponseCode::type insertMany(const std::string& databaseName, const std::vector<Record> & records);
     ResponseCode::type update(const std::string& databaseName, const std::string& recordName, const std::string& recordBody);
     ResponseCode::type remove(const std::string& databaseName, const std::string& recordName);
+    short port;
 
 private:
     ResponseCode::type insert(datatuple* tuple);
