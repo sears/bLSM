@@ -1,0 +1,3 @@
+Portions of this work are based upon Stasis' "Rose" LSM-Tree implementation.
+
+http://code.google.com/p/stasis/source/browse/trunk/benchmarks/rose.cpp
