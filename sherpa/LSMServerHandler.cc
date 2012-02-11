@@ -28,6 +28,8 @@
 
 int blind_update = 0; // updates check preimage by default.
 
+FILE* trace = 0;
+
 LSMServerHandler::
 LSMServerHandler(int argc, char **argv)
 {
@@ -42,7 +44,7 @@ LSMServerHandler(int argc, char **argv)
     int log_mode = 0; // do not log by default.
     int64_t expiry_delta = 0;  // do not gc by default
     port = 9090;
-
+    char * tracefile = 0;
     stasis_buffer_manager_size = 1 * 1024 * 1024 * 1024 / PAGE_SIZE;  // 1.5GB total
 
     for(int i = 1; i < argc; i++) {
@@ -64,6 +66,9 @@ LSMServerHandler(int argc, char **argv)
         } else if(!strcmp(argv[i], "--port")) {
             i++;
             port = atoi(argv[i]);
+        } else if(!strcmp(argv[i], "--trace")) {
+            i++;
+            tracefile = argv[i];
         } else if(!strcmp(argv[i], "--blind-update")) {
             blind_update = 1;
         } else if(!strcmp(argv[i], "--expiry-delta")) {
@@ -73,6 +78,14 @@ LSMServerHandler(int argc, char **argv)
             fprintf(stderr, "Usage: %s [--test|--benchmark|--benchmark-small] [--log-mode <int>] [--expiry-delta <int>]", argv[0]);
             abort();
         }
+    }
+
+    if(tracefile) {
+      trace = fopen(tracefile, "w");
+      if(trace == 0) {
+        perror("Couldn't open trace file!");
+        abort();
+      }
     }
 
     pthread_mutex_init(&mutex_, 0);
@@ -154,16 +167,21 @@ nextDatabaseId()
 ResponseCode::type LSMServerHandler::
 ping() 
 {
+  if(trace) { fprintf(trace, "Success = ping()\n"); fflush(trace); }
     return mapkeeper::ResponseCode::Success;
 }
 
 ResponseCode::type LSMServerHandler::
 shutdown()
 {
+  if(trace) { fprintf(trace, "Success = shutdown()\n"); fflush(trace); }
   exit(0); // xxx hack
   return mapkeeper::ResponseCode::Success;
 }
-
+std::string pp_tuple(datatuple * tuple) {
+  std::string key((const char*)tuple->rawkey(), (size_t)tuple->rawkeylen());
+  return key;
+}
 ResponseCode::type LSMServerHandler::
 insert(datatuple* tuple)
 {
@@ -180,8 +198,10 @@ addMap(const std::string& databaseName)
     datatuple* ret = get(tup);
     if (ret) {
         datatuple::freetuple(ret);
+        if(trace) { fprintf(trace, "MapExists = addMap(%s)\n", databaseName.c_str()); fflush(trace); }
         return mapkeeper::ResponseCode::MapExists;
     }
+    if(trace) { fprintf(trace, "Success = addMap(%s)\n", databaseName.c_str()); fflush(trace); }
     return insert(tup);
 }
 
@@ -190,6 +210,7 @@ dropMap(const std::string& databaseName)
 {
   uint32_t id = getDatabaseId(databaseName);
   if(id == 0) {
+    if(trace) { fprintf(trace, "MapNotFound = dropMap(%s)\n", databaseName.c_str()); fflush(trace); }
     return mapkeeper::ResponseCode::MapNotFound;
   }
   datatuple * tup = buildTuple(0, databaseName);
@@ -217,9 +238,11 @@ dropMap(const std::string& databaseName)
       datatuple::freetuple(current);
     }
     delete itr;
+    if(trace) { fprintf(trace, "Success = dropMap(%s)\n", databaseName.c_str()); fflush(trace); }
     return mapkeeper::ResponseCode::Success;
   } else {
     datatuple::freetuple(tup);
+    if(trace) { fprintf(trace, "MapNotFound = dropMap(%s)\n", databaseName.c_str()); fflush(trace); }
     return mapkeeper::ResponseCode::MapNotFound;
   }
 }
@@ -242,7 +265,7 @@ listMaps(StringListResponse& _return)
     datatuple::freetuple(current);
   }
   delete itr;
-
+  if(trace) { fprintf(trace, "... = listMaps()\n"); fflush(trace); }
     _return.responseCode = mapkeeper::ResponseCode::Success;
 }
 
@@ -255,6 +278,7 @@ scan(RecordListResponse& _return, const std::string& databaseName, const ScanOrd
     uint32_t id = getDatabaseId(databaseName);
     if (id == 0) {
         // database not found
+        if(trace) { fprintf(trace, "MapNotFound = scan(...)\n"); fflush(trace); }
         _return.responseCode = mapkeeper::ResponseCode::MapNotFound;
         return;
     }
@@ -275,6 +299,7 @@ scan(RecordListResponse& _return, const std::string& databaseName, const ScanOrd
         datatuple* current = itr->getnext();
         if (current == NULL) {
             _return.responseCode = mapkeeper::ResponseCode::ScanEnded;
+            if(trace) { fprintf(trace, "ScanEnded = scan(...)\n"); fflush(trace); }
             break;
         }
 
@@ -290,6 +315,7 @@ scan(RecordListResponse& _return, const std::string& databaseName, const ScanOrd
                 (endKeyIncluded && cmp > 0)) {
             datatuple::freetuple(current);
             _return.responseCode = mapkeeper::ResponseCode::ScanEnded;
+            if(trace) { fprintf(trace, "ScanEnded = scan(...)\n"); fflush(trace); }
             break;
         } 
 
@@ -320,6 +346,7 @@ get(BinaryResponse& _return, const std::string& databaseName, const std::string&
     uint32_t id = getDatabaseId(databaseName);
     if (id == 0) {
         // database not found
+        if(trace) { fprintf(trace, "MapNotFound = get(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
         _return.responseCode = mapkeeper::ResponseCode::MapNotFound;
         return;
     }
@@ -327,9 +354,11 @@ get(BinaryResponse& _return, const std::string& databaseName, const std::string&
     datatuple* recordBody = get(id, recordName);
     if (recordBody == NULL) {
         // record not found
+        if(trace) { fprintf(trace, "RecordNotFound = get(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
         _return.responseCode = mapkeeper::ResponseCode::RecordNotFound;
         return;
     }
+    if(trace) { fprintf(trace, "Success = get(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
     _return.responseCode = mapkeeper::ResponseCode::Success;
     _return.value.assign((const char*)(recordBody->data()), recordBody->datalen());
     datatuple::freetuple(recordBody);
@@ -368,9 +397,11 @@ put(const std::string& databaseName,
 {
   uint32_t id = getDatabaseId(databaseName);
   if (id == 0) {
+      if(trace) { fprintf(trace, "MapNotFound = put(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
       return mapkeeper::ResponseCode::MapNotFound;
   }
   datatuple* tup = buildTuple(id, recordName, recordBody);
+  if(trace) { fprintf(trace, "Success = put(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
   return insert(tup);
 }
 
@@ -381,6 +412,7 @@ insert(const std::string& databaseName,
 {
     uint32_t id = getDatabaseId(databaseName);
     if (id == 0) {
+        if(trace) { fprintf(trace, "MapNotFound = insert(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
         return mapkeeper::ResponseCode::MapNotFound;
     }
     if(!blind_update) {
@@ -390,18 +422,21 @@ insert(const std::string& databaseName,
           datatuple::freetuple(oldRecordBody);
         } else {
           datatuple::freetuple(oldRecordBody);
+          if(trace) { fprintf(trace, "RecordExists = insert(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
           return mapkeeper::ResponseCode::RecordExists;
         }
       }
     }
 
     datatuple* tup = buildTuple(id, recordName, recordBody);
+    if(trace) { fprintf(trace, "Success = insert(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
     return insert(tup);
 }
 
 ResponseCode::type LSMServerHandler::
 insertMany(const std::string& databaseName, const std::vector<Record> & records)
 {
+    if(trace) { fprintf(trace, "Error = insertMany(%s, ...) (not supported)\n", databaseName.c_str()); fflush(trace); }
     return mapkeeper::ResponseCode::Error;
 }
 
@@ -412,16 +447,19 @@ update(const std::string& databaseName,
 {
     uint32_t id = getDatabaseId(databaseName);
     if (id == 0) {
+        if(trace) { fprintf(trace, "MapNotFound = update(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
         return mapkeeper::ResponseCode::MapNotFound;
     }
     if(!blind_update) {
       datatuple* oldRecordBody = get(id, recordName);
       if (oldRecordBody == NULL) {
+        if(trace) { fprintf(trace, "RecordNotFound = update(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
         return mapkeeper::ResponseCode::RecordNotFound;
       }
       datatuple::freetuple(oldRecordBody);
     }
     datatuple* tup = buildTuple(id, recordName, recordBody);
+    if(trace) { fprintf(trace, "Success = update(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
     return insert(tup);
 }
 
@@ -430,14 +468,17 @@ remove(const std::string& databaseName, const std::string& recordName)
 {
     uint32_t id = getDatabaseId(databaseName);
     if (id == 0) {
+        if(trace) { fprintf(trace, "MapNotFound = remove(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
         return mapkeeper::ResponseCode::MapNotFound;
     }
     datatuple* oldRecordBody = get(id, recordName);
     if (oldRecordBody == NULL) {
+        if(trace) { fprintf(trace, "RecordNotFound = remove(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
         return mapkeeper::ResponseCode::RecordNotFound;
     }
     datatuple::freetuple(oldRecordBody);
     datatuple* tup = buildTuple(id, recordName);
+    if(trace) { fprintf(trace, "Success = remove(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
     return insert(tup);
 }
 
