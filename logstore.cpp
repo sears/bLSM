@@ -27,6 +27,9 @@
 #include <stasis/logger/filePool.h>
 #include "mergeStats.h"
 
+// Backpressure reads to avoid merge starvation?  Experimental/short-term hack
+//#define BACKPRESSURE_READS
+
 static inline double tv_to_double(struct timeval tv)
 {
   return static_cast<double>(tv.tv_sec) +
@@ -276,7 +279,13 @@ void logtable::flushTable()
 
 datatuple * logtable::findTuple(int xid, const datatuple::key_t key, size_t keySize)
 {
-    //prepare a search tuple
+    // Apply proportional backpressure to reads as well as writes.  This prevents
+    // starvation of the merge threads on fast boxes.
+#ifdef BACKPRESSURE_READS
+  merge_mgr->tick(merge_mgr->get_merge_stats(0));
+#endif
+
+  //prepare a search tuple
     datatuple *search_tuple = datatuple::create(key, keySize);
 
 
@@ -456,6 +465,12 @@ datatuple * logtable::findTuple(int xid, const datatuple::key_t key, size_t keyS
  **/
 datatuple * logtable::findTuple_first(int xid, datatuple::key_t key, size_t keySize)
 {
+    // Apply proportional backpressure to reads as well as writes.  This prevents
+    // starvation of the merge threads on fast boxes.
+#ifdef BACKPRESSURE_READS
+    merge_mgr->tick(merge_mgr->get_merge_stats(0));
+#endif
+
     //prepare a search tuple
     datatuple * search_tuple = datatuple::create(key, keySize);
 
@@ -637,7 +652,10 @@ void logtable::insertTuple(datatuple *tuple)
         	batch_size = 0;
         }
     }
-    merge_mgr->read_tuple_from_small_component(0, tuple);  // has to be before rb_mut, since it calls tick with block = true, and that releases header_mut.
+    // Note, this is where we block for backpressure.  Do this without holding
+    // any locks!
+    merge_mgr->read_tuple_from_small_component(0, tuple);
+
     datatuple * pre_t = 0; // this is a pointer to any data tuples that we'll be deleting below.  We need to update the merge_mgr statistics with it, but have to do so outside of the rb_mut region.
 
     pre_t = insertTupleHelper(tuple);
