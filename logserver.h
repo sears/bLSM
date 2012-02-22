@@ -27,7 +27,7 @@
 #include <stasis/transactional.h>
 #include <pthread.h>
 
-#include "logstore.h"
+#include "blsm.h"
 
 #define STATS_ENABLED 1
 

@@ -16,7 +16,7 @@
  * limitations under the License.
  *
  */
-#include "logstore.h"
+#include "blsm.h"
 #include "merger.h"
 
 #include <stasis/transactional.h>

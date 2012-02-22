@@ -17,7 +17,7 @@
  *
  */
 #include "tuplemerger.h"
-#include "logstore.h"
+#include "blsm.h"
 
 // t2 is the newer tuple.
 // we return deletes here.  our caller decides what to do with them.

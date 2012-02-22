@@ -25,7 +25,7 @@
 
 
 #include "merger.h"
-#include "logstore.h"
+#include "blsm.h"
 #include "simpleServer.h"
 
 int main(int argc, char *argv[])

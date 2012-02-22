@@ -18,7 +18,7 @@
  *      Author: sears
  */
 #include <stasis/transactional.h>
-#include "logstore.h"
+#include "blsm.h"
 #include "regionAllocator.h"
 
 int main(int argc, char **argv)

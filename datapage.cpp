@@ -17,7 +17,7 @@
  *
  *      Author: makdere
  */
-#include "logstore.h"
+#include "blsm.h"
 #include "datapage.h"
 #include "regionAllocator.h"
 

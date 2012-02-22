@@ -8,15 +8,15 @@ INC = -I ../stasis 							\
       -I ./sherpa
 
 LIBSRC = $(wildcard *.c) $(wildcard *.cpp)
-LIBNAME = logstore
+LIBNAME = blsm
 
 ifeq ($(shell uname),Linux)
 STATIC_LIBS= ../mapkeeper/thrift/gen-cpp/libmapkeeper.a	\
-	 -lrt sherpa/LSMServerHandler.cc bin/liblogstore.a		\
+	 -lrt sherpa/LSMServerHandler.cc bin/libblsm.a		\
 	../stasis/bin/libstasis.a
 else
 STATIC_LIBS= ./libstdc++.a ../mapkeeper/thrift/gen-cpp/libmapkeeper.a	\
-	 sherpa/LSMServerHandler.cc bin/liblogstore.a			\
+	 sherpa/LSMServerHandler.cc bin/libblsm.a			\
 	../stasis/bin/libstasis.a
 endif
 

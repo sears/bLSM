@@ -21,7 +21,7 @@
 
 #include "mergeManager.h"
 #include "mergeStats.h"
-#include "logstore.h"
+#include "blsm.h"
 #include "math.h"
 #include "time.h"
 #include <stasis/transactional.h>

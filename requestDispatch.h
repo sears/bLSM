@@ -9,7 +9,7 @@
 #define REQUESTDISPATCH_H_
 #include "network.h"
 #include "datatuple.h"
-#include "logstore.h"
+#include "blsm.h"
 template<class HANDLE>
 class requestDispatch {
 private:

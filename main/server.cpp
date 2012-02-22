@@ -21,7 +21,7 @@
 #include <vector>
 #include <iostream>
 #include <sstream>
-#include "logstore.h"
+#include "blsm.h"
 #include "logserver.h"
 #include "datapage.h"
 #include "merger.h"

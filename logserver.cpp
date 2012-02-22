@@ -22,7 +22,7 @@
 #include "datatuple.h"
 #include "merger.h"
 
-#include "logstore.h"
+#include "blsm.h"
 #include "requestDispatch.h"
 
 #include <sys/types.h> 

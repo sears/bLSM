@@ -20,7 +20,7 @@
  */
 
 #include "mergeStats.h"
-#include "logstore.h"
+#include "blsm.h"
 #include "datatuple.h"
 
 

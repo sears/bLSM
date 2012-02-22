@@ -21,7 +21,7 @@
 
 #ifndef SIMPLESERVER_H_
 #define SIMPLESERVER_H_
-#include "logstore.h"
+#include "blsm.h"
 
 class simpleServer {
 public:

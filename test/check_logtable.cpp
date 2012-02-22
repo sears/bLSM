@@ -22,7 +22,7 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
-#include "logstore.h"
+#include "blsm.h"
 #include "datapage.h"
 #include <assert.h>
 #include <limits.h>

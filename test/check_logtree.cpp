@@ -22,7 +22,7 @@
 #include <iostream>
 #include <algorithm>
 #include <sstream>
-#include "logstore.h"
+#include "blsm.h"
 #include "regionAllocator.h"
 #include "diskTreeComponent.h"
 

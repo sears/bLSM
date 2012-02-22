@@ -23,7 +23,7 @@
 #include <iostream>
 #include <signal.h>
 #include "merger.h"
-#include "logstore.h"
+#include "blsm.h"
 #include "LSMServerHandler.h"
 
 int blind_update = 0; // updates check preimage by default.

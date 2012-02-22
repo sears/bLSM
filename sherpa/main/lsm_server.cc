@@ -7,7 +7,7 @@
 #include <transport/TBufferTransports.h>
 #include <concurrency/ThreadManager.h>
 #include <concurrency/PosixThreadFactory.h>
-#include "logstore.h"
+#include "blsm.h"
 #include "datatuple.h"
 #include "LSMServerHandler.h"
 

@@ -19,7 +19,7 @@
 #ifndef _MERGER_H_
 #define _MERGER_H_
 
-#include "logstore.h"
+#include "blsm.h"
 
 #include <stasis/common.h>
 
