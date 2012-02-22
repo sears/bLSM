@@ -44,7 +44,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     sync();
 
-    logtable::init_stasis();
+    blsm::init_stasis();
 
     int xid = Tbegin();
 
@@ -132,7 +132,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     printf("Random Reads completed.\n");
     Tcommit(xid);
-    logtable::deinit_stasis();
+    blsm::deinit_stasis();
 }
 
 /** @test

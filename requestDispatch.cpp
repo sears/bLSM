@@ -22,21 +22,21 @@
 #include "regionAllocator.h"
 
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_insert(logtable * ltable, HANDLE fd, datatuple * tuple) {
+inline int requestDispatch<HANDLE>::op_insert(blsm * ltable, HANDLE fd, datatuple * tuple) {
     //insert/update/delete
     ltable->insertTuple(tuple);
     //step 4: send response
     return writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_test_and_set(logtable * ltable, HANDLE fd, datatuple * tuple, datatuple * tuple2) {
+inline int requestDispatch<HANDLE>::op_test_and_set(blsm * ltable, HANDLE fd, datatuple * tuple, datatuple * tuple2) {
     //insert/update/delete
     bool succ = ltable->testAndSetTuple(tuple, tuple2);
     //step 4: send response
     return writeoptosocket(fd, succ ? LOGSTORE_RESPONSE_SUCCESS : LOGSTORE_RESPONSE_FAIL);
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_bulk_insert(logtable *ltable, HANDLE fd) {
+inline int requestDispatch<HANDLE>::op_bulk_insert(blsm *ltable, HANDLE fd) {
   int err = writeoptosocket(fd, LOGSTORE_RESPONSE_RECEIVING_TUPLES);
   datatuple ** tups = (datatuple **) malloc(sizeof(tups[0]) * 100);
   int tups_size = 100;
@@ -60,7 +60,7 @@ inline int requestDispatch<HANDLE>::op_bulk_insert(logtable *ltable, HANDLE fd) 
   return err;
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_find(logtable * ltable, HANDLE fd, datatuple * tuple) {
+inline int requestDispatch<HANDLE>::op_find(blsm * ltable, HANDLE fd, datatuple * tuple) {
     //find the tuple
     datatuple *dt = ltable->findTuple_first(-1, tuple->strippedkey(), tuple->strippedkeylen());
 
@@ -105,12 +105,12 @@ inline int requestDispatch<HANDLE>::op_find(logtable * ltable, HANDLE fd, datatu
     return err;
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_scan(logtable * ltable, HANDLE fd, datatuple * tuple, datatuple * tuple2, size_t limit) {
+inline int requestDispatch<HANDLE>::op_scan(blsm * ltable, HANDLE fd, datatuple * tuple, datatuple * tuple2, size_t limit) {
     size_t count = 0;
     int err = writeoptosocket(fd, LOGSTORE_RESPONSE_SENDING_TUPLES);
 
     if(!err) {
-        logtable::iterator * itr = new logtable::iterator(ltable, tuple);
+        blsm::iterator * itr = new blsm::iterator(ltable, tuple);
         datatuple * t;
         while(!err && (t = itr->getnext())) {
             if(tuple2) {  // are we at the end of range?
@@ -130,17 +130,17 @@ inline int requestDispatch<HANDLE>::op_scan(logtable * ltable, HANDLE fd, datatu
     return err;
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_flush(logtable * ltable, HANDLE fd) {
+inline int requestDispatch<HANDLE>::op_flush(blsm * ltable, HANDLE fd) {
     ltable->flushTable();
     return writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_shutdown(logtable * ltable, HANDLE fd) {
+inline int requestDispatch<HANDLE>::op_shutdown(blsm * ltable, HANDLE fd) {
     ltable->accepting_new_requests = false;
     return writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_stat_space_usage(logtable * ltable, HANDLE fd) {
+inline int requestDispatch<HANDLE>::op_stat_space_usage(blsm * ltable, HANDLE fd) {
 
 
     int xid = Tbegin();
@@ -238,13 +238,13 @@ inline int requestDispatch<HANDLE>::op_stat_space_usage(logtable * ltable, HANDL
     return err;
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_stat_perf_report(logtable * ltable, HANDLE fd) {
+inline int requestDispatch<HANDLE>::op_stat_perf_report(blsm * ltable, HANDLE fd) {
 
 }
 
 
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_stat_histogram(logtable * ltable, HANDLE fd, size_t limit) {
+inline int requestDispatch<HANDLE>::op_stat_histogram(blsm * ltable, HANDLE fd, size_t limit) {
 
     if(limit < 3) {
         return writeoptosocket(fd, LOGSTORE_PROTOCOL_ERROR);
@@ -302,7 +302,7 @@ inline int requestDispatch<HANDLE>::op_stat_histogram(logtable * ltable, HANDLE 
     return err;
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_dbg_blockmap(logtable * ltable, HANDLE fd) {
+inline int requestDispatch<HANDLE>::op_dbg_blockmap(blsm * ltable, HANDLE fd) {
     // produce a list of stasis regions
     int xid = Tbegin();
 
@@ -406,8 +406,8 @@ inline int requestDispatch<HANDLE>::op_dbg_blockmap(logtable * ltable, HANDLE fd
 }
 
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_dbg_drop_database(logtable * ltable, HANDLE fd) {
-    logtable::iterator * itr = new logtable::iterator(ltable);
+inline int requestDispatch<HANDLE>::op_dbg_drop_database(blsm * ltable, HANDLE fd) {
+    blsm::iterator * itr = new blsm::iterator(ltable);
     datatuple * del;
     fprintf(stderr, "DROPPING DATABASE...\n");
     long long n = 0;
@@ -432,11 +432,11 @@ inline int requestDispatch<HANDLE>::op_dbg_drop_database(logtable * ltable, HAND
     return writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_dbg_noop(logtable * ltable, HANDLE fd) {
+inline int requestDispatch<HANDLE>::op_dbg_noop(blsm * ltable, HANDLE fd) {
   return writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_dbg_set_log_mode(logtable * ltable, HANDLE fd, datatuple * tuple) {
+inline int requestDispatch<HANDLE>::op_dbg_set_log_mode(blsm * ltable, HANDLE fd, datatuple * tuple) {
   if(tuple->rawkeylen() != sizeof(int)) {
 	  abort();
 	  return writeoptosocket(fd, LOGSTORE_PROTOCOL_ERROR);
@@ -448,7 +448,7 @@ inline int requestDispatch<HANDLE>::op_dbg_set_log_mode(logtable * ltable, HANDL
   }
 }
 template<class HANDLE>
-int requestDispatch<HANDLE>::dispatch_request(HANDLE f, logtable *ltable) {
+int requestDispatch<HANDLE>::dispatch_request(HANDLE f, blsm *ltable) {
   //step 1: read the opcode
   network_op_t opcode = readopfromsocket(f, LOGSTORE_CLIENT_REQUEST);
   if(opcode == LOGSTORE_CONN_CLOSED_ERROR) {
@@ -485,7 +485,7 @@ int requestDispatch<HANDLE>::dispatch_request(HANDLE f, logtable *ltable) {
 
 }
 template<class HANDLE>
-int requestDispatch<HANDLE>::dispatch_request(network_op_t opcode, datatuple * tuple, datatuple * tuple2, logtable * ltable, HANDLE fd) {
+int requestDispatch<HANDLE>::dispatch_request(network_op_t opcode, datatuple * tuple, datatuple * tuple2, blsm * ltable, HANDLE fd) {
     int err = 0;
 #if 0
     if(tuple) {

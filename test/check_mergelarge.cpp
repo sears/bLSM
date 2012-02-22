@@ -43,7 +43,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     unlink("logfile.txt");
     system("rm -rf stasis_log/");
 
-    logtable::init_stasis();
+    blsm::init_stasis();
 
     //data generation
 //    std::vector<std::string> * data_arr = new std::vector<std::string>;
@@ -62,7 +62,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     int xid = Tbegin();
 
-    logtable *ltable = new logtable(10*1024*1024, 1000, 10000, 100);
+    blsm *ltable = new blsm(10*1024*1024, 1000, 10000, 100);
     merge_scheduler mscheduler(ltable);
 
     recordid table_root = ltable->allocTable(xid);
@@ -109,7 +109,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     printf("merge threads finished.\n");
     gettimeofday(&stop_tv,0);
     printf("run time: %6.1f\n", (tv_to_double(stop_tv) - tv_to_double(start_tv)));
-    logtable::deinit_stasis();
+    blsm::deinit_stasis();
     
 }
 

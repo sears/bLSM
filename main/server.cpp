@@ -53,7 +53,7 @@ void terminate (int param)
 
 	  printf("Deinitializing stasis...\n");
 	  fflush(stdout);
-	  logtable::deinit_stasis();
+	  blsm::deinit_stasis();
 
 	  exit(0);
 }
@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
 
     prev_fn = signal (SIGINT,terminate);
 
-    logtable::init_stasis();
+    blsm::init_stasis();
 
     int xid = Tbegin();
 
@@ -84,7 +84,7 @@ int main(int argc, char *argv[])
       printf("note: running w/ 2GB c0 for benchmarking"); // XXX build a separate test server and deployment server?
     }
 
-    logtable ltable(c0_size);
+    blsm ltable(c0_size);
 
     recordid table_root = ROOT_RECORD;
     if(TrecordType(xid, ROOT_RECORD) == INVALID_SLOT) {

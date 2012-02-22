@@ -33,7 +33,7 @@
 
 class logtable_mergedata;
 
-class logtable {
+class blsm {
 public:
 
   class iterator;
@@ -49,9 +49,9 @@ public:
   //  6GB ~= 100B * 500 GB / (datapage_size * 4KB)
   //  (100B * 500GB) / (6GB * 4KB) = 2.035
   // RCS: Set this to 1 so that we do (on average) one seek per b-tree read.
-  logtable(int log_mode = 0, pageid_t max_c0_size = 100 * 1024 * 1024, pageid_t internal_region_size = 1000, pageid_t datapage_region_size = 10000, pageid_t datapage_size = 1);
+  blsm(int log_mode = 0, pageid_t max_c0_size = 100 * 1024 * 1024, pageid_t internal_region_size = 1000, pageid_t datapage_region_size = 10000, pageid_t datapage_size = 1);
 
-    ~logtable();
+    ~blsm();
 
     double * R() { return &r_val; }
 
@@ -322,7 +322,7 @@ public:
 
     class iterator {
   public:
-      explicit iterator(logtable* ltable)
+      explicit iterator(blsm* ltable)
       : ltable(ltable),
         epoch(ltable->get_epoch()),
         merge_it_(NULL),
@@ -338,7 +338,7 @@ public:
         //        rwlc_unlock(ltable->header_mut);
       }
 
-      explicit iterator(logtable* ltable,datatuple *key)
+      explicit iterator(blsm* ltable,datatuple *key)
       : ltable(ltable),
         epoch(ltable->get_epoch()),
         merge_it_(NULL),
@@ -427,7 +427,7 @@ public:
     static const int C1           = 0;
     static const int C1_MERGEABLE = 1;
     static const int C2           = 2;
-      logtable * ltable;
+      blsm * ltable;
       uint64_t epoch;
       typedef mergeManyIterator<
          memTreeComponent::batchedRevalidatingIterator,

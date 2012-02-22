@@ -25,7 +25,7 @@
 
 class merge_scheduler {
 public:
-  merge_scheduler(logtable * ltable);
+  merge_scheduler(blsm * ltable);
   ~merge_scheduler();
 
   void start();
@@ -37,7 +37,7 @@ public:
 private:
   pthread_t mem_merge_thread_;
   pthread_t disk_merge_thread_;
-  logtable * ltable_;
+  blsm * ltable_;
   const double MIN_R;
 };
 

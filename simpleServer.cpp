@@ -67,7 +67,7 @@ void * simpleServer::worker(int self) {
   }
 }
 
-simpleServer::simpleServer(logtable * ltable, int max_threads, int port):
+simpleServer::simpleServer(blsm * ltable, int max_threads, int port):
   ltable(ltable),
   port(port),
   max_threads(max_threads),

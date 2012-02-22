@@ -46,7 +46,7 @@ void insertWithConcurrentReads(size_t NUM_ENTRIES) {
 
   sync();
 
-  logtable::init_stasis();
+  blsm::init_stasis();
 
   int xid = Tbegin();
 
@@ -140,7 +140,7 @@ void insertWithConcurrentReads(size_t NUM_ENTRIES) {
   printf("Writes complete.\n");
   Tcommit(xid);
 
-  logtable::deinit_stasis();
+  blsm::deinit_stasis();
 }
 
 void insertProbeIter(size_t NUM_ENTRIES)
@@ -151,7 +151,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     sync();
 
-    logtable::init_stasis();
+    blsm::init_stasis();
 
     int xid = Tbegin();
 
@@ -246,7 +246,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
   
 	Tcommit(xid);
 
-	logtable::deinit_stasis();
+	blsm::deinit_stasis();
 }
 
 

@@ -40,7 +40,7 @@ static inline double tv_to_double(struct timeval tv)
 // LOG TABLE IMPLEMENTATION
 /////////////////////////////////////////////////////////////////
 
-logtable::logtable(int log_mode, pageid_t max_c0_size, pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size)
+blsm::blsm(int log_mode, pageid_t max_c0_size, pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size)
 {
     recovering = true;
     this->max_c0_size = max_c0_size;
@@ -85,7 +85,7 @@ logtable::logtable(int log_mode, pageid_t max_c0_size, pageid_t internal_region_
     									 stasis_log_file_permissions);
 }
 
-logtable::~logtable()
+blsm::~blsm()
 {
     delete merge_mgr; // shuts down pretty print thread.
 
@@ -110,7 +110,7 @@ logtable::~logtable()
     delete tmerger;
 }
 
-void logtable::init_stasis() {
+void blsm::init_stasis() {
 
   DataPage::register_stasis_page_impl();
 //  stasis_buffer_manager_hint_writes_are_sequential = 1;
@@ -118,9 +118,9 @@ void logtable::init_stasis() {
 
 }
 
-void logtable::deinit_stasis() { Tdeinit(); }
+void blsm::deinit_stasis() { Tdeinit(); }
 
-recordid logtable::allocTable(int xid)
+recordid blsm::allocTable(int xid)
 {
     table_rec = Talloc(xid, sizeof(tbl_header));
     mergeStats * stats = 0;
@@ -142,7 +142,7 @@ recordid logtable::allocTable(int xid)
     return table_rec;
 }
 
-void logtable::openTable(int xid, recordid rid) {
+void blsm::openTable(int xid, recordid rid) {
   table_rec = rid;
   Tread(xid, table_rec, &tbl_header);
   tree_c2 = new diskTreeComponent(xid, tbl_header.c2_root, tbl_header.c2_state, tbl_header.c2_dp_state, 0);
@@ -156,14 +156,14 @@ void logtable::openTable(int xid, recordid rid) {
 
 }
 
-void logtable::logUpdate(datatuple * tup) {
+void blsm::logUpdate(datatuple * tup) {
   byte * buf = tup->to_bytes();
   LogEntry * e = stasis_log_write_update(log_file, 0, INVALID_PAGE, 0/*Page**/, 0/*op*/, buf, tup->byte_length());
   log_file->write_entry_done(log_file,e);
   free(buf);
 }
 
-void logtable::replayLog() {
+void blsm::replayLog() {
   lsn_t start = tbl_header.log_trunc;
   LogHandle * lh = start ? getLSNHandle(log_file, start) : getLogHandle(log_file);
   const LogEntry * e;
@@ -184,12 +184,12 @@ void logtable::replayLog() {
 
 }
 
-lsn_t logtable::get_log_offset() {
+lsn_t blsm::get_log_offset() {
   if(recovering || !log_mode) { return INVALID_LSN; }
   return log_file->next_available_lsn(log_file);
 }
 
-void logtable::truncate_log() {
+void blsm::truncate_log() {
   if(recovering) {
     printf("Not truncating log until recovery is complete.\n");
   } else {
@@ -200,7 +200,7 @@ void logtable::truncate_log() {
   }
 }
 
-void logtable::update_persistent_header(int xid, lsn_t trunc_lsn) {
+void blsm::update_persistent_header(int xid, lsn_t trunc_lsn) {
 
     tbl_header.c2_root = tree_c2->get_root_rid();
     tbl_header.c2_dp_state = tree_c2->get_datapage_allocator_rid();
@@ -219,7 +219,7 @@ void logtable::update_persistent_header(int xid, lsn_t trunc_lsn) {
     Tset(xid, table_rec, &tbl_header);    
 }
 
-void logtable::flushTable()
+void blsm::flushTable()
 {
     struct timeval start_tv, stop_tv;
     double start, stop;
@@ -277,7 +277,7 @@ void logtable::flushTable()
     c0_flushing = false;
 }
 
-datatuple * logtable::findTuple(int xid, const datatuple::key_t key, size_t keySize)
+datatuple * blsm::findTuple(int xid, const datatuple::key_t key, size_t keySize)
 {
     // Apply proportional backpressure to reads as well as writes.  This prevents
     // starvation of the merge threads on fast boxes.
@@ -463,7 +463,7 @@ datatuple * logtable::findTuple(int xid, const datatuple::key_t key, size_t keyS
  * returns the first record found with the matching key
  * (not to be used together with diffs)
  **/
-datatuple * logtable::findTuple_first(int xid, datatuple::key_t key, size_t keySize)
+datatuple * blsm::findTuple_first(int xid, datatuple::key_t key, size_t keySize)
 {
     // Apply proportional backpressure to reads as well as writes.  This prevents
     // starvation of the merge threads on fast boxes.
@@ -563,7 +563,7 @@ datatuple * logtable::findTuple_first(int xid, datatuple::key_t key, size_t keyS
 
 }
 
-datatuple * logtable::insertTupleHelper(datatuple *tuple)
+datatuple * blsm::insertTupleHelper(datatuple *tuple)
 {
   bool need_free = false;
   if(!tuple->isDelete() && expiry != 0) {
@@ -613,7 +613,7 @@ datatuple * logtable::insertTupleHelper(datatuple *tuple)
   return pre_t;
 }
 
-void logtable::insertManyTuples(datatuple ** tuples, int tuple_count) {
+void blsm::insertManyTuples(datatuple ** tuples, int tuple_count) {
   for(int i = 0; i < tuple_count; i++) {
     merge_mgr->read_tuple_from_small_component(0, tuples[i]);
   }
@@ -642,7 +642,7 @@ void logtable::insertManyTuples(datatuple ** tuples, int tuple_count) {
   merge_mgr->read_tuple_from_large_component(0, num_old_tups, sum_old_tup_lens);
 }
 
-void logtable::insertTuple(datatuple *tuple)
+void blsm::insertTuple(datatuple *tuple)
 {
     if(log_mode && !recovering) {
         logUpdate(tuple);
@@ -669,7 +669,7 @@ void logtable::insertTuple(datatuple *tuple)
     DEBUG("tree size %d tuples %lld bytes.\n", tsize, tree_bytes);
 }
 
-bool logtable::testAndSetTuple(datatuple *tuple, datatuple *tuple2)
+bool blsm::testAndSetTuple(datatuple *tuple, datatuple *tuple2)
 {
     bool succ = false;
     static pthread_mutex_t test_and_set_mut = PTHREAD_MUTEX_INITIALIZER;
@@ -697,11 +697,11 @@ bool logtable::testAndSetTuple(datatuple *tuple, datatuple *tuple2)
     return succ;
 }
 
-void logtable::registerIterator(iterator * it) {
+void blsm::registerIterator(iterator * it) {
   its.push_back(it);
 }
 
-void logtable::forgetIterator(iterator * it) {
+void blsm::forgetIterator(iterator * it) {
   for(unsigned int i = 0; i < its.size(); i++) {
     if(its[i] == it) {
       its.erase(its.begin()+i);
@@ -710,7 +710,7 @@ void logtable::forgetIterator(iterator * it) {
   }
 }
 
-void logtable::bump_epoch() {
+void blsm::bump_epoch() {
   epoch++;
   for(unsigned int i = 0; i < its.size(); i++) {
     its[i]->invalidate();

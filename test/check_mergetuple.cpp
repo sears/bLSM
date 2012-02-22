@@ -45,7 +45,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     sync();
 
-    logtable::init_stasis();
+    blsm::init_stasis();
 
     double delete_freq = .05;
     double update_freq = .15;
@@ -120,7 +120,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     int xid = Tbegin();
 
-    logtable *ltable = new logtable(10 * 1024 * 1024, 1000, 1000, 40);
+    blsm *ltable = new blsm(10 * 1024 * 1024, 1000, 1000, 40);
     merge_scheduler mscheduler(ltable);
 
     recordid table_root = ltable->allocTable(xid);
@@ -265,7 +265,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     Tcommit(xid);
     delete ltable;
-    logtable::deinit_stasis();
+    blsm::deinit_stasis();
 }
 
 

@@ -61,14 +61,14 @@ int main(int argc, char *argv[])
     	}
     }
 
-    logtable::init_stasis();
+    blsm::init_stasis();
 
       int xid = Tbegin();
 
 
       recordid table_root = ROOT_RECORD;
     {
-		logtable ltable(log_mode, c0_size);
+		blsm ltable(log_mode, c0_size);
 		ltable.expiry = expiry_delta;
 
 		if(TrecordType(xid, ROOT_RECORD) == INVALID_SLOT) {
@@ -101,7 +101,7 @@ int main(int argc, char *argv[])
 		printf("Deinitializing stasis...\n");
 		fflush(stdout);
     }
-    logtable::deinit_stasis();
+    blsm::deinit_stasis();
 
     printf("Shutdown complete\n");
 }

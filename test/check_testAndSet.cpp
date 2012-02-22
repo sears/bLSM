@@ -42,7 +42,7 @@
 
 unsigned char vals[NUM_THREADS];
 
-logtable * ltable;
+blsm * ltable;
 
 int myucharcmp(const void * ap, const void * bp) {
   unsigned char a = *(unsigned char*)ap;
@@ -73,10 +73,10 @@ void insertProbeIter(size_t NUM_ENTRIES)
     unlink("logfile.txt");
     system("rm -rf stasis_log/");
 
-    logtable::init_stasis();
+    blsm::init_stasis();
     int xid = Tbegin();
 
-    ltable = new logtable(10 * 1024 * 1024, 1000, 10000, 5);
+    ltable = new blsm(10 * 1024 * 1024, 1000, 10000, 5);
 
     merge_scheduler mscheduler(ltable);
 
@@ -106,7 +106,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     mscheduler.shutdown();
     delete ltable;
-    logtable::deinit_stasis();
+    blsm::deinit_stasis();
 
     printf("\npass\n");
 }

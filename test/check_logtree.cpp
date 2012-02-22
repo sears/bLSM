@@ -54,7 +54,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
     system("rm -rf stasis_log/");
     sync();
 
-    logtable::init_stasis();
+    blsm::init_stasis();
 
     int xid = Tbegin();
 
@@ -156,7 +156,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
     delete it;
     delete ro_alloc;
 	Tcommit(xid);
-	logtable::deinit_stasis();
+	blsm::deinit_stasis();
 }
 
 

@@ -89,14 +89,14 @@ LSMServerHandler(int argc, char **argv)
     }
 
     pthread_mutex_init(&mutex_, 0);
-    logtable::init_stasis();
+    blsm::init_stasis();
 
     int xid = Tbegin();
 
 
     recordid table_root = ROOT_RECORD;
     {
-        ltable_ = new logtable(log_mode, c0_size);
+        ltable_ = new blsm(log_mode, c0_size);
         ltable_->expiry = expiry_delta;
 
         if(TrecordType(xid, ROOT_RECORD) == INVALID_SLOT) {
@@ -135,7 +135,7 @@ initNextDatabaseId()
     uint32_t id = 0;
     datatuple* start = buildTuple(id, "");
     datatuple* end = buildTuple(id + 1, "");
-    logtable::iterator* itr = new logtable::iterator(ltable_, start);
+    blsm::iterator* itr = new blsm::iterator(ltable_, start);
     datatuple* current;
     while ((current = itr->getnext())) {
         // are we at the end of range?
@@ -220,7 +220,7 @@ dropMap(const std::string& databaseName)
     datatuple::freetuple(exists);
 
     datatuple * startKey = buildTuple(id, "");
-    logtable::iterator * itr = new logtable::iterator(ltable_, startKey);
+    blsm::iterator * itr = new blsm::iterator(ltable_, startKey);
     datatuple::freetuple(startKey);
     datatuple * current;
 
@@ -251,7 +251,7 @@ void LSMServerHandler::
 listMaps(StringListResponse& _return) 
 {
   datatuple * startKey = buildTuple(0, "");
-  logtable::iterator * itr = new logtable::iterator(ltable_, startKey);
+  blsm::iterator * itr = new blsm::iterator(ltable_, startKey);
   datatuple::freetuple(startKey);
   datatuple * current;
   while(NULL != (current = itr->getnext())) {
@@ -290,7 +290,7 @@ scan(RecordListResponse& _return, const std::string& databaseName, const ScanOrd
     } else {
         end = buildTuple(id, endKey);
     }
-    logtable::iterator* itr = new logtable::iterator(ltable_, start);
+    blsm::iterator* itr = new blsm::iterator(ltable_, start);
 
     int32_t resultSize = 0;
 

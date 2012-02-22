@@ -71,7 +71,7 @@ int main (int argc, char * argv[]) {
 	printf("Hard limit=%lld\n", (long long)((stasis_dirty_page_count_hard_limit*PAGE_SIZE)/MB));
 	printf("Hard limit is %f pct.\n", 100.0 * ((double)stasis_dirty_page_count_hard_limit)/((double)stasis_buffer_manager_size));
 
-	logtable::init_stasis();
+	blsm::init_stasis();
 
 	RegionAllocator * readableAlloc = NULL;
 	if(!mode) {
@@ -441,5 +441,5 @@ int main (int argc, char * argv[]) {
 	}
 
 
-	logtable::deinit_stasis();
+	blsm::deinit_stasis();
 }

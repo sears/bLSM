@@ -37,7 +37,7 @@
 #include <fcntl.h>
 
 void *serverLoop(void *args);
-void logserver::startserver(logtable *ltable)
+void logserver::startserver(blsm *ltable)
 {
     sys_alive = true;
     this->ltable = ltable;

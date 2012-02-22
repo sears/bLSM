@@ -27,7 +27,7 @@
 #include <stdio.h>
 #include <datatuple.h>
 
-class logtable;
+class blsm;
 class mergeStats;
 
 class mergeManager {
@@ -48,8 +48,8 @@ public:
   uint64_t long_tv(struct timeval& tv) {
     return (1000000ULL * (uint64_t)tv.tv_sec) + ((uint64_t)tv.tv_usec);
   }
-  mergeManager(logtable *ltable);
-  mergeManager(logtable *ltable, int xid, recordid rid);
+  mergeManager(blsm *ltable);
+  mergeManager(blsm *ltable, int xid, recordid rid);
   void marshal(int xid, recordid rid);
   recordid talloc(int xid);
   ~mergeManager();
@@ -106,7 +106,7 @@ private:
    *
    * TODO: remove mergeManager->ltable?
    */
-  logtable*    ltable;
+  blsm*    ltable;
   mergeStats * c0;   /// Per-tree component statistics for c0 and c0_mergeable (the latter should always be null...)
   mergeStats * c1;   /// Per-tree component statistics for c1 and c1_mergeable.
   mergeStats * c2;   /// Per-tree component statistics for c2.

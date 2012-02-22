@@ -29,11 +29,11 @@ int main(int argc, char **argv)
 
     sync();
 
-    logtable::init_stasis();
+    blsm::init_stasis();
 
     int xid = Tbegin();
 
-    logtable *ltable = new logtable(1000, 10000, 5);
+    blsm *ltable = new blsm(1000, 10000, 5);
 
     recordid table_root = ltable->allocTable(xid);
 
@@ -48,7 +48,7 @@ int main(int argc, char **argv)
     delete ro_alloc;
     Tcommit(xid);
     delete ltable;
-    logtable::deinit_stasis();
+    blsm::deinit_stasis();
 
 
 
