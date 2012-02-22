@@ -1,0 +1,25 @@
+THRIFT_DIR = /home/sears/local/thrift
+
+CPPFLAGS =-I../../../stasis -I../.. -I. -I $(THRIFT_DIR)/include/thrift -I../../../mapkeeper/thrift/gen-cpp
+CXXFLAGS =-g -O3
+
+LDFLAGS=-lpthread -llogstore -lstasis -lmapkeeper -lthrift 	\
+	   -L $(THRIFT_DIR)/lib -L ../../../mapkeeper/thrift/gen-cpp	 		\
+	   -L ../../build -L ../../../stasis/build/src/stasis 				\
+	   -Wl,-rpath,\$$ORIGIN/../../../build						\
+           -Wl,-rpath,\$$ORIGIN/../../../../stasis/build/src/stasis			\
+           -Wl,-rpath,\$$ORIGIN/../../../../mapkeeper/thrift/gen-cpp			\
+           -Wl,-rpath,/usr/local/lib							\
+           -Wl,-rpath,$(THRIFT_DIR)/lib
+
+all: main/lsm_client main/lsm_server main/lsm_shutdown
+
+main/lsm_client :
+main/lsm_shutdown :
+
+main/lsm_server : LSMServerHandler.cc
+
+clean:
+	rm -f main/lsm_client main/lsm_server
+
+#		 $(CXX) $(CXXFLAGS) $(CPPFLAGS) -o $@ $^ $(LDFLAGS)
