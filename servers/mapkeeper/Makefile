@@ -1,38 +1,22 @@
-ROOT=/home/y
-include $(ROOT)/share/yahoo_cfg/Make.defs
+THRIFT_DIR = /home/sears/local/thrift
 
-USE_OSE = no
+CPPFLAGS =-I../../../stasis -I../.. -I. -I $(THRIFT_DIR)/include/thrift -I../../../mapkeeper/thrift/gen-cpp
+CXXFLAGS =-g -O3
 
-LIB_NAME        = LSMServer
-SHLIB_VERSION   = 1
+LDFLAGS=-lpthread -lblsm -lstasis -lmapkeeper -lthrift 	\
+	   -L $(THRIFT_DIR)/lib -L ../../../mapkeeper/thrift/gen-cpp	 		\
+	   -L ../../build -L ../../../stasis/build/src/stasis 				\
+	   -Wl,-rpath,\$$ORIGIN/../../../build						\
+           -Wl,-rpath,\$$ORIGIN/../../../../stasis/build/src/stasis			\
+           -Wl,-rpath,\$$ORIGIN/../../../../mapkeeper/thrift/gen-cpp			\
+           -Wl,-rpath,/usr/local/lib							\
+           -Wl,-rpath,$(THRIFT_DIR)/lib
 
-CXXSRC		= LSMServerHandler.cc
+all: main/blsm_client main/blsm_server
 
-LCLEAN		+= *~ 
-WARN            += -Werror -Wall
-LINC		+= -I. -I /usr/local/include/thrift -I /home/y/include64/stasis -I .. -I ../../thrift/gen-cpp
+main/blsm_client :
 
-LDLIBS +=	-L/usr/local/lib
-LDFLAGS += -Wl,-rpath,/home/y/lib64 -Wl,-rpath,../build
+main/blsm_server : LSMServerHandler.cc
 
-
-# Poor packaging for yicu
-LINC +=         -I/home/y/include/yicu
-
-LDLIBS		+= -lthrift -lmapkeeper -lstasis -llogstore -L ../build -L ../../thrift/gen-cpp
-
-# Need to remove potential warnings in yapache.
-LDEF += -DEAPI
-LDEF += -D_FILE_OFFSET_BITS=64
-
-ifdef UNIT_TEST
-CXXFLAGS += -O0 -g -DUNIT_TEST
-endif
-
-ifdef DEBUG
-CXXFLAGS += -O0 -g
-endif
-
-include $(ROOT)/share/yahoo_cfg/Make.rules
-
-$(SOTARGET): $(OBJS)
+clean:
+	rm -f main/blsm_client main/blsm_server
