@@ -1,5 +1,5 @@
 /*
- * logstore.h
+ * blsm.h
  *
  * Copyright 2009-2012 Yahoo! Inc.
  *
@@ -380,7 +380,7 @@ public:
                   char * b =(char*)malloc(bl + 1);
                   memcpy(b, tmp->strippedkey(), bl);
                   b[bl] = 0;
-                  printf("logstore.h assert fail: out of order tuples %d should be < 0.  %s <=> %s\n", res, a, b);
+                  printf("blsm.h assert fail: out of order tuples %d should be < 0.  %s <=> %s\n", res, a, b);
                   free(a);
                   free(b);
               }

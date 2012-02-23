@@ -1,5 +1,5 @@
 /*
- * logstore.cpp
+ * blsm.cpp
  *
  * Copyright 2009-2012 Yahoo! Inc.
  *
