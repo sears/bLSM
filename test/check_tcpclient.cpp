@@ -30,8 +30,8 @@
 #include <time.h>
 #include <sys/types.h> 
 
-#include "../tcpclient.h"
-#include "../network.h"
+#include "../servers/native/tcpclient.h"
+#include "../servers/native/network.h"
 
 #include "check_util.h"
 

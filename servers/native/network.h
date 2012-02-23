@@ -32,9 +32,6 @@ typedef unsigned char byte;
 
 typedef uint8_t network_op_t;
 
-typedef uint32_t len_t ;
-static const len_t DELETE = ((len_t)0) - 1;
-
 #define LOGSTORE_NODELAY
 
 #include <datatuple.h>

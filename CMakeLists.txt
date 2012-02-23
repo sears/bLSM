@@ -11,7 +11,7 @@ Project(Stasis)
 
 SET(PACKAGE_VERSION 1)
 
-SUBDIRS(test util benchmarks main)
+SUBDIRS(test util benchmarks servers/native)
 
 # Main decisions
 SET(BUILD_SHARED_LIBS ON)
@@ -80,7 +80,5 @@ ENDIF ( "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" )
 
 #CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 IF ( HAVE_STASIS )
-  ADD_LIBRARY(blsm requestDispatch.cpp simpleServer.cpp logserver.cpp blsm.cpp diskTreeComponent.cpp memTreeComponent.cpp datapage.cpp merger.cpp tuplemerger.cpp mergeStats.cpp mergeManager.cpp bloomFilter.c)
+  ADD_LIBRARY(blsm blsm.cpp diskTreeComponent.cpp memTreeComponent.cpp datapage.cpp merger.cpp tuplemerger.cpp mergeStats.cpp mergeManager.cpp bloomFilter.c)
 ENDIF ( HAVE_STASIS )
-
-ADD_LIBRARY(blsm_client tcpclient.cpp)

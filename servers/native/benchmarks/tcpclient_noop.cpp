@@ -20,15 +20,15 @@
  *      Author: sears
  */
 
-#include "../tcpclient.h"
+#include "..tcpclient.h"
 #include "../network.h"
-#include "../datatuple.h"
+#include "datatuple.h"
 
 void usage(char * argv[]) {
     fprintf(stderr, "usage %s numthreads threadopcount [host [port]]\n", argv[0]);
 }
 
-#include "../util/util_main.h"
+#include "../servers/native/util/util_main.h"
 #include <sys/time.h>
 int threadopcount;
 

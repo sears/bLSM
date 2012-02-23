@@ -21,7 +21,7 @@
 #include <stasis/common.h>
 #include <stasis/util/time.h>
 #include <stdio.h>
-#include <logserver.h>
+#include <blsm.h>
 #include <regionAllocator.h>
 
 BEGIN_C_DECLS

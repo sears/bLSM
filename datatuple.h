@@ -17,17 +17,17 @@
  *
  *      Author: sears
  */
-#include <network.h>
-
 #ifndef _DATATUPLE_H_
 #define _DATATUPLE_H_
 
 #include <string>
 #include <stdlib.h>
-typedef unsigned char byte;
+#include <stasis/common.h>
 #include <cstring>
 #include <assert.h>
 
+typedef uint32_t len_t ;
+static const len_t DELETE = ((len_t)0) - 1;
 
 typedef struct datatuple
 {
