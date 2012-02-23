@@ -54,7 +54,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
     system("rm -rf stasis_log/");
     sync();
 
-    blsm::init_stasis();
+    bLSM::init_stasis();
 
     int xid = Tbegin();
 
@@ -134,7 +134,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
 
 
     int64_t count = 0;
-    RegionAllocator * ro_alloc = new RegionAllocator();
+    regionAllocator * ro_alloc = new regionAllocator();
     diskTreeComponent::internalNodes::iterator * it = new diskTreeComponent::internalNodes::iterator(xid, ro_alloc, lt->get_root_rec());
 
     while(it->next()) {
@@ -156,7 +156,7 @@ void insertProbeIter_str(int  NUM_ENTRIES)
     delete it;
     delete ro_alloc;
 	Tcommit(xid);
-	blsm::deinit_stasis();
+	bLSM::deinit_stasis();
 }
 
 

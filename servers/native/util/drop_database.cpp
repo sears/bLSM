@@ -15,11 +15,11 @@ void usage(char * argv[]) {
 int main(int argc, char * argv[]) {
 	logstore_handle_t * l = util_open_conn(argc, argv);
 
-    datatuple * ret = logstore_client_op(l, OP_DBG_DROP_DATABASE);
+    dataTuple * ret = logstore_client_op(l, OP_DBG_DROP_DATABASE);
     if(ret == NULL) {
     	perror("Drop database failed"); return 3;
     } else {
-    	datatuple::freetuple(ret);
+    	dataTuple::freetuple(ret);
     }
     logstore_client_close(l);
     printf("Drop database succeeded\n");

@@ -29,11 +29,11 @@ public:
   static const int DEFAULT_PORT = 32432;
   static const int DEFAULT_THREADS = 1000;
 
-  simpleServer(blsm * ltable, int max_threads = DEFAULT_THREADS, int port = DEFAULT_PORT);
+  simpleServer(bLSM * ltable, int max_threads = DEFAULT_THREADS, int port = DEFAULT_PORT);
   bool acceptLoop();
   ~simpleServer();
 private:
-  blsm* ltable;
+  bLSM* ltable;
   int port;
   int max_threads;
   int * thread_fd;

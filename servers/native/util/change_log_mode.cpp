@@ -44,14 +44,14 @@ int main(int argc, char * argv[]) {
 
     logstore_handle_t * l = util_open_conn(argc, argv);
 
-    datatuple * tup = datatuple::create(&mode, sizeof(mode));
+    dataTuple * tup = dataTuple::create(&mode, sizeof(mode));
 
-    datatuple * ret = logstore_client_op(l, OP_DBG_SET_LOG_MODE, tup);
+    dataTuple * ret = logstore_client_op(l, OP_DBG_SET_LOG_MODE, tup);
 
     if(ret == NULL) {
       perror("Changing log mode failed.."); return 3;
     } else {
-      datatuple::freetuple(ret);
+      dataTuple::freetuple(ret);
     }
     logstore_client_close(l);
     printf("Log mode changed.\n");

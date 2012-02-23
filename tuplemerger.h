@@ -19,26 +19,26 @@
 #ifndef _TUPLE_MERGER_H_
 #define _TUPLE_MERGER_H_
 
-struct datatuple;
+struct dataTuple;
 
-typedef datatuple* (*merge_fn_t) (const datatuple*, const datatuple *);
+typedef dataTuple* (*merge_fn_t) (const dataTuple*, const dataTuple *);
 
-datatuple* append_merger(const datatuple *t1, const datatuple *t2);
-datatuple* replace_merger(const datatuple *t1, const datatuple *t2);
+dataTuple* append_merger(const dataTuple *t1, const dataTuple *t2);
+dataTuple* replace_merger(const dataTuple *t1, const dataTuple *t2);
 
 
-class tuplemerger
+class tupleMerger
 {
 
 public:
 
-    tuplemerger(merge_fn_t merge_fp) 
+    tupleMerger(merge_fn_t merge_fp) 
         {
             this->merge_fp = merge_fp;
         }
 
     
-    datatuple* merge(const datatuple *t1, const datatuple *t2);
+    dataTuple* merge(const dataTuple *t1, const dataTuple *t2);
 
 private:
 

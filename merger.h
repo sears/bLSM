@@ -23,10 +23,10 @@
 
 #include <stasis/common.h>
 
-class merge_scheduler {
+class mergeScheduler {
 public:
-  merge_scheduler(blsm * ltable);
-  ~merge_scheduler();
+  mergeScheduler(bLSM * ltable);
+  ~mergeScheduler();
 
   void start();
   void shutdown();
@@ -37,7 +37,7 @@ public:
 private:
   pthread_t mem_merge_thread_;
   pthread_t disk_merge_thread_;
-  blsm * ltable_;
+  bLSM * ltable_;
   const double MIN_R;
 };
 

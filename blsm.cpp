@@ -40,7 +40,7 @@ static inline double tv_to_double(struct timeval tv)
 // LOG TABLE IMPLEMENTATION
 /////////////////////////////////////////////////////////////////
 
-blsm::blsm(int log_mode, pageid_t max_c0_size, pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size)
+bLSM::bLSM(int log_mode, pageid_t max_c0_size, pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size)
 {
     recovering = true;
     this->max_c0_size = max_c0_size;
@@ -63,7 +63,7 @@ blsm::blsm(int log_mode, pageid_t max_c0_size, pageid_t internal_region_size, pa
     current_timestamp = 0;
     expiry = 0;
     this->merge_mgr = 0;
-    tmerger = new tuplemerger(&replace_merger);
+    tmerger = new tupleMerger(&replace_merger);
 
     header_mut = rwlc_initlock();
     pthread_mutex_init(&rb_mut, 0);
@@ -85,7 +85,7 @@ blsm::blsm(int log_mode, pageid_t max_c0_size, pageid_t internal_region_size, pa
     									 stasis_log_file_permissions);
 }
 
-blsm::~blsm()
+bLSM::~bLSM()
 {
     delete merge_mgr; // shuts down pretty print thread.
 
@@ -110,17 +110,17 @@ blsm::~blsm()
     delete tmerger;
 }
 
-void blsm::init_stasis() {
+void bLSM::init_stasis() {
 
-  DataPage::register_stasis_page_impl();
+  dataPage::register_stasis_page_impl();
 //  stasis_buffer_manager_hint_writes_are_sequential = 1;
   Tinit();
 
 }
 
-void blsm::deinit_stasis() { Tdeinit(); }
+void bLSM::deinit_stasis() { Tdeinit(); }
 
-recordid blsm::allocTable(int xid)
+recordid bLSM::allocTable(int xid)
 {
     table_rec = Talloc(xid, sizeof(tbl_header));
     mergeStats * stats = 0;
@@ -142,7 +142,7 @@ recordid blsm::allocTable(int xid)
     return table_rec;
 }
 
-void blsm::openTable(int xid, recordid rid) {
+void bLSM::openTable(int xid, recordid rid) {
   table_rec = rid;
   Tread(xid, table_rec, &tbl_header);
   tree_c2 = new diskTreeComponent(xid, tbl_header.c2_root, tbl_header.c2_state, tbl_header.c2_dp_state, 0);
@@ -156,23 +156,23 @@ void blsm::openTable(int xid, recordid rid) {
 
 }
 
-void blsm::logUpdate(datatuple * tup) {
+void bLSM::logUpdate(dataTuple * tup) {
   byte * buf = tup->to_bytes();
   LogEntry * e = stasis_log_write_update(log_file, 0, INVALID_PAGE, 0/*Page**/, 0/*op*/, buf, tup->byte_length());
   log_file->write_entry_done(log_file,e);
   free(buf);
 }
 
-void blsm::replayLog() {
+void bLSM::replayLog() {
   lsn_t start = tbl_header.log_trunc;
   LogHandle * lh = start ? getLSNHandle(log_file, start) : getLogHandle(log_file);
   const LogEntry * e;
   while((e = nextInLog(lh))) {
     switch(e->type) {
     case UPDATELOG: {
-      datatuple * tup = datatuple::from_bytes((byte*)stasis_log_entry_update_args_cptr(e));
+      dataTuple * tup = dataTuple::from_bytes((byte*)stasis_log_entry_update_args_cptr(e));
       insertTuple(tup);
-      datatuple::freetuple(tup);
+      dataTuple::freetuple(tup);
     } break;
     case INTERNALLOG: { } break;
     default: assert(e->type == UPDATELOG); abort();
@@ -184,12 +184,12 @@ void blsm::replayLog() {
 
 }
 
-lsn_t blsm::get_log_offset() {
+lsn_t bLSM::get_log_offset() {
   if(recovering || !log_mode) { return INVALID_LSN; }
   return log_file->next_available_lsn(log_file);
 }
 
-void blsm::truncate_log() {
+void bLSM::truncate_log() {
   if(recovering) {
     printf("Not truncating log until recovery is complete.\n");
   } else {
@@ -200,7 +200,7 @@ void blsm::truncate_log() {
   }
 }
 
-void blsm::update_persistent_header(int xid, lsn_t trunc_lsn) {
+void bLSM::update_persistent_header(int xid, lsn_t trunc_lsn) {
 
     tbl_header.c2_root = tree_c2->get_root_rid();
     tbl_header.c2_dp_state = tree_c2->get_datapage_allocator_rid();
@@ -219,7 +219,7 @@ void blsm::update_persistent_header(int xid, lsn_t trunc_lsn) {
     Tset(xid, table_rec, &tbl_header);    
 }
 
-void blsm::flushTable()
+void bLSM::flushTable()
 {
     struct timeval start_tv, stop_tv;
     double start, stop;
@@ -277,7 +277,7 @@ void blsm::flushTable()
     c0_flushing = false;
 }
 
-datatuple * blsm::findTuple(int xid, const datatuple::key_t key, size_t keySize)
+dataTuple * bLSM::findTuple(int xid, const dataTuple::key_t key, size_t keySize)
 {
     // Apply proportional backpressure to reads as well as writes.  This prevents
     // starvation of the merge threads on fast boxes.
@@ -286,12 +286,12 @@ datatuple * blsm::findTuple(int xid, const datatuple::key_t key, size_t keySize)
 #endif
 
   //prepare a search tuple
-    datatuple *search_tuple = datatuple::create(key, keySize);
+    dataTuple *search_tuple = dataTuple::create(key, keySize);
 
 
     pthread_mutex_lock(&rb_mut);
 
-    datatuple *ret_tuple=0; 
+    dataTuple *ret_tuple=0; 
 
     //step 1: look in tree_c0
     memTreeComponent::rbtree_t::iterator rbitr = get_tree_c0()->find(search_tuple);
@@ -312,14 +312,14 @@ datatuple * blsm::findTuple(int xid, const datatuple::key_t key, size_t keySize)
         rbitr = get_tree_c0_mergeable()->find(search_tuple);
         if(rbitr != get_tree_c0_mergeable()->end())
         {
-            datatuple *tuple = *rbitr;
+            dataTuple *tuple = *rbitr;
 
             if(tuple->isDelete())  //tuple deleted
                 done = true;  //return ret_tuple            
             else if(ret_tuple != 0)  //merge the two
             {
-                datatuple *mtuple = tmerger->merge(tuple, ret_tuple);  //merge the two
-                datatuple::freetuple(ret_tuple); //free tuple from current tree
+                dataTuple *mtuple = tmerger->merge(tuple, ret_tuple);  //merge the two
+                dataTuple::freetuple(ret_tuple); //free tuple from current tree
                 ret_tuple = mtuple; //set return tuple to merge result
             }
             else //key first found in old mem tree
@@ -334,7 +334,7 @@ datatuple * blsm::findTuple(int xid, const datatuple::key_t key, size_t keySize)
     if(!done && get_tree_c1_prime() != 0)
     {
         DEBUG("old c1 tree not null\n");
-        datatuple *tuple_oc1 = get_tree_c1_prime()->findTuple(xid, key, keySize);
+        dataTuple *tuple_oc1 = get_tree_c1_prime()->findTuple(xid, key, keySize);
 
         if(tuple_oc1 != NULL)
         {
@@ -343,8 +343,8 @@ datatuple * blsm::findTuple(int xid, const datatuple::key_t key, size_t keySize)
                 done = true;
             else if(ret_tuple != 0) //merge the two
             {
-                datatuple *mtuple = tmerger->merge(tuple_oc1, ret_tuple);  //merge the two
-                datatuple::freetuple(ret_tuple); //free tuple from before
+                dataTuple *mtuple = tmerger->merge(tuple_oc1, ret_tuple);  //merge the two
+                dataTuple::freetuple(ret_tuple); //free tuple from before
                 ret_tuple = mtuple; //set return tuple to merge result
             }
             else //found for the first time
@@ -355,7 +355,7 @@ datatuple * blsm::findTuple(int xid, const datatuple::key_t key, size_t keySize)
 
             if(!use_copy)
             {
-                datatuple::freetuple(tuple_oc1); //free tuple from tree old c1
+                dataTuple::freetuple(tuple_oc1); //free tuple from tree old c1
             }
         }
     }
@@ -363,7 +363,7 @@ datatuple * blsm::findTuple(int xid, const datatuple::key_t key, size_t keySize)
     //step 3: check c1
     if(!done)
     {
-        datatuple *tuple_c1 = get_tree_c1()->findTuple(xid, key, keySize);
+        dataTuple *tuple_c1 = get_tree_c1()->findTuple(xid, key, keySize);
         if(tuple_c1 != NULL)
         {
             bool use_copy = false;
@@ -371,8 +371,8 @@ datatuple * blsm::findTuple(int xid, const datatuple::key_t key, size_t keySize)
                 done = true;
             else if(ret_tuple != 0) //merge the two
             {
-                datatuple *mtuple = tmerger->merge(tuple_c1, ret_tuple);  //merge the two
-                datatuple::freetuple(ret_tuple);  //free tuple from before
+                dataTuple *mtuple = tmerger->merge(tuple_c1, ret_tuple);  //merge the two
+                dataTuple::freetuple(ret_tuple);  //free tuple from before
                 ret_tuple = mtuple; //set return tuple to merge result
             }
             else //found for the first time
@@ -383,7 +383,7 @@ datatuple * blsm::findTuple(int xid, const datatuple::key_t key, size_t keySize)
 
             if(!use_copy)
             {
-                datatuple::freetuple(tuple_c1); //free tuple from tree c1
+                dataTuple::freetuple(tuple_c1); //free tuple from tree c1
             }
         }
     }
@@ -392,7 +392,7 @@ datatuple * blsm::findTuple(int xid, const datatuple::key_t key, size_t keySize)
     if(!done && get_tree_c1_mergeable() != 0)
     {
         DEBUG("old c1 tree not null\n");
-        datatuple *tuple_oc1 = get_tree_c1_mergeable()->findTuple(xid, key, keySize);
+        dataTuple *tuple_oc1 = get_tree_c1_mergeable()->findTuple(xid, key, keySize);
         
         if(tuple_oc1 != NULL)
         {
@@ -401,8 +401,8 @@ datatuple * blsm::findTuple(int xid, const datatuple::key_t key, size_t keySize)
                 done = true;        
             else if(ret_tuple != 0) //merge the two
             {
-                datatuple *mtuple = tmerger->merge(tuple_oc1, ret_tuple);  //merge the two
-                datatuple::freetuple(ret_tuple); //free tuple from before
+                dataTuple *mtuple = tmerger->merge(tuple_oc1, ret_tuple);  //merge the two
+                dataTuple::freetuple(ret_tuple); //free tuple from before
                 ret_tuple = mtuple; //set return tuple to merge result            
             }
             else //found for the first time
@@ -413,7 +413,7 @@ datatuple * blsm::findTuple(int xid, const datatuple::key_t key, size_t keySize)
 
             if(!use_copy)
             {
-            	datatuple::freetuple(tuple_oc1); //free tuple from tree old c1
+            	dataTuple::freetuple(tuple_oc1); //free tuple from tree old c1
             }
         }        
     }
@@ -422,7 +422,7 @@ datatuple * blsm::findTuple(int xid, const datatuple::key_t key, size_t keySize)
     if(!done)
     {
         DEBUG("Not in old first disk tree\n");        
-        datatuple *tuple_c2 = get_tree_c2()->findTuple(xid, key, keySize);
+        dataTuple *tuple_c2 = get_tree_c2()->findTuple(xid, key, keySize);
 
         if(tuple_c2 != NULL)
         {
@@ -431,8 +431,8 @@ datatuple * blsm::findTuple(int xid, const datatuple::key_t key, size_t keySize)
                 done = true;        
             else if(ret_tuple != 0)
             {
-                datatuple *mtuple = tmerger->merge(tuple_c2, ret_tuple);  //merge the two
-                datatuple::freetuple(ret_tuple); //free tuple from before
+                dataTuple *mtuple = tmerger->merge(tuple_c2, ret_tuple);  //merge the two
+                dataTuple::freetuple(ret_tuple); //free tuple from before
                 ret_tuple = mtuple; //set return tuple to merge result            
             }
             else //found for the first time
@@ -443,16 +443,16 @@ datatuple * blsm::findTuple(int xid, const datatuple::key_t key, size_t keySize)
 
             if(!use_copy)
             {
-            	datatuple::freetuple(tuple_c2);  //free tuple from tree c2
+            	dataTuple::freetuple(tuple_c2);  //free tuple from tree c2
             }
         }        
     }     
 
     rwlc_unlock(header_mut);
-    datatuple::freetuple(search_tuple);
+    dataTuple::freetuple(search_tuple);
     if (ret_tuple != NULL && ret_tuple->isDelete()) {
         // this is a tombstone. don't return it
-        datatuple::freetuple(ret_tuple);
+        dataTuple::freetuple(ret_tuple);
         return NULL;
     }
     return ret_tuple;
@@ -463,7 +463,7 @@ datatuple * blsm::findTuple(int xid, const datatuple::key_t key, size_t keySize)
  * returns the first record found with the matching key
  * (not to be used together with diffs)
  **/
-datatuple * blsm::findTuple_first(int xid, datatuple::key_t key, size_t keySize)
+dataTuple * bLSM::findTuple_first(int xid, dataTuple::key_t key, size_t keySize)
 {
     // Apply proportional backpressure to reads as well as writes.  This prevents
     // starvation of the merge threads on fast boxes.
@@ -472,9 +472,9 @@ datatuple * blsm::findTuple_first(int xid, datatuple::key_t key, size_t keySize)
 #endif
 
     //prepare a search tuple
-    datatuple * search_tuple = datatuple::create(key, keySize);
+    dataTuple * search_tuple = dataTuple::create(key, keySize);
 
-    datatuple *ret_tuple=0;
+    dataTuple *ret_tuple=0;
     //step 1: look in tree_c0
 
     pthread_mutex_lock(&rb_mut);
@@ -551,11 +551,11 @@ datatuple * blsm::findTuple_first(int xid, datatuple::key_t key, size_t keySize)
         rwlc_unlock(header_mut);
     }
 
-    datatuple::freetuple(search_tuple);
+    dataTuple::freetuple(search_tuple);
 
     if (ret_tuple != NULL && ret_tuple->isDelete()) {
         // this is a tombstone. don't return it
-        datatuple::freetuple(ret_tuple);
+        dataTuple::freetuple(ret_tuple);
         return NULL;
     }
    
@@ -563,7 +563,7 @@ datatuple * blsm::findTuple_first(int xid, datatuple::key_t key, size_t keySize)
 
 }
 
-datatuple * blsm::insertTupleHelper(datatuple *tuple)
+dataTuple * bLSM::insertTupleHelper(dataTuple *tuple)
 {
   bool need_free = false;
   if(!tuple->isDelete() && expiry != 0) {
@@ -576,22 +576,22 @@ datatuple * blsm::insertTupleHelper(datatuple *tuple)
     memcpy(newkey, tuple->strippedkey(), kl);
     newkey[kl] = 0;
     memcpy(newkey+kl+1, &ts, ts_sz);
-    datatuple * old = tuple;
-    tuple = datatuple::create(newkey, kl+ 1+ ts_sz, tuple->data(), tuple->datalen());
+    dataTuple * old = tuple;
+    tuple = dataTuple::create(newkey, kl+ 1+ ts_sz, tuple->data(), tuple->datalen());
     assert(tuple->strippedkeylen() == old->strippedkeylen());
-    assert(!datatuple::compare_obj(tuple, old));
+    assert(!dataTuple::compare_obj(tuple, old));
     free(newkey);
     need_free = true;
   }  //find the previous tuple with same key in the memtree if exists
   pthread_mutex_lock(&rb_mut);
   memTreeComponent::rbtree_t::iterator rbitr = tree_c0->find(tuple);
-  datatuple * t  = 0;
-  datatuple * pre_t = 0;
+  dataTuple * t  = 0;
+  dataTuple * pre_t = 0;
   if(rbitr != tree_c0->end())
   {
       pre_t = *rbitr;
       //do the merging
-      datatuple *new_t = tmerger->merge(pre_t, tuple);
+      dataTuple *new_t = tmerger->merge(pre_t, tuple);
       merge_mgr->get_merge_stats(0)->merged_tuples(new_t, tuple, pre_t);
       t = new_t;
 
@@ -608,12 +608,12 @@ datatuple * blsm::insertTupleHelper(datatuple *tuple)
   }
   pthread_mutex_unlock(&rb_mut);
 
-  if(need_free) { datatuple::freetuple(tuple); }
+  if(need_free) { dataTuple::freetuple(tuple); }
 
   return pre_t;
 }
 
-void blsm::insertManyTuples(datatuple ** tuples, int tuple_count) {
+void bLSM::insertManyTuples(dataTuple ** tuples, int tuple_count) {
   for(int i = 0; i < tuple_count; i++) {
     merge_mgr->read_tuple_from_small_component(0, tuples[i]);
   }
@@ -631,18 +631,18 @@ void blsm::insertManyTuples(datatuple ** tuples, int tuple_count) {
   int num_old_tups = 0;
   pageid_t sum_old_tup_lens = 0;
   for(int i = 0; i < tuple_count; i++) {
-    datatuple * old_tup = insertTupleHelper(tuples[i]);
+    dataTuple * old_tup = insertTupleHelper(tuples[i]);
     if(old_tup) {
       num_old_tups++;
       sum_old_tup_lens += old_tup->byte_length();
-      datatuple::freetuple(old_tup);
+      dataTuple::freetuple(old_tup);
     }
   }
 
   merge_mgr->read_tuple_from_large_component(0, num_old_tups, sum_old_tup_lens);
 }
 
-void blsm::insertTuple(datatuple *tuple)
+void bLSM::insertTuple(dataTuple *tuple)
 {
     if(log_mode && !recovering) {
         logUpdate(tuple);
@@ -656,26 +656,26 @@ void blsm::insertTuple(datatuple *tuple)
     // any locks!
     merge_mgr->read_tuple_from_small_component(0, tuple);
 
-    datatuple * pre_t = 0; // this is a pointer to any data tuples that we'll be deleting below.  We need to update the merge_mgr statistics with it, but have to do so outside of the rb_mut region.
+    dataTuple * pre_t = 0; // this is a pointer to any data tuples that we'll be deleting below.  We need to update the merge_mgr statistics with it, but have to do so outside of the rb_mut region.
 
     pre_t = insertTupleHelper(tuple);
 
     if(pre_t) {
       // needs to be here; calls update_progress, which sometimes grabs mutexes..
       merge_mgr->read_tuple_from_large_component(0, pre_t);  // was interspersed with the erase, insert above...
-      datatuple::freetuple(pre_t); //free the previous tuple
+      dataTuple::freetuple(pre_t); //free the previous tuple
     }
 
     DEBUG("tree size %d tuples %lld bytes.\n", tsize, tree_bytes);
 }
 
-bool blsm::testAndSetTuple(datatuple *tuple, datatuple *tuple2)
+bool bLSM::testAndSetTuple(dataTuple *tuple, dataTuple *tuple2)
 {
     bool succ = false;
     static pthread_mutex_t test_and_set_mut = PTHREAD_MUTEX_INITIALIZER;
     pthread_mutex_lock(&test_and_set_mut);
 
-    datatuple * exists = findTuple_first(-1, tuple2 ? tuple2->strippedkey() : tuple->strippedkey(), tuple2 ? tuple2->strippedkeylen() : tuple->strippedkeylen());
+    dataTuple * exists = findTuple_first(-1, tuple2 ? tuple2->strippedkey() : tuple->strippedkey(), tuple2 ? tuple2->strippedkeylen() : tuple->strippedkeylen());
 
     if(!tuple2 || tuple2->isDelete()) {
       if(!exists || exists->isDelete()) {
@@ -690,18 +690,18 @@ bool blsm::testAndSetTuple(datatuple *tuple, datatuple *tuple2)
         succ = false;
       }
     }
-    if(exists) datatuple::freetuple(exists);
+    if(exists) dataTuple::freetuple(exists);
     if(succ) insertTuple(tuple);
 
     pthread_mutex_unlock(&test_and_set_mut);
     return succ;
 }
 
-void blsm::registerIterator(iterator * it) {
+void bLSM::registerIterator(iterator * it) {
   its.push_back(it);
 }
 
-void blsm::forgetIterator(iterator * it) {
+void bLSM::forgetIterator(iterator * it) {
   for(unsigned int i = 0; i < its.size(); i++) {
     if(its[i] == it) {
       its.erase(its.begin()+i);
@@ -710,7 +710,7 @@ void blsm::forgetIterator(iterator * it) {
   }
 }
 
-void blsm::bump_epoch() {
+void bLSM::bump_epoch() {
   epoch++;
   for(unsigned int i = 0; i < its.size(); i++) {
     its[i]->invalidate();

@@ -145,7 +145,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         getnextdata(ditem, 8192);
         len_t datalen = ditem.length()+1;
 
-        datatuple* newtuple = datatuple::create((*key_arr)[i].c_str(), keylen,
+        dataTuple* newtuple = dataTuple::create((*key_arr)[i].c_str(), keylen,
                         ditem.c_str(), datalen);
 
         datasize += newtuple->byte_length();
@@ -159,7 +159,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         gettimeofday(&ti_end,0);
         insert_time += tv_to_double(ti_end) - tv_to_double(ti_st);
 
-        datatuple::freetuple(newtuple);
+        dataTuple::freetuple(newtuple);
 
         if(i % 10000 == 0 && i > 0)
             printf("%llu / %llu inserted.\n", (unsigned long long)i, (unsigned long long)NUM_ENTRIES);
@@ -187,10 +187,10 @@ void insertProbeIter(size_t NUM_ENTRIES)
         //get the key
         len_t keylen = (*key_arr)[ri].length()+1;
 
-        datatuple* searchtuple = datatuple::create((*key_arr)[ri].c_str(), keylen);
+        dataTuple* searchtuple = dataTuple::create((*key_arr)[ri].c_str(), keylen);
 
         //find the key with the given tuple
-        datatuple *dt = logstore_client_op(l, OP_FIND, searchtuple);
+        dataTuple *dt = logstore_client_op(l, OP_FIND, searchtuple);
 
         assert(dt!=0);
         assert(!dt->isDelete());
@@ -198,10 +198,10 @@ void insertProbeIter(size_t NUM_ENTRIES)
         assert(dt->rawkeylen() == (*key_arr)[ri].length()+1);
 
         //free dt
-        datatuple::freetuple(dt);
+        dataTuple::freetuple(dt);
         dt = 0;
 
-        datatuple::freetuple(searchtuple);
+        dataTuple::freetuple(searchtuple);
     }
     printf("found %d\n", found_tuples);
 
@@ -209,13 +209,13 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     ret = logstore_client_op_returns_many(l, OP_SCAN, NULL, NULL, 0); // start = NULL stop = NULL limit = NONE
     assert(ret == LOGSTORE_RESPONSE_SENDING_TUPLES);
-    datatuple * tup;
+    dataTuple * tup;
     size_t i = 0;
     while((tup = logstore_client_next_tuple(l))) {
       assert(!tup->isDelete());
       assert(tup->rawkeylen() == (*key_arr)[i].length()+1);
       assert(!memcmp(tup->rawkey(), (*key_arr)[i].c_str(), (*key_arr)[i].length()));
-      datatuple::freetuple(tup);
+      dataTuple::freetuple(tup);
       i++;
     }
     assert(i == NUM_ENTRIES);

@@ -89,14 +89,14 @@ LSMServerHandler(int argc, char **argv)
     }
 
     pthread_mutex_init(&mutex_, 0);
-    blsm::init_stasis();
+    bLSM::init_stasis();
 
     int xid = Tbegin();
 
 
     recordid table_root = ROOT_RECORD;
     {
-        ltable_ = new blsm(log_mode, c0_size);
+        ltable_ = new bLSM(log_mode, c0_size);
         ltable_->expiry = expiry_delta;
 
         if(TrecordType(xid, ROOT_RECORD) == INVALID_SLOT) {
@@ -111,7 +111,7 @@ LSMServerHandler(int argc, char **argv)
         }
 
         Tcommit(xid);
-        merge_scheduler * mscheduler = new merge_scheduler(ltable_);
+        mergeScheduler * mscheduler = new mergeScheduler(ltable_);
         mscheduler->start();
         ltable_->replayLog();
 
@@ -133,21 +133,21 @@ initNextDatabaseId()
 {
     nextDatabaseId_ = 1;
     uint32_t id = 0;
-    datatuple* start = buildTuple(id, "");
-    datatuple* end = buildTuple(id + 1, "");
-    blsm::iterator* itr = new blsm::iterator(ltable_, start);
-    datatuple* current;
+    dataTuple* start = buildTuple(id, "");
+    dataTuple* end = buildTuple(id + 1, "");
+    bLSM::iterator* itr = new bLSM::iterator(ltable_, start);
+    dataTuple* current;
     while ((current = itr->getnext())) {
         // are we at the end of range?
-        if (datatuple::compare_obj(current, end) >= 0) {
-            datatuple::freetuple(current);
+        if (dataTuple::compare_obj(current, end) >= 0) {
+            dataTuple::freetuple(current);
             break;
         }
         uint32_t currentId = *((uint32_t*)(current->data()));
         if (currentId > nextDatabaseId_) {
             nextDatabaseId_ = currentId;
         }
-        datatuple::freetuple(current);
+        dataTuple::freetuple(current);
     }
     nextDatabaseId_++;
     delete itr;
@@ -178,15 +178,15 @@ shutdown()
   exit(0); // xxx hack
   return mapkeeper::ResponseCode::Success;
 }
-std::string pp_tuple(datatuple * tuple) {
+std::string pp_tuple(dataTuple * tuple) {
   std::string key((const char*)tuple->rawkey(), (size_t)tuple->rawkeylen());
   return key;
 }
 ResponseCode::type LSMServerHandler::
-insert(datatuple* tuple)
+insert(dataTuple* tuple)
 {
     ltable_->insertTuple(tuple);
-    datatuple::freetuple(tuple);
+    dataTuple::freetuple(tuple);
     return mapkeeper::ResponseCode::Success;
 }
 
@@ -194,10 +194,10 @@ ResponseCode::type LSMServerHandler::
 addMap(const std::string& databaseName) 
 {
     uint32_t id = nextDatabaseId();
-    datatuple* tup = buildTuple(0, databaseName, (void*)&id, (uint32_t)(sizeof(id)));
-    datatuple* ret = get(tup);
+    dataTuple* tup = buildTuple(0, databaseName, (void*)&id, (uint32_t)(sizeof(id)));
+    dataTuple* ret = get(tup);
     if (ret) {
-        datatuple::freetuple(ret);
+        dataTuple::freetuple(ret);
         if(trace) { fprintf(trace, "MapExists = addMap(%s)\n", databaseName.c_str()); fflush(trace); }
         return mapkeeper::ResponseCode::MapExists;
     }
@@ -213,35 +213,35 @@ dropMap(const std::string& databaseName)
     if(trace) { fprintf(trace, "MapNotFound = dropMap(%s)\n", databaseName.c_str()); fflush(trace); }
     return mapkeeper::ResponseCode::MapNotFound;
   }
-  datatuple * tup = buildTuple(0, databaseName);
-  datatuple * exists = get(tup);
+  dataTuple * tup = buildTuple(0, databaseName);
+  dataTuple * exists = get(tup);
 
   if(exists) {
-    datatuple::freetuple(exists);
+    dataTuple::freetuple(exists);
 
-    datatuple * startKey = buildTuple(id, "");
-    blsm::iterator * itr = new blsm::iterator(ltable_, startKey);
-    datatuple::freetuple(startKey);
-    datatuple * current;
+    dataTuple * startKey = buildTuple(id, "");
+    bLSM::iterator * itr = new bLSM::iterator(ltable_, startKey);
+    dataTuple::freetuple(startKey);
+    dataTuple * current;
 
     // insert tombstone; deletes metadata entry for map; frees tup
     insert(tup);
 
     while(NULL != (current = itr->getnext())) {
       if(*((uint32_t*)current->strippedkey()) != id) {
-        datatuple::freetuple(current);
+        dataTuple::freetuple(current);
         break;
       }
-      datatuple * del = datatuple::create(current->strippedkey(), current->strippedkeylen());
+      dataTuple * del = dataTuple::create(current->strippedkey(), current->strippedkeylen());
       ltable_->insertTuple(del);
-      datatuple::freetuple(del);
-      datatuple::freetuple(current);
+      dataTuple::freetuple(del);
+      dataTuple::freetuple(current);
     }
     delete itr;
     if(trace) { fprintf(trace, "Success = dropMap(%s)\n", databaseName.c_str()); fflush(trace); }
     return mapkeeper::ResponseCode::Success;
   } else {
-    datatuple::freetuple(tup);
+    dataTuple::freetuple(tup);
     if(trace) { fprintf(trace, "MapNotFound = dropMap(%s)\n", databaseName.c_str()); fflush(trace); }
     return mapkeeper::ResponseCode::MapNotFound;
   }
@@ -250,19 +250,19 @@ dropMap(const std::string& databaseName)
 void LSMServerHandler::
 listMaps(StringListResponse& _return) 
 {
-  datatuple * startKey = buildTuple(0, "");
-  blsm::iterator * itr = new blsm::iterator(ltable_, startKey);
-  datatuple::freetuple(startKey);
-  datatuple * current;
+  dataTuple * startKey = buildTuple(0, "");
+  bLSM::iterator * itr = new bLSM::iterator(ltable_, startKey);
+  dataTuple::freetuple(startKey);
+  dataTuple * current;
   while(NULL != (current = itr->getnext())) {
     if(*((uint32_t*)current->strippedkey()) != 0) {
-      datatuple::freetuple(current);
+      dataTuple::freetuple(current);
       break;
     }
     _return.values.push_back(
         std::string((char*)(current->strippedkey()) + sizeof(uint32_t),
                     current->strippedkeylen() - sizeof(uint32_t)));
-    datatuple::freetuple(current);
+    dataTuple::freetuple(current);
   }
   delete itr;
   if(trace) { fprintf(trace, "... = listMaps()\n"); fflush(trace); }
@@ -283,37 +283,37 @@ scan(RecordListResponse& _return, const std::string& databaseName, const ScanOrd
         return;
     }
  
-    datatuple* start = buildTuple(id, startKey);
-    datatuple* end;
+    dataTuple* start = buildTuple(id, startKey);
+    dataTuple* end;
     if (endKey.empty()) {
         end = buildTuple(id + 1, endKey);
     } else {
         end = buildTuple(id, endKey);
     }
-    blsm::iterator* itr = new blsm::iterator(ltable_, start);
+    bLSM::iterator* itr = new bLSM::iterator(ltable_, start);
 
     int32_t resultSize = 0;
 
     while ((maxRecords == 0 || (int32_t)(_return.records.size()) < maxRecords) && 
            (maxBytes == 0 || resultSize < maxBytes)) {
-        datatuple* current = itr->getnext();
+        dataTuple* current = itr->getnext();
         if (current == NULL) {
             _return.responseCode = mapkeeper::ResponseCode::ScanEnded;
             if(trace) { fprintf(trace, "ScanEnded = scan(...)\n"); fflush(trace); }
             break;
         }
 
-        int cmp = datatuple::compare_obj(current, start);
+        int cmp = dataTuple::compare_obj(current, start);
         if ((!startKeyIncluded) && cmp == 0) {
-            datatuple::freetuple(current);
+            dataTuple::freetuple(current);
             continue;
         } 
 
         // are we at the end of range?
-        cmp = datatuple::compare_obj(current, end);
+        cmp = dataTuple::compare_obj(current, end);
         if ((!endKeyIncluded && cmp >= 0) ||
                 (endKeyIncluded && cmp > 0)) {
-            datatuple::freetuple(current);
+            dataTuple::freetuple(current);
             _return.responseCode = mapkeeper::ResponseCode::ScanEnded;
             if(trace) { fprintf(trace, "ScanEnded = scan(...)\n"); fflush(trace); }
             break;
@@ -327,16 +327,16 @@ scan(RecordListResponse& _return, const std::string& databaseName, const ScanOrd
         rec.value.assign((char*)(current->data()), dataSize);
         _return.records.push_back(rec);
         resultSize += keySize + dataSize;
-        datatuple::freetuple(current);
+        dataTuple::freetuple(current);
     }
     delete itr;
 }
 
-datatuple* LSMServerHandler::
-get(datatuple* tuple)
+dataTuple* LSMServerHandler::
+get(dataTuple* tuple)
 {
     // -1 is invalid txn id
-    datatuple* tup = ltable_->findTuple_first(-1, tuple->rawkey(), tuple->rawkeylen());
+    dataTuple* tup = ltable_->findTuple_first(-1, tuple->rawkey(), tuple->rawkeylen());
     return tup;
 }
 
@@ -351,7 +351,7 @@ get(BinaryResponse& _return, const std::string& databaseName, const std::string&
         return;
     }
     
-    datatuple* recordBody = get(id, recordName);
+    dataTuple* recordBody = get(id, recordName);
     if (recordBody == NULL) {
         // record not found
         if(trace) { fprintf(trace, "RecordNotFound = get(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
@@ -361,32 +361,32 @@ get(BinaryResponse& _return, const std::string& databaseName, const std::string&
     if(trace) { fprintf(trace, "Success = get(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
     _return.responseCode = mapkeeper::ResponseCode::Success;
     _return.value.assign((const char*)(recordBody->data()), recordBody->datalen());
-    datatuple::freetuple(recordBody);
+    dataTuple::freetuple(recordBody);
 }
 
 uint32_t LSMServerHandler::
 getDatabaseId(const std::string& databaseName)
 {
-    datatuple* tup = buildTuple(0, databaseName);
-    datatuple* databaseId = get(tup);
-    datatuple::freetuple(tup);
+    dataTuple* tup = buildTuple(0, databaseName);
+    dataTuple* databaseId = get(tup);
+    dataTuple::freetuple(tup);
     if (databaseId == NULL) {
         // database not found
         std::cout << "db not found" << std::endl;
         return 0;
     }
     uint32_t id = *((uint32_t*)(databaseId->data()));
-    datatuple::freetuple(databaseId);
+    dataTuple::freetuple(databaseId);
     return id;
 }
 
 
-datatuple* LSMServerHandler::
+dataTuple* LSMServerHandler::
 get(uint32_t databaseId, const std::string& recordName)
 {
-    datatuple* recordKey = buildTuple(databaseId, recordName);
-    datatuple* ret = get(recordKey);
-    datatuple::freetuple(recordKey);
+    dataTuple* recordKey = buildTuple(databaseId, recordName);
+    dataTuple* ret = get(recordKey);
+    dataTuple::freetuple(recordKey);
     return ret;
 }
 
@@ -400,7 +400,7 @@ put(const std::string& databaseName,
       if(trace) { fprintf(trace, "MapNotFound = put(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
       return mapkeeper::ResponseCode::MapNotFound;
   }
-  datatuple* tup = buildTuple(id, recordName, recordBody);
+  dataTuple* tup = buildTuple(id, recordName, recordBody);
   if(trace) { fprintf(trace, "Success = put(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
   return insert(tup);
 }
@@ -416,19 +416,19 @@ insert(const std::string& databaseName,
         return mapkeeper::ResponseCode::MapNotFound;
     }
     if(!blind_update) {
-      datatuple* oldRecordBody = get(id, recordName);
+      dataTuple* oldRecordBody = get(id, recordName);
       if (oldRecordBody != NULL) {
         if(oldRecordBody->isDelete()) {
-          datatuple::freetuple(oldRecordBody);
+          dataTuple::freetuple(oldRecordBody);
         } else {
-          datatuple::freetuple(oldRecordBody);
+          dataTuple::freetuple(oldRecordBody);
           if(trace) { fprintf(trace, "RecordExists = insert(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
           return mapkeeper::ResponseCode::RecordExists;
         }
       }
     }
 
-    datatuple* tup = buildTuple(id, recordName, recordBody);
+    dataTuple* tup = buildTuple(id, recordName, recordBody);
     if(trace) { fprintf(trace, "Success = insert(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
     return insert(tup);
 }
@@ -451,14 +451,14 @@ update(const std::string& databaseName,
         return mapkeeper::ResponseCode::MapNotFound;
     }
     if(!blind_update) {
-      datatuple* oldRecordBody = get(id, recordName);
+      dataTuple* oldRecordBody = get(id, recordName);
       if (oldRecordBody == NULL) {
         if(trace) { fprintf(trace, "RecordNotFound = update(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
         return mapkeeper::ResponseCode::RecordNotFound;
       }
-      datatuple::freetuple(oldRecordBody);
+      dataTuple::freetuple(oldRecordBody);
     }
-    datatuple* tup = buildTuple(id, recordName, recordBody);
+    dataTuple* tup = buildTuple(id, recordName, recordBody);
     if(trace) { fprintf(trace, "Success = update(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
     return insert(tup);
 }
@@ -471,37 +471,37 @@ remove(const std::string& databaseName, const std::string& recordName)
         if(trace) { fprintf(trace, "MapNotFound = remove(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
         return mapkeeper::ResponseCode::MapNotFound;
     }
-    datatuple* oldRecordBody = get(id, recordName);
+    dataTuple* oldRecordBody = get(id, recordName);
     if (oldRecordBody == NULL) {
         if(trace) { fprintf(trace, "RecordNotFound = remove(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
         return mapkeeper::ResponseCode::RecordNotFound;
     }
-    datatuple::freetuple(oldRecordBody);
-    datatuple* tup = buildTuple(id, recordName);
+    dataTuple::freetuple(oldRecordBody);
+    dataTuple* tup = buildTuple(id, recordName);
     if(trace) { fprintf(trace, "Success = remove(%s, %s)\n", databaseName.c_str(), recordName.c_str()); fflush(trace); }
     return insert(tup);
 }
 
-datatuple* LSMServerHandler::
+dataTuple* LSMServerHandler::
 buildTuple(uint32_t databaseId, const std::string& recordName)
 {
     return buildTuple(databaseId, recordName, NULL, DELETE);
 }
 
-datatuple* LSMServerHandler::
+dataTuple* LSMServerHandler::
 buildTuple(uint32_t databaseId, const std::string& recordName, const std::string& recordBody)
 {
     return buildTuple(databaseId, recordName, recordBody.c_str(), recordBody.size());
 }
 
-datatuple* LSMServerHandler::
+dataTuple* LSMServerHandler::
 buildTuple(uint32_t databaseId, const std::string& recordName, const void* body, uint32_t bodySize)
 {
     uint32_t keySize = sizeof(databaseId) + recordName.size();
     unsigned char* key = (unsigned char*)malloc(keySize);
     *(uint32_t*)key = htonl(databaseId);
     memcpy(((uint32_t*)key) + 1, recordName.c_str(), recordName.size());
-    datatuple *tup = datatuple::create(key, keySize, body, bodySize);
+    dataTuple *tup = dataTuple::create(key, keySize, body, bodySize);
     free(key);
     return tup;
 }

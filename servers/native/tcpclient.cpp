@@ -83,7 +83,7 @@ static inline void close_conn(logstore_handle_t *l) {
 
 uint8_t
 logstore_client_op_returns_many(logstore_handle_t *l,
-				uint8_t opcode,  datatuple * tuple, datatuple * tuple2, uint64_t count) {
+				uint8_t opcode,  dataTuple * tuple, dataTuple * tuple2, uint64_t count) {
 
     if(l->server_socket < 0)
     {
@@ -144,7 +144,7 @@ logstore_client_op_returns_many(logstore_handle_t *l,
 
 }
 network_op_t
-logstore_client_send_tuple(logstore_handle_t *l, datatuple *t) {
+logstore_client_send_tuple(logstore_handle_t *l, dataTuple *t) {
   assert(l->server_fsocket != 0);
   network_op_t rcode = LOGSTORE_RESPONSE_SUCCESS;
   int err;
@@ -163,45 +163,45 @@ logstore_client_send_tuple(logstore_handle_t *l, datatuple *t) {
   return rcode;
 }
 
-datatuple *
+dataTuple *
 logstore_client_next_tuple(logstore_handle_t *l) {
 	assert(l->server_fsocket != 0); // otherwise, then the client forgot to check a return value...
 	int err = 0;
-	datatuple * ret = readtuplefromsocket(l->server_fsocket, &err);
+	dataTuple * ret = readtuplefromsocket(l->server_fsocket, &err);
 	if(err) {
 		close_conn(l);
 		if(ret) {
-			datatuple::freetuple(ret);
+			dataTuple::freetuple(ret);
 			ret = NULL;
 		}
 	}
 	return ret;
 }
-datatuple *
+dataTuple *
 logstore_client_op(logstore_handle_t *l,
-          uint8_t opcode,  datatuple * tuple, datatuple * tuple2, uint64_t count)
+          uint8_t opcode,  dataTuple * tuple, dataTuple * tuple2, uint64_t count)
 {
     network_op_t rcode = logstore_client_op_returns_many(l, opcode, tuple, tuple2, count);
 
     if(opiserror(rcode)) { return NULL; }
 
-    datatuple * ret = NULL;
+    dataTuple * ret = NULL;
 
     if(rcode == LOGSTORE_RESPONSE_SENDING_TUPLES)
     {
 		ret =     logstore_client_next_tuple(l);
 		if(ret) {
-			datatuple *nxt = logstore_client_next_tuple(l);
+			dataTuple *nxt = logstore_client_next_tuple(l);
 			if(nxt) {
 				fprintf(stderr, "Opcode %d returned multiple tuples, but caller expects zero or one.  Closing connection.\n", (int)opcode);
-				datatuple::freetuple(nxt);
-				datatuple::freetuple(ret);
+				dataTuple::freetuple(nxt);
+				dataTuple::freetuple(ret);
 				close_conn(l);
 				ret = 0;
 			}
 		}
     } else if(rcode == LOGSTORE_RESPONSE_SUCCESS) {
-    	ret = tuple ? tuple : datatuple::create("", 1);
+    	ret = tuple ? tuple : dataTuple::create("", 1);
     } else {
     	assert(rcode == LOGSTORE_RESPONSE_FAIL); // if this is an invalid response, we should have noticed above
     	ret = 0;

@@ -61,14 +61,14 @@ int main(int argc, char *argv[])
     	}
     }
 
-    blsm::init_stasis();
+    bLSM::init_stasis();
 
       int xid = Tbegin();
 
 
       recordid table_root = ROOT_RECORD;
     {
-		blsm ltable(log_mode, c0_size);
+		bLSM ltable(log_mode, c0_size);
 		ltable.expiry = expiry_delta;
 
 		if(TrecordType(xid, ROOT_RECORD) == INVALID_SLOT) {
@@ -83,7 +83,7 @@ int main(int argc, char *argv[])
 		}
 
 		Tcommit(xid);
-		merge_scheduler * mscheduler = new merge_scheduler(&ltable);
+		mergeScheduler * mscheduler = new mergeScheduler(&ltable);
 		mscheduler->start();
 		ltable.replayLog();
 
@@ -101,7 +101,7 @@ int main(int argc, char *argv[])
 		printf("Deinitializing stasis...\n");
 		fflush(stdout);
     }
-    blsm::deinit_stasis();
+    bLSM::deinit_stasis();
 
     printf("Shutdown complete\n");
 }

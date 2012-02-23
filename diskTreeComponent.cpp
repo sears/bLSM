@@ -76,7 +76,7 @@ void diskTreeComponent::writes_done() {
   }
 }
 
-int diskTreeComponent::insertTuple(int xid, datatuple *t)
+int diskTreeComponent::insertTuple(int xid, dataTuple *t)
 {
   if(bloom_filter) {
     bloom_filter_insert(bloom_filter, (const char*)t->strippedkey(), t->strippedkeylen());
@@ -96,14 +96,14 @@ int diskTreeComponent::insertTuple(int xid, datatuple *t)
   return ret;
 }
 
-DataPage* diskTreeComponent::insertDataPage(int xid, datatuple *tuple) {
+dataPage* diskTreeComponent::insertDataPage(int xid, dataTuple *tuple) {
     //create a new data page -- either the last region is full, or the last data page doesn't want our tuple.  (or both)
 
-    DataPage * dp = 0;
+    dataPage * dp = 0;
     int count = 0;
     while(dp==0)
     {
-      dp = new DataPage(xid, datapage_size, ltree->get_datapage_alloc());
+      dp = new dataPage(xid, datapage_size, ltree->get_datapage_alloc());
 
         //insert the record into the data page
         if(!dp->append(tuple))
@@ -130,9 +130,9 @@ DataPage* diskTreeComponent::insertDataPage(int xid, datatuple *tuple) {
     return dp;
 }
 
-datatuple * diskTreeComponent::findTuple(int xid, datatuple::key_t key, size_t keySize)
+dataTuple * diskTreeComponent::findTuple(int xid, dataTuple::key_t key, size_t keySize)
 {
-    datatuple * tup=0;
+    dataTuple * tup=0;
 
     if(bloom_filter) {
       if(!bloom_filter_lookup(bloom_filter, (const char*)key, keySize)) {
@@ -145,7 +145,7 @@ datatuple * diskTreeComponent::findTuple(int xid, datatuple::key_t key, size_t k
 
     if(pid!=-1)
     {
-        DataPage * dp = new DataPage(xid, 0, pid);
+        dataPage * dp = new dataPage(xid, 0, pid);
         dp->recordRead(key, keySize, &tup);
         delete dp;
     }
@@ -194,7 +194,7 @@ recordid diskTreeComponent::internalNodes::create(int xid) {
 void diskTreeComponent::internalNodes::writeNodeRecord(int xid, Page * p, recordid & rid,
                               const byte *key, size_t keylen, pageid_t ptr) {
   DEBUG("writenoderecord:\tp->id\t%lld\tkey:\t%s\tkeylen: %d\tval_page\t%lld\n",
-        p->id, datatuple::key_to_str(key).c_str(), keylen, ptr);
+        p->id, dataTuple::key_to_str(key).c_str(), keylen, ptr);
   indexnode_rec *nr = (indexnode_rec*)stasis_record_write_begin(xid, p, rid);
   nr->ptr = ptr;
   memcpy(nr+1, key, keylen);
@@ -338,7 +338,7 @@ recordid diskTreeComponent::internalNodes::appendPage(int xid,
 
     } else {
       DEBUG("Appended new internal node tree depth = %lld key = %s\n",
-            depth, datatuple::key_to_str(key).c_str());
+            depth, dataTuple::key_to_str(key).c_str());
     }
 
     lastLeaf = ret.page;
@@ -346,7 +346,7 @@ recordid diskTreeComponent::internalNodes::appendPage(int xid,
 
   } else {
     // write the new value to an existing page
-    DEBUG("Writing %s\t%d to existing page# %lld\n", datatuple::key_to_str(key).c_str(),
+    DEBUG("Writing %s\t%d to existing page# %lld\n", dataTuple::key_to_str(key).c_str(),
           val_page, lastLeafPage->id);
     stasis_record_alloc_done(xid, lastLeafPage, ret);
 
@@ -368,15 +368,15 @@ recordid diskTreeComponent::internalNodes::appendPage(int xid,
 
 diskTreeComponent::internalNodes::internalNodes(int xid, pageid_t internal_region_size, pageid_t datapage_region_size, pageid_t datapage_size)
 : lastLeaf(-1),
-  internal_node_alloc(new RegionAllocator(xid, internal_region_size)),
-  datapage_alloc(new RegionAllocator(xid, datapage_region_size))
+  internal_node_alloc(new regionAllocator(xid, internal_region_size)),
+  datapage_alloc(new regionAllocator(xid, datapage_region_size))
 { create(xid); }
 
 diskTreeComponent::internalNodes::internalNodes(int xid, recordid root, recordid internal_node_state, recordid datapage_state)
 : lastLeaf(-1),
   root_rec(root),
-  internal_node_alloc(new RegionAllocator(xid, internal_node_state)),
-  datapage_alloc(new RegionAllocator(xid, datapage_state))
+  internal_node_alloc(new regionAllocator(xid, internal_node_state)),
+  datapage_alloc(new regionAllocator(xid, datapage_state))
 { }
 
 diskTreeComponent::internalNodes::~internalNodes() {
@@ -646,8 +646,8 @@ recordid diskTreeComponent::internalNodes::lookup(int xid,
     rid.size = stasis_record_length_read(xid, node, rid);
 
     const indexnode_rec *rec = (const indexnode_rec*)stasis_record_read_begin(xid,node,rid);
-    int cmpval = datatuple::compare((datatuple::key_t) (rec+1), rid.size-sizeof(*rec),
-                                    (datatuple::key_t) key, keySize);
+    int cmpval = dataTuple::compare((dataTuple::key_t) (rec+1), rid.size-sizeof(*rec),
+                                    (dataTuple::key_t) key, keySize);
     stasis_record_read_done(xid,node,rid,(const byte*)rec);
 
     // key of current node is too big; there can be no matches under it.
@@ -716,7 +716,7 @@ void diskTreeComponent::internalNodes::print_tree(int xid, pageid_t pid, int64_t
       rid.slot = i;
       const indexnode_rec *nr = (const indexnode_rec*)stasis_record_read_begin(xid,node,rid);
       printf("\tchild_page_id:%lld\tkey:%s\n", nr->ptr,
-             datatuple::key_to_str((byte*)(nr+1)).c_str());
+             dataTuple::key_to_str((byte*)(nr+1)).c_str());
       stasis_record_read_done(xid, node, rid, (const byte*)nr);
     }
 
@@ -733,7 +733,7 @@ void diskTreeComponent::internalNodes::print_tree(int xid, pageid_t pid, int64_t
     rid.slot = FIRST_SLOT;
     const indexnode_rec *nr = (const indexnode_rec*)stasis_record_read_begin(xid,node,rid);
     printf("\tdata_page_id:%lld\tkey:%s\n", nr->ptr,
-           datatuple::key_to_str((byte*)(nr+1)).c_str());
+           dataTuple::key_to_str((byte*)(nr+1)).c_str());
     stasis_record_read_done(xid, node, rid, (const byte*)nr);
 
     printf("\t...\n");
@@ -741,7 +741,7 @@ void diskTreeComponent::internalNodes::print_tree(int xid, pageid_t pid, int64_t
     rid.slot= numslots - 1;
     nr = (const indexnode_rec*)stasis_record_read_begin(xid,node,rid);
     printf("\tdata_page_id:%lld\tkey:%s\n", nr->ptr,
-           datatuple::key_to_str((byte*)(nr+1)).c_str());
+           dataTuple::key_to_str((byte*)(nr+1)).c_str());
     stasis_record_read_done(xid, node, rid, (const byte*)nr);
 }
   unlock(node->rwlatch);
@@ -752,7 +752,7 @@ void diskTreeComponent::internalNodes::print_tree(int xid, pageid_t pid, int64_t
 //diskTreeComponentIterator implementation
 /////////////////////////////////////////////////
 
-diskTreeComponent::internalNodes::iterator::iterator(int xid, RegionAllocator* ro_alloc, recordid root) {
+diskTreeComponent::internalNodes::iterator::iterator(int xid, regionAllocator* ro_alloc, recordid root) {
   ro_alloc_ = ro_alloc;
   if(root.page == 0 && root.slot == 0 && root.size == -1) abort();
   p = ro_alloc_->load_page(xid,root.page);
@@ -798,7 +798,7 @@ diskTreeComponent::internalNodes::iterator::iterator(int xid, RegionAllocator* r
   if(!justOnePage) readlock(p->rwlatch,0);
 }
 
-diskTreeComponent::internalNodes::iterator::iterator(int xid, RegionAllocator* ro_alloc, recordid root, const byte* key, len_t keylen) {
+diskTreeComponent::internalNodes::iterator::iterator(int xid, regionAllocator* ro_alloc, recordid root, const byte* key, len_t keylen) {
   if(root.page == NULLRID.page && root.slot == NULLRID.slot) abort();
   ro_alloc_ = ro_alloc;
   p = ro_alloc_->load_page(xid,root.page);
@@ -917,7 +917,7 @@ void diskTreeComponent::internalNodes::iterator::close() {
 // tree iterator implementation
 /////////////////////////////////////////////////////////////////////
 
-void diskTreeComponent::iterator::init_iterators(datatuple * key1, datatuple * key2) {
+void diskTreeComponent::iterator::init_iterators(dataTuple * key1, dataTuple * key2) {
     assert(!key2); // unimplemented
     if(tree_.size == INVALID_SIZE) {
         lsmIterator_ = NULL;
@@ -931,7 +931,7 @@ void diskTreeComponent::iterator::init_iterators(datatuple * key1, datatuple * k
   }
 
 diskTreeComponent::iterator::iterator(diskTreeComponent::internalNodes *tree, mergeManager * mgr, double target_progress_delta, bool * flushing) :
-    ro_alloc_(new RegionAllocator()),
+    ro_alloc_(new regionAllocator()),
     tree_(tree ? tree->get_root_rec() : NULLRID),
     mgr_(mgr),
     target_progress_delta_(target_progress_delta),
@@ -941,8 +941,8 @@ diskTreeComponent::iterator::iterator(diskTreeComponent::internalNodes *tree, me
     init_helper(NULL);
 }
 
-diskTreeComponent::iterator::iterator(diskTreeComponent::internalNodes *tree, datatuple* key) :
-    ro_alloc_(new RegionAllocator()),
+diskTreeComponent::iterator::iterator(diskTreeComponent::internalNodes *tree, dataTuple* key) :
+    ro_alloc_(new regionAllocator()),
     tree_(tree ? tree->get_root_rec() : NULLRID),
     mgr_(NULL),
     target_progress_delta_(0.0),
@@ -965,7 +965,7 @@ diskTreeComponent::iterator::~iterator() {
   delete ro_alloc_;
 }
 
-void diskTreeComponent::iterator::init_helper(datatuple* key1)
+void diskTreeComponent::iterator::init_helper(dataTuple* key1)
 {
     if(!lsmIterator_)
     {
@@ -988,7 +988,7 @@ void diskTreeComponent::iterator::init_helper(datatuple* key1)
             lsmIterator_->value((byte**)hack);
 
             curr_pageid = *pid_tmp;
-            curr_page = new DataPage(-1, ro_alloc_, curr_pageid);
+            curr_page = new dataPage(-1, ro_alloc_, curr_pageid);
 
             DEBUG("opening datapage iterator %lld at key %s\n.", curr_pageid, key1 ? (char*)key1->key() : "NULL");
             dp_itr = new DPITR_T(curr_page, key1);
@@ -997,14 +997,14 @@ void diskTreeComponent::iterator::init_helper(datatuple* key1)
     }
 }
 
-datatuple * diskTreeComponent::iterator::next_callerFrees()
+dataTuple * diskTreeComponent::iterator::next_callerFrees()
 {
     if(!this->lsmIterator_) { return NULL; }
 
     if(dp_itr == 0)
         return 0;
 
-    datatuple* readTuple = dp_itr->getnext();
+    dataTuple* readTuple = dp_itr->getnext();
 
 
     if(!readTuple)
@@ -1022,7 +1022,7 @@ datatuple * diskTreeComponent::iterator::next_callerFrees()
             size_t ret = lsmIterator_->value((byte**)hack);
             assert(ret == sizeof(pageid_t));
             curr_pageid = *pid_tmp;
-            curr_page = new DataPage(-1, ro_alloc_, curr_pageid);
+            curr_page = new dataPage(-1, ro_alloc_, curr_pageid);
             DEBUG("opening datapage iterator %lld at beginning\n.", curr_pageid);
             dp_itr = new DPITR_T(curr_page->begin());
 

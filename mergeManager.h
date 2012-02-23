@@ -27,7 +27,7 @@
 #include <stdio.h>
 #include <datatuple.h>
 
-class blsm;
+class bLSM;
 class mergeStats;
 
 class mergeManager {
@@ -48,8 +48,8 @@ public:
   uint64_t long_tv(struct timeval& tv) {
     return (1000000ULL * (uint64_t)tv.tv_sec) + ((uint64_t)tv.tv_usec);
   }
-  mergeManager(blsm *ltable);
-  mergeManager(blsm *ltable, int xid, recordid rid);
+  mergeManager(bLSM *ltable);
+  mergeManager(bLSM *ltable, int xid, recordid rid);
   void marshal(int xid, recordid rid);
   recordid talloc(int xid);
   ~mergeManager();
@@ -62,14 +62,14 @@ public:
 
   void tick(mergeStats * s);
   mergeStats* get_merge_stats(int mergeLevel);
-  void read_tuple_from_small_component(int merge_level, datatuple * tup);
-  void read_tuple_from_large_component(int merge_level, datatuple * tup) {
+  void read_tuple_from_small_component(int merge_level, dataTuple * tup);
+  void read_tuple_from_large_component(int merge_level, dataTuple * tup) {
     if(tup)
       read_tuple_from_large_component(merge_level, 1, tup->byte_length());
   }
   void read_tuple_from_large_component(int merge_level, int tuple_count, pageid_t byte_len);
 
-  void wrote_tuple(int merge_level, datatuple * tup);
+  void wrote_tuple(int merge_level, dataTuple * tup);
   void pretty_print(FILE * out);
   void *pretty_print_thread();
   void *update_progress_thread();
@@ -106,7 +106,7 @@ private:
    *
    * TODO: remove mergeManager->ltable?
    */
-  blsm*    ltable;
+  bLSM*    ltable;
   mergeStats * c0;   /// Per-tree component statistics for c0 and c0_mergeable (the latter should always be null...)
   mergeStats * c1;   /// Per-tree component statistics for c1 and c1_mergeable.
   mergeStats * c2;   /// Per-tree component statistics for c2.

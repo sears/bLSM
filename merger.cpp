@@ -22,27 +22,27 @@
 #include <stasis/transactional.h>
 
 static void* memMerge_thr(void* arg) {
-  return ((merge_scheduler*)arg)->memMergeThread();
+  return ((mergeScheduler*)arg)->memMergeThread();
 }
 static void* diskMerge_thr(void* arg) {
-  return ((merge_scheduler*)arg)->diskMergeThread();
+  return ((mergeScheduler*)arg)->diskMergeThread();
 }
 
-merge_scheduler::merge_scheduler(blsm *ltable) : ltable_(ltable), MIN_R(3.0) { }
-merge_scheduler::~merge_scheduler() { }
+mergeScheduler::mergeScheduler(bLSM *ltable) : ltable_(ltable), MIN_R(3.0) { }
+mergeScheduler::~mergeScheduler() { }
 
-void merge_scheduler::shutdown() {
+void mergeScheduler::shutdown() {
   ltable_->stop();
   pthread_join(mem_merge_thread_,  0);
   pthread_join(disk_merge_thread_, 0);
 }
 
-void merge_scheduler::start() {
+void mergeScheduler::start() {
   pthread_create(&mem_merge_thread_,  0, memMerge_thr,  this);
   pthread_create(&disk_merge_thread_, 0, diskMerge_thr, this);
 }
 
-bool insert_filter(blsm * ltable, datatuple * t, bool dropDeletes) {
+bool insert_filter(bLSM * ltable, dataTuple * t, bool dropDeletes) {
   if(t->isDelete()) {
     if(dropDeletes || ! ltable->mightBeAfterMemMerge(t)) {
       return false;
@@ -57,7 +57,7 @@ template <class ITA, class ITB>
 void merge_iterators(int xid, diskTreeComponent * forceMe,
                     ITA *itrA,
                     ITB *itrB,
-                    blsm *ltable,
+                    bLSM *ltable,
                     diskTreeComponent *scratch_tree,
                     mergeStats * stats,
                     bool dropDeletes);
@@ -84,7 +84,7 @@ void merge_iterators(int xid, diskTreeComponent * forceMe,
   </pre>
      Merge algorithm: actual order: 1 2 3 4 5 6 12 11.5 11 [7 8 (9) 10] 13
  */
-void * merge_scheduler::memMergeThread() {
+void * mergeScheduler::memMergeThread() {
 
     int xid;
 
@@ -240,7 +240,7 @@ void * merge_scheduler::memMergeThread() {
 }
 
 
-void * merge_scheduler::diskMergeThread()
+void * mergeScheduler::diskMergeThread()
 {
     int xid;
 
@@ -355,11 +355,11 @@ static void periodically_force(int xid, int *i, diskTreeComponent * forceMe, sta
   }
 }
 
-static int garbage_collect(blsm * ltable_, datatuple ** garbage, int garbage_len, int next_garbage, bool force = false) {
+static int garbage_collect(bLSM * ltable_, dataTuple ** garbage, int garbage_len, int next_garbage, bool force = false) {
   if(next_garbage == garbage_len || force) {
     pthread_mutex_lock(&ltable_->rb_mut);
     for(int i = 0; i < next_garbage; i++) {
-      datatuple * t2tmp = NULL;
+      dataTuple * t2tmp = NULL;
       {
       memTreeComponent::rbtree_t::iterator rbitr = ltable_->get_tree_c0()->find(garbage[i]);
         if(rbitr != ltable_->get_tree_c0()->end()) {
@@ -375,9 +375,9 @@ static int garbage_collect(blsm * ltable_, datatuple ** garbage, int garbage_len
       if(t2tmp) {
         ltable_->get_tree_c0()->erase(garbage[i]);
         //ltable_->merge_mgr->get_merge_stats(0)->current_size -= garbage[i]->byte_length();
-        datatuple::freetuple(t2tmp);
+        dataTuple::freetuple(t2tmp);
       }
-      datatuple::freetuple(garbage[i]);
+      dataTuple::freetuple(garbage[i]);
     }
     pthread_mutex_unlock(&ltable_->rb_mut);
     return 0;
@@ -391,20 +391,20 @@ void merge_iterators(int xid,
                         diskTreeComponent * forceMe,
                         ITA *itrA, //iterator on c1 or c2
                         ITB *itrB, //iterator on c0 or c1, respectively
-                        blsm *ltable,
+                        bLSM *ltable,
                         diskTreeComponent *scratch_tree, mergeStats * stats,
                         bool dropDeletes  // should be true iff this is biggest component
                         )
 {
   stasis_log_t * log = (stasis_log_t*)stasis_log();
 
-    datatuple *t1 = itrA->next_callerFrees();
+    dataTuple *t1 = itrA->next_callerFrees();
     ltable->merge_mgr->read_tuple_from_large_component(stats->merge_level, t1);
-    datatuple *t2 = 0;
+    dataTuple *t2 = 0;
 
     int garbage_len = 100;
     int next_garbage = 0;
-    datatuple ** garbage = (datatuple**)malloc(sizeof(garbage[0]) * garbage_len);
+    dataTuple ** garbage = (dataTuple**)malloc(sizeof(garbage[0]) * garbage_len);
 
     int i = 0;
 
@@ -415,7 +415,7 @@ void merge_iterators(int xid,
         DEBUG("tuple\t%lld: keylen %d datalen %d\n",
                ntuples, *(t2->keylen),*(t2->datalen) );
 
-        while(t1 != 0 && datatuple::compare(t1->rawkey(), t1->rawkeylen(), t2->rawkey(), t2->rawkeylen()) < 0) // t1 is less than t2
+        while(t1 != 0 && dataTuple::compare(t1->rawkey(), t1->rawkeylen(), t2->rawkey(), t2->rawkeylen()) < 0) // t1 is less than t2
         {
             //insert t1
             if(insert_filter(ltable, t1, dropDeletes)) {
@@ -423,7 +423,7 @@ void merge_iterators(int xid,
               i+=t1->byte_length();
               ltable->merge_mgr->wrote_tuple(stats->merge_level, t1);
             }
-            datatuple::freetuple(t1);
+            dataTuple::freetuple(t1);
 
             //advance itrA
             t1 = itrA->next_callerFrees();
@@ -432,9 +432,9 @@ void merge_iterators(int xid,
             periodically_force(xid, &i, forceMe, log);
         }
 
-        if(t1 != 0 && datatuple::compare(t1->strippedkey(), t1->strippedkeylen(), t2->strippedkey(), t2->strippedkeylen()) == 0)
+        if(t1 != 0 && dataTuple::compare(t1->strippedkey(), t1->strippedkeylen(), t2->strippedkey(), t2->strippedkeylen()) == 0)
         {
-            datatuple *mtuple = ltable->gettuplemerger()->merge(t1,t2);
+            dataTuple *mtuple = ltable->gettuplemerger()->merge(t1,t2);
             stats->merged_tuples(mtuple, t2, t1); // this looks backwards, but is right.
 
             //insert merged tuple, drop deletes
@@ -443,10 +443,10 @@ void merge_iterators(int xid,
               i+=mtuple->byte_length();
               ltable->merge_mgr->wrote_tuple(stats->merge_level, mtuple);
             }
-            datatuple::freetuple(t1);
+            dataTuple::freetuple(t1);
             t1 = itrA->next_callerFrees();  //advance itrA
             ltable->merge_mgr->read_tuple_from_large_component(stats->merge_level, t1);
-            datatuple::freetuple(mtuple);
+            dataTuple::freetuple(mtuple);
             periodically_force(xid, &i, forceMe, log);
         }
         else
@@ -469,7 +469,7 @@ void merge_iterators(int xid,
           next_garbage++;
         }
         if(stats->merge_level != 1) {
-          datatuple::freetuple(t2);
+          dataTuple::freetuple(t2);
         }
 
     }
@@ -480,7 +480,7 @@ void merge_iterators(int xid,
         ltable->merge_mgr->wrote_tuple(stats->merge_level, t1);
         i += t1->byte_length();
       }
-      datatuple::freetuple(t1);
+      dataTuple::freetuple(t1);
 
       //advance itrA
       t1 = itrA->next_callerFrees();

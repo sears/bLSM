@@ -22,23 +22,23 @@
 #include "regionAllocator.h"
 
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_insert(blsm * ltable, HANDLE fd, datatuple * tuple) {
+inline int requestDispatch<HANDLE>::op_insert(bLSM * ltable, HANDLE fd, dataTuple * tuple) {
     //insert/update/delete
     ltable->insertTuple(tuple);
     //step 4: send response
     return writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_test_and_set(blsm * ltable, HANDLE fd, datatuple * tuple, datatuple * tuple2) {
+inline int requestDispatch<HANDLE>::op_test_and_set(bLSM * ltable, HANDLE fd, dataTuple * tuple, dataTuple * tuple2) {
     //insert/update/delete
     bool succ = ltable->testAndSetTuple(tuple, tuple2);
     //step 4: send response
     return writeoptosocket(fd, succ ? LOGSTORE_RESPONSE_SUCCESS : LOGSTORE_RESPONSE_FAIL);
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_bulk_insert(blsm *ltable, HANDLE fd) {
+inline int requestDispatch<HANDLE>::op_bulk_insert(bLSM *ltable, HANDLE fd) {
   int err = writeoptosocket(fd, LOGSTORE_RESPONSE_RECEIVING_TUPLES);
-  datatuple ** tups = (datatuple **) malloc(sizeof(tups[0]) * 100);
+  dataTuple ** tups = (dataTuple **) malloc(sizeof(tups[0]) * 100);
   int tups_size = 100;
   int cur_tup_count = 0;
   while((tups[cur_tup_count] = readtuplefromsocket(fd, &err))) {
@@ -46,34 +46,34 @@ inline int requestDispatch<HANDLE>::op_bulk_insert(blsm *ltable, HANDLE fd) {
     if(cur_tup_count == tups_size) {
       ltable->insertManyTuples(tups, cur_tup_count);
       for(int i = 0; i < cur_tup_count; i++) {
-        datatuple::freetuple(tups[i]);
+        dataTuple::freetuple(tups[i]);
       }
       cur_tup_count = 0;
     }
   }
   ltable->insertManyTuples(tups, cur_tup_count);
   for(int i = 0; i < cur_tup_count; i++) {
-    datatuple::freetuple(tups[i]);
+    dataTuple::freetuple(tups[i]);
   }
   free(tups);
   if(!err) err = writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
   return err;
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_find(blsm * ltable, HANDLE fd, datatuple * tuple) {
+inline int requestDispatch<HANDLE>::op_find(bLSM * ltable, HANDLE fd, dataTuple * tuple) {
     //find the tuple
-    datatuple *dt = ltable->findTuple_first(-1, tuple->strippedkey(), tuple->strippedkeylen());
+    dataTuple *dt = ltable->findTuple_first(-1, tuple->strippedkey(), tuple->strippedkeylen());
 
     #ifdef STATS_ENABLED
 
     if(dt == 0) {
-        DEBUG("key not found:\t%s\n", datatuple::key_to_str(tuple.key()).c_str());
+        DEBUG("key not found:\t%s\n", dataTuple::key_to_str(tuple.key()).c_str());
     } else if( dt->datalen() != 1024) {
-        DEBUG("data len for\t%s:\t%d\n", datatuple::key_to_str(tuple.key()).c_str(),
+        DEBUG("data len for\t%s:\t%d\n", dataTuple::key_to_str(tuple.key()).c_str(),
                dt->datalen);
-        if(datatuple::compare(tuple->key(), tuple->keylen(), dt->key(), dt->keylen()) != 0) {
-            DEBUG("key not equal:\t%s\t%s\n", datatuple::key_to_str(tuple.key()).c_str(),
-                   datatuple::key_to_str(dt->key).c_str());
+        if(dataTuple::compare(tuple->key(), tuple->keylen(), dt->key(), dt->keylen()) != 0) {
+            DEBUG("key not equal:\t%s\t%s\n", dataTuple::key_to_str(tuple.key()).c_str(),
+                   dataTuple::key_to_str(dt->key).c_str());
         }
 
     }
@@ -100,27 +100,27 @@ inline int requestDispatch<HANDLE>::op_find(blsm * ltable, HANDLE fd, datatuple 
     }
     //free datatuple
     if(dt_needs_free) {
-        datatuple::freetuple(dt);
+        dataTuple::freetuple(dt);
     }
     return err;
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_scan(blsm * ltable, HANDLE fd, datatuple * tuple, datatuple * tuple2, size_t limit) {
+inline int requestDispatch<HANDLE>::op_scan(bLSM * ltable, HANDLE fd, dataTuple * tuple, dataTuple * tuple2, size_t limit) {
     size_t count = 0;
     int err = writeoptosocket(fd, LOGSTORE_RESPONSE_SENDING_TUPLES);
 
     if(!err) {
-        blsm::iterator * itr = new blsm::iterator(ltable, tuple);
-        datatuple * t;
+        bLSM::iterator * itr = new bLSM::iterator(ltable, tuple);
+        dataTuple * t;
         while(!err && (t = itr->getnext())) {
             if(tuple2) {  // are we at the end of range?
-                if(datatuple::compare_obj(t, tuple2) >= 0) {
-                    datatuple::freetuple(t);
+                if(dataTuple::compare_obj(t, tuple2) >= 0) {
+                    dataTuple::freetuple(t);
                     break;
                 }
             }
             err = writetupletosocket(fd, t);
-            datatuple::freetuple(t);
+            dataTuple::freetuple(t);
             count ++;
             if(count == limit) { break; }  // did we hit limit?
         }
@@ -130,17 +130,17 @@ inline int requestDispatch<HANDLE>::op_scan(blsm * ltable, HANDLE fd, datatuple 
     return err;
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_flush(blsm * ltable, HANDLE fd) {
+inline int requestDispatch<HANDLE>::op_flush(bLSM * ltable, HANDLE fd) {
     ltable->flushTable();
     return writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_shutdown(blsm * ltable, HANDLE fd) {
+inline int requestDispatch<HANDLE>::op_shutdown(bLSM * ltable, HANDLE fd) {
     ltable->accepting_new_requests = false;
     return writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_stat_space_usage(blsm * ltable, HANDLE fd) {
+inline int requestDispatch<HANDLE>::op_stat_space_usage(bLSM * ltable, HANDLE fd) {
 
 
     int xid = Tbegin();
@@ -223,7 +223,7 @@ inline int requestDispatch<HANDLE>::op_stat_space_usage(blsm * ltable, HANDLE fd
     Tcommit(xid);
 
     uint64_t filesize = max_off * PAGE_SIZE;
-    datatuple *tup = datatuple::create(&treesize, sizeof(treesize), &filesize, sizeof(filesize));
+    dataTuple *tup = dataTuple::create(&treesize, sizeof(treesize), &filesize, sizeof(filesize));
 
     DEBUG("tree size: %lld, filesize %lld\n", treesize, filesize);
 
@@ -233,25 +233,25 @@ inline int requestDispatch<HANDLE>::op_stat_space_usage(blsm * ltable, HANDLE fd
     if(!err){ err = writeendofiteratortosocket(fd);                        }
 
 
-    datatuple::freetuple(tup);
+    dataTuple::freetuple(tup);
 
     return err;
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_stat_perf_report(blsm * ltable, HANDLE fd) {
+inline int requestDispatch<HANDLE>::op_stat_perf_report(bLSM * ltable, HANDLE fd) {
 
 }
 
 
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_stat_histogram(blsm * ltable, HANDLE fd, size_t limit) {
+inline int requestDispatch<HANDLE>::op_stat_histogram(bLSM * ltable, HANDLE fd, size_t limit) {
 
     if(limit < 3) {
         return writeoptosocket(fd, LOGSTORE_PROTOCOL_ERROR);
     }
 
     int xid = Tbegin();
-    RegionAllocator * ro_alloc = new RegionAllocator();
+    regionAllocator * ro_alloc = new regionAllocator();
     diskTreeComponent::internalNodes::iterator * it = new diskTreeComponent::internalNodes::iterator(xid, ro_alloc, ltable->get_tree_c2()->get_root_rid());
     size_t count = 0;
     int err = 0;
@@ -269,12 +269,12 @@ inline int requestDispatch<HANDLE>::op_stat_histogram(blsm * ltable, HANDLE fd, 
         stride = 1;
     }
 
-    datatuple * tup = datatuple::create(&stride, sizeof(stride));
+    dataTuple * tup = dataTuple::create(&stride, sizeof(stride));
 
     if(!err) { err = writeoptosocket(fd, LOGSTORE_RESPONSE_SENDING_TUPLES); }
     if(!err) { err = writetupletosocket(fd, tup);                           }
 
-    datatuple::freetuple(tup);
+    dataTuple::freetuple(tup);
 
     size_t cur_stride = 0;
     size_t i = 0;
@@ -284,11 +284,11 @@ inline int requestDispatch<HANDLE>::op_stat_histogram(blsm * ltable, HANDLE fd, 
         if(i == count || !cur_stride) {  // do we want to send this key? (this matches the first, last and interior keys)
             byte * key;
             size_t keylen= it->key(&key);
-            tup = datatuple::create(key, keylen);
+            tup = dataTuple::create(key, keylen);
 
             if(!err) { err = writetupletosocket(fd, tup);                   }
 
-            datatuple::freetuple(tup);
+            dataTuple::freetuple(tup);
             cur_stride = stride;
         }
         cur_stride--;
@@ -302,7 +302,7 @@ inline int requestDispatch<HANDLE>::op_stat_histogram(blsm * ltable, HANDLE fd, 
     return err;
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_dbg_blockmap(blsm * ltable, HANDLE fd) {
+inline int requestDispatch<HANDLE>::op_dbg_blockmap(bLSM * ltable, HANDLE fd) {
     // produce a list of stasis regions
     int xid = Tbegin();
 
@@ -406,9 +406,9 @@ inline int requestDispatch<HANDLE>::op_dbg_blockmap(blsm * ltable, HANDLE fd) {
 }
 
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_dbg_drop_database(blsm * ltable, HANDLE fd) {
-    blsm::iterator * itr = new blsm::iterator(ltable);
-    datatuple * del;
+inline int requestDispatch<HANDLE>::op_dbg_drop_database(bLSM * ltable, HANDLE fd) {
+    bLSM::iterator * itr = new bLSM::iterator(ltable);
+    dataTuple * del;
     fprintf(stderr, "DROPPING DATABASE...\n");
     long long n = 0;
     while((del = itr->getnext())) {
@@ -425,18 +425,18 @@ inline int requestDispatch<HANDLE>::op_dbg_drop_database(blsm * ltable, HANDLE f
           printf("? %lld %s\n", n, (char*)del->rawkey()); fflush(stdout);
         }
       }
-      datatuple::freetuple(del);
+      dataTuple::freetuple(del);
     }
     delete itr;
     fprintf(stderr, "...DROP DATABASE COMPLETE\n");
     return writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_dbg_noop(blsm * ltable, HANDLE fd) {
+inline int requestDispatch<HANDLE>::op_dbg_noop(bLSM * ltable, HANDLE fd) {
   return writeoptosocket(fd, LOGSTORE_RESPONSE_SUCCESS);
 }
 template<class HANDLE>
-inline int requestDispatch<HANDLE>::op_dbg_set_log_mode(blsm * ltable, HANDLE fd, datatuple * tuple) {
+inline int requestDispatch<HANDLE>::op_dbg_set_log_mode(bLSM * ltable, HANDLE fd, dataTuple * tuple) {
   if(tuple->rawkeylen() != sizeof(int)) {
 	  abort();
 	  return writeoptosocket(fd, LOGSTORE_PROTOCOL_ERROR);
@@ -448,7 +448,7 @@ inline int requestDispatch<HANDLE>::op_dbg_set_log_mode(blsm * ltable, HANDLE fd
   }
 }
 template<class HANDLE>
-int requestDispatch<HANDLE>::dispatch_request(HANDLE f, blsm *ltable) {
+int requestDispatch<HANDLE>::dispatch_request(HANDLE f, bLSM *ltable) {
   //step 1: read the opcode
   network_op_t opcode = readopfromsocket(f, LOGSTORE_CLIENT_REQUEST);
   if(opcode == LOGSTORE_CONN_CLOSED_ERROR) {
@@ -459,7 +459,7 @@ int requestDispatch<HANDLE>::dispatch_request(HANDLE f, blsm *ltable) {
   int err = opcode == OP_DONE || opiserror(opcode); //close the conn on failure
 
   //step 2: read the first tuple from client
-  datatuple *tuple = 0, *tuple2 = 0;
+  dataTuple *tuple = 0, *tuple2 = 0;
   if(!err) { tuple  = readtuplefromsocket(f, &err); }
   //        read the second tuple from client
   if(!err) { tuple2 = readtuplefromsocket(f, &err); }
@@ -468,8 +468,8 @@ int requestDispatch<HANDLE>::dispatch_request(HANDLE f, blsm *ltable) {
   if(!err) { err = dispatch_request(opcode, tuple, tuple2, ltable, f); }
 
   //free the tuple
-  if(tuple)  datatuple::freetuple(tuple);
-  if(tuple2) datatuple::freetuple(tuple2);
+  if(tuple)  dataTuple::freetuple(tuple);
+  if(tuple2) dataTuple::freetuple(tuple2);
 
   // Deal with old work_queue item by freeing it or putting it back in the queue.
 
@@ -485,7 +485,7 @@ int requestDispatch<HANDLE>::dispatch_request(HANDLE f, blsm *ltable) {
 
 }
 template<class HANDLE>
-int requestDispatch<HANDLE>::dispatch_request(network_op_t opcode, datatuple * tuple, datatuple * tuple2, blsm * ltable, HANDLE fd) {
+int requestDispatch<HANDLE>::dispatch_request(network_op_t opcode, dataTuple * tuple, dataTuple * tuple2, bLSM * ltable, HANDLE fd) {
     int err = 0;
 #if 0
     if(tuple) {

@@ -46,7 +46,7 @@ void insertWithConcurrentReads(size_t NUM_ENTRIES) {
 
   sync();
 
-  blsm::init_stasis();
+  bLSM::init_stasis();
 
   int xid = Tbegin();
 
@@ -67,13 +67,13 @@ void insertWithConcurrentReads(size_t NUM_ENTRIES) {
   if(data_arr.size() > NUM_ENTRIES)
       data_arr.erase(data_arr.begin()+NUM_ENTRIES, data_arr.end());
 
-  RegionAllocator * alloc = new RegionAllocator(xid, 10000); // ~ 10 datapages per region.
+  regionAllocator * alloc = new regionAllocator(xid, 10000); // ~ 10 datapages per region.
 
   printf("Stage 1: Writing %llu keys\n", (unsigned long long)NUM_ENTRIES);
 
   int pcount = 1000;
   int dpages = 0;
-  DataPage *dp=0;
+  dataPage *dp=0;
   int64_t datasize = 0;
   std::vector<pageid_t> dsp;
   size_t last_i = 0;
@@ -81,7 +81,7 @@ void insertWithConcurrentReads(size_t NUM_ENTRIES) {
   for(size_t i = 0; i < NUM_ENTRIES; i++)
   {
       //prepare the key
-      datatuple *newtuple = datatuple::create(key_arr[i].c_str(), key_arr[i].length()+1, data_arr[i].c_str(), data_arr[i].length()+1);
+      dataTuple *newtuple = dataTuple::create(key_arr[i].c_str(), key_arr[i].length()+1, data_arr[i].c_str(), data_arr[i].length()+1);
 
       datasize += newtuple->byte_length();
       if(dp==NULL || !dp->append(newtuple))
@@ -98,9 +98,9 @@ void insertWithConcurrentReads(size_t NUM_ENTRIES) {
           delete alloc;
           Tcommit(xid);
           xid = Tbegin();
-          alloc = new RegionAllocator(xid, 10000);
+          alloc = new regionAllocator(xid, 10000);
 
-          dp = new DataPage(xid, pcount, alloc);
+          dp = new dataPage(xid, pcount, alloc);
 //          printf("%lld\n", dp->get_start_pid());
           bool succ = dp->append(newtuple);
           assert(succ);
@@ -111,13 +111,13 @@ void insertWithConcurrentReads(size_t NUM_ENTRIES) {
       if(j >= key_arr.size()) { j = key_arr.size()-1; }
       bool found = 0;
       {
-        DataPage::iterator it = dp->begin();
-        datatuple * dt;
+        dataPage::iterator it = dp->begin();
+        dataTuple * dt;
         while((dt = it.getnext()) != NULL) {
           if(!strcmp((char*)dt->rawkey(), key_arr[j].c_str())) {
             found = true;
           }
-          datatuple::freetuple(dt);
+          dataTuple::freetuple(dt);
         }
       }
       if(found) {
@@ -140,7 +140,7 @@ void insertWithConcurrentReads(size_t NUM_ENTRIES) {
   printf("Writes complete.\n");
   Tcommit(xid);
 
-  blsm::deinit_stasis();
+  bLSM::deinit_stasis();
 }
 
 void insertProbeIter(size_t NUM_ENTRIES)
@@ -151,7 +151,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     sync();
 
-    blsm::init_stasis();
+    bLSM::init_stasis();
 
     int xid = Tbegin();
 
@@ -171,7 +171,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     if(data_arr.size() > NUM_ENTRIES)
         data_arr.erase(data_arr.begin()+NUM_ENTRIES, data_arr.end());
 
-    RegionAllocator * alloc = new RegionAllocator(xid, 10000); // ~ 10 datapages per region.
+    regionAllocator * alloc = new regionAllocator(xid, 10000); // ~ 10 datapages per region.
 
     printf("Stage 1: Writing %llu keys\n", (unsigned long long)NUM_ENTRIES);
     struct timeval start, stop;
@@ -181,13 +181,13 @@ void insertProbeIter(size_t NUM_ENTRIES)
       
     int pcount = 1000;
     int dpages = 0;
-    DataPage *dp=0;
+    dataPage *dp=0;
     int64_t datasize = 0;
     std::vector<pageid_t> dsp;
     for(size_t i = 0; i < NUM_ENTRIES; i++)
     {
         //prepare the key
-        datatuple *newtuple = datatuple::create(key_arr[i].c_str(), key_arr[i].length()+1, data_arr[i].c_str(), data_arr[i].length()+1);
+        dataTuple *newtuple = dataTuple::create(key_arr[i].c_str(), key_arr[i].length()+1, data_arr[i].c_str(), data_arr[i].length()+1);
 
         datasize += newtuple->byte_length();
         if(dp==NULL || !dp->append(newtuple))
@@ -197,7 +197,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
                 dp->writes_done();
                 delete dp;
 
-            dp = new DataPage(xid, pcount, alloc);
+            dp = new dataPage(xid, pcount, alloc);
 
 			bool succ = dp->append(newtuple);
 			assert(succ);
@@ -228,15 +228,15 @@ void insertProbeIter(size_t NUM_ENTRIES)
     int tuplenum = 0;
     for(int i = 0; i < dpages ; i++)
     {
-        DataPage dp(xid, 0, dsp[i]);
-        DataPage::iterator itr = dp.begin();
-        datatuple *dt=0;
+        dataPage dp(xid, 0, dsp[i]);
+        dataPage::iterator itr = dp.begin();
+        dataTuple *dt=0;
         while( (dt=itr.getnext()) != NULL)
             {
                 assert(dt->rawkeylen() == key_arr[tuplenum].length()+1);
                 assert(dt->datalen() == data_arr[tuplenum].length()+1);
                 tuplenum++;
-                datatuple::freetuple(dt);
+                dataTuple::freetuple(dt);
                 dt = 0;
             }
 
@@ -246,7 +246,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
   
 	Tcommit(xid);
 
-	blsm::deinit_stasis();
+	bLSM::deinit_stasis();
 }
 
 

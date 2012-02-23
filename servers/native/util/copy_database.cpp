@@ -53,7 +53,7 @@ int main(int argc, char * argv[]) {
   }
   long long num_tuples = 0;
   long long size_copied = 0;
-  datatuple *tup;
+  dataTuple *tup;
 
   int bytes_per_dot = 10 * 1024 * 1024;
   int dots_per_line = 50;
@@ -66,7 +66,7 @@ int main(int argc, char * argv[]) {
     ret = logstore_client_send_tuple(to, tup);
     num_tuples ++;
     size_copied += tup->byte_length();
-    datatuple::freetuple(tup);
+    dataTuple::freetuple(tup);
     if(ret != LOGSTORE_RESPONSE_SUCCESS) {
       perror("Send tuple failed"); return 3;
     }

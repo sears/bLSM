@@ -25,15 +25,11 @@
 
 #include "diskTreeComponent.h"
 #include "memTreeComponent.h"
-
 #include "tuplemerger.h"
-
 #include "mergeManager.h"
 #include "mergeStats.h"
 
-class logtable_mergedata;
-
-class blsm {
+class bLSM {
 public:
 
   class iterator;
@@ -49,28 +45,28 @@ public:
   //  6GB ~= 100B * 500 GB / (datapage_size * 4KB)
   //  (100B * 500GB) / (6GB * 4KB) = 2.035
   // RCS: Set this to 1 so that we do (on average) one seek per b-tree read.
-  blsm(int log_mode = 0, pageid_t max_c0_size = 100 * 1024 * 1024, pageid_t internal_region_size = 1000, pageid_t datapage_region_size = 10000, pageid_t datapage_size = 1);
+  bLSM(int log_mode = 0, pageid_t max_c0_size = 100 * 1024 * 1024, pageid_t internal_region_size = 1000, pageid_t datapage_region_size = 10000, pageid_t datapage_size = 1);
 
-    ~blsm();
+    ~bLSM();
 
     double * R() { return &r_val; }
 
     //user access functions
-    datatuple * findTuple(int xid, const datatuple::key_t key, size_t keySize);
+    dataTuple * findTuple(int xid, const dataTuple::key_t key, size_t keySize);
 
-    datatuple * findTuple_first(int xid, datatuple::key_t key, size_t keySize);
+    dataTuple * findTuple_first(int xid, dataTuple::key_t key, size_t keySize);
 
 private:
-    datatuple * insertTupleHelper(datatuple *tuple);
+    dataTuple * insertTupleHelper(dataTuple *tuple);
 public:
-    void insertManyTuples(struct datatuple **tuples, int tuple_count);
-    void insertTuple(struct datatuple *tuple);
+    void insertManyTuples(struct dataTuple **tuples, int tuple_count);
+    void insertTuple(struct dataTuple *tuple);
     /** This test and set has strange semantics on two fronts:
      *
      * 1) It is not atomic with respect to non-testAndSet operations (which is fine in theory, since they have no barrier semantics, and we don't have a use case to support the extra overhead)
      * 2) If tuple2 is not null, it looks at tuple2's key instead of tuple's key.  This means you can atomically set the value of one key based on the value of another (if you want to...)
      */
-    bool testAndSetTuple(struct datatuple *tuple, struct datatuple *tuple2);
+    bool testAndSetTuple(struct dataTuple *tuple, struct dataTuple *tuple2);
 
     //other class functions
     recordid allocTable(int xid);
@@ -78,7 +74,7 @@ public:
     void flushTable();    
 
     void replayLog();
-    void logUpdate(datatuple * tup);
+    void logUpdate(dataTuple * tup);
 
     static void init_stasis();
     static void deinit_stasis();
@@ -115,7 +111,7 @@ public:
 
     void update_persistent_header(int xid, lsn_t log_trunc = INVALID_LSN);
 
-    inline tuplemerger * gettuplemerger(){return tmerger;}
+    inline tupleMerger * gettuplemerger(){return tmerger;}
     
 public:
 
@@ -183,14 +179,14 @@ public:
     pageid_t datapage_region_size; // "
     pageid_t datapage_size;        // "
 private:
-    tuplemerger *tmerger;
+    tupleMerger *tmerger;
 
     std::vector<iterator *> its;
 
 public:
     bool shutting_down_;
 
-    bool mightBeOnDisk(datatuple * t) {
+    bool mightBeOnDisk(dataTuple * t) {
       if(tree_c1) {
         if(!tree_c1->bloom_filter) { DEBUG("no c1 bloom filter\n"); return true; }
         if(bloom_filter_lookup(tree_c1->bloom_filter,           (const char*)t->strippedkey(), t->strippedkeylen())) { DEBUG("in c1\n"); return true; }
@@ -202,7 +198,7 @@ public:
       return mightBeAfterMemMerge(t);
     }
 
-    bool mightBeAfterMemMerge(datatuple * t) {
+    bool mightBeAfterMemMerge(dataTuple * t) {
 
       if(tree_c1_mergeable) {
         if(!tree_c1_mergeable->bloom_filter) { DEBUG("no c1m bloom filter\n"); return true; }
@@ -220,11 +216,11 @@ public:
     template<class ITRA, class ITRN>
     class mergeManyIterator {
     public:
-      explicit mergeManyIterator(ITRA* a, ITRN** iters, int num_iters, datatuple*(*merge)(const datatuple*,const datatuple*), int (*cmp)(const datatuple*,const datatuple*)) :
+      explicit mergeManyIterator(ITRA* a, ITRN** iters, int num_iters, dataTuple*(*merge)(const dataTuple*,const dataTuple*), int (*cmp)(const dataTuple*,const dataTuple*)) :
         num_iters_(num_iters+1),
         first_iter_(a),
         iters_((ITRN**)malloc(sizeof(*iters_) * num_iters)),          // exactly the number passed in
-        current_((datatuple**)malloc(sizeof(*current_) * (num_iters_))),  // one more than was passed in
+        current_((dataTuple**)malloc(sizeof(*current_) * (num_iters_))),  // one more than was passed in
         last_iter_(-1),
         cmp_(cmp),
         merge_(merge),
@@ -240,7 +236,7 @@ public:
         delete(first_iter_);
         for(int i = 0; i < num_iters_; i++) {
             if(i != last_iter_) {
-                if(current_[i]) datatuple::freetuple(current_[i]);
+                if(current_[i]) dataTuple::freetuple(current_[i]);
             }
         }
         for(int i = 1; i < num_iters_; i++) {
@@ -250,12 +246,12 @@ public:
         free(iters_);
         free(dups);
       }
-      datatuple * peek() {
-          datatuple * ret = next_callerFrees();
+      dataTuple * peek() {
+          dataTuple * ret = next_callerFrees();
           last_iter_ = -1; // don't advance iterator on next peek() or getnext() call.
           return ret;
       }
-      datatuple * next_callerFrees() {
+      dataTuple * next_callerFrees() {
         int num_dups = 0;
         if(last_iter_ != -1) {
           // get the value after the one we just returned to the user
@@ -287,7 +283,7 @@ public:
             }
           }
         }
-        datatuple * ret;
+        dataTuple * ret;
         if(!merge_) {
             ret = current_[min];
         } else {
@@ -296,7 +292,7 @@ public:
         }
         // advance the iterators that match the tuple we're returning.
         for(int i = 0; i < num_dups; i++) {
-            datatuple::freetuple(current_[dups[i]]); // should never be null
+            dataTuple::freetuple(current_[dups[i]]); // should never be null
             current_[dups[i]] = iters_[dups[i]-1]->next_callerFrees();
         }
         last_iter_ = min; // mark the min iter to be advance at the next invocation of next().  This saves us a copy in the non-merging case.
@@ -307,12 +303,12 @@ public:
       int      num_iters_;
       ITRA  *  first_iter_;
       ITRN  ** iters_;
-      datatuple ** current_;
+      dataTuple ** current_;
       int      last_iter_;
 
 
-      int  (*cmp_)(const datatuple*,const datatuple*);
-      datatuple*(*merge_)(const datatuple*,const datatuple*);
+      int  (*cmp_)(const dataTuple*,const dataTuple*);
+      dataTuple*(*merge_)(const dataTuple*,const dataTuple*);
 
       // temporary variables initiaized once for effiency
       int * dups;
@@ -322,7 +318,7 @@ public:
 
     class iterator {
   public:
-      explicit iterator(blsm* ltable)
+      explicit iterator(bLSM* ltable)
       : ltable(ltable),
         epoch(ltable->get_epoch()),
         merge_it_(NULL),
@@ -338,7 +334,7 @@ public:
         //        rwlc_unlock(ltable->header_mut);
       }
 
-      explicit iterator(blsm* ltable,datatuple *key)
+      explicit iterator(bLSM* ltable,dataTuple *key)
       : ltable(ltable),
         epoch(ltable->get_epoch()),
         merge_it_(NULL),
@@ -361,16 +357,16 @@ public:
         ltable->forgetIterator(this);
         invalidate();
         pthread_mutex_unlock(&ltable->rb_mut);
-        if(last_returned) datatuple::freetuple(last_returned);
+        if(last_returned) dataTuple::freetuple(last_returned);
         rwlc_unlock(ltable->header_mut);
       }
   private:
-      datatuple * getnextHelper() {
+      dataTuple * getnextHelper() {
         //          rwlc_readlock(ltable->header_mut);
           revalidate();
-          datatuple * tmp = merge_it_->next_callerFrees();
+          dataTuple * tmp = merge_it_->next_callerFrees();
           if(last_returned && tmp) {
-              int res = datatuple::compare(last_returned->strippedkey(), last_returned->strippedkeylen(), tmp->strippedkey(), tmp->strippedkeylen());
+              int res = dataTuple::compare(last_returned->strippedkey(), last_returned->strippedkeylen(), tmp->strippedkey(), tmp->strippedkeylen());
               if(res >= 0) {
 		  int al = last_returned->strippedkeylen();
                   char * a =(char*)malloc(al + 1);
@@ -387,21 +383,21 @@ public:
 
           }
           if(last_returned) {
-              datatuple::freetuple(last_returned);
+              dataTuple::freetuple(last_returned);
           }
           last_returned = tmp;
           //          rwlc_unlock(ltable->header_mut);
           return last_returned;
       }
   public:
-      datatuple * getnextIncludingTombstones() {
-          datatuple * ret = getnextHelper();
+      dataTuple * getnextIncludingTombstones() {
+          dataTuple * ret = getnextHelper();
           ret = ret ? ret->create_copy() : NULL;
           return ret;
       }
 
-      datatuple * getnext() {
-          datatuple * ret;
+      dataTuple * getnext() {
+          dataTuple * ret;
           while((ret = getnextHelper()) && ret->isDelete()) { }  // getNextHelper handles its own memory.
           ret = ret ? ret->create_copy() : NULL; // XXX hate making copy!  Caller should not manage our memory.
           return ret;
@@ -427,7 +423,7 @@ public:
     static const int C1           = 0;
     static const int C1_MERGEABLE = 1;
     static const int C2           = 2;
-      blsm * ltable;
+      bLSM * ltable;
       uint64_t epoch;
       typedef mergeManyIterator<
          memTreeComponent::batchedRevalidatingIterator,
@@ -438,8 +434,8 @@ public:
 
       merge_it_t* merge_it_;
 
-      datatuple * last_returned;
-      datatuple * key;
+      dataTuple * last_returned;
+      dataTuple * key;
       bool valid;
       int reval_count;
       static const int reval_period = 100;
@@ -465,7 +461,7 @@ public:
         diskTreeComponent::iterator * disk_it[4];
         epoch = ltable->get_epoch();
 
-        datatuple *t;
+        dataTuple *t;
         if(last_returned) {
           t = last_returned;
         } else if(key) {
@@ -490,13 +486,13 @@ public:
         disk_it[3]         = ltable->get_tree_c2()->open_iterator(t);
 
         inner_merge_it_t * inner_merge_it =
-               new inner_merge_it_t(c0_it, c0_mergeable_it, 1, NULL, datatuple::compare_obj);
-        merge_it_ = new merge_it_t(inner_merge_it, disk_it, 4, NULL, datatuple::compare_obj); // XXX Hardcodes comparator, and does not handle merges
+               new inner_merge_it_t(c0_it, c0_mergeable_it, 1, NULL, dataTuple::compare_obj);
+        merge_it_ = new merge_it_t(inner_merge_it, disk_it, 4, NULL, dataTuple::compare_obj); // XXX Hardcodes comparator, and does not handle merges
         if(last_returned) {
-          datatuple * junk = merge_it_->peek();
-          if(junk && !datatuple::compare(junk->strippedkey(), junk->strippedkeylen(), last_returned->strippedkey(), last_returned->strippedkeylen())) {
+          dataTuple * junk = merge_it_->peek();
+          if(junk && !dataTuple::compare(junk->strippedkey(), junk->strippedkeylen(), last_returned->strippedkey(), last_returned->strippedkeylen())) {
             // we already returned junk
-            datatuple::freetuple(merge_it_->next_callerFrees());
+            dataTuple::freetuple(merge_it_->next_callerFrees());
           }
         }
         valid = true;

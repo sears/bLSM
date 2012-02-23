@@ -17,37 +17,36 @@
  *
  *      Author: makdere
  */
-#ifndef _SIMPLE_DATA_PAGE_H_
-#define _SIMPLE_DATA_PAGE_H_
+#ifndef DATA_PAGE_H_
+#define DATA_PAGE_H_
 
 #include <limits.h>
 
 #include <stasis/page.h>
 #include <stasis/constants.h>
 #include "datatuple.h"
-
-struct RegionAllocator;
+#include "regionAllocator.h"
 
 //#define CHECK_FOR_SCRIBBLING
 
-class DataPage
+class dataPage
 {
 public:
   class iterator
   {
   private:
-    void scan_to_key(datatuple * key) {
+    void scan_to_key(dataTuple * key) {
       if(key) {
         len_t old_off = read_offset_;
-        datatuple * t = getnext();
-        while(t && datatuple::compare(key->strippedkey(), key->strippedkeylen(), t->strippedkey(), t->strippedkeylen()) > 0) {
-          datatuple::freetuple(t);
+        dataTuple * t = getnext();
+        while(t && dataTuple::compare(key->strippedkey(), key->strippedkeylen(), t->strippedkey(), t->strippedkeylen()) > 0) {
+          dataTuple::freetuple(t);
           old_off = read_offset_;
           t = getnext();
         }
         if(t) {
           DEBUG("datapage opened at %s\n", t->key());
-          datatuple::freetuple(t);
+          dataTuple::freetuple(t);
           read_offset_ = old_off;
         } else {
           DEBUG("datapage key not found.  Offset = %lld", read_offset_);
@@ -56,7 +55,7 @@ public:
       }
     }
   public:
-    iterator(DataPage *dp, datatuple * key=NULL) : read_offset_(0), dp(dp) {
+    iterator(dataPage *dp, dataTuple * key=NULL) : read_offset_(0), dp(dp) {
       scan_to_key(key);
     }
 
@@ -66,11 +65,11 @@ public:
     }
 
     //returns the next tuple and also advances the iterator
-    datatuple *getnext();
+    dataTuple *getnext();
 
   private:
     off_t read_offset_;
-    DataPage *dp;
+    dataPage *dp;
   };
 
 public:
@@ -78,12 +77,12 @@ public:
   /**
    * if alloc is non-null, then reads will be optimized for sequential access
    */
-  DataPage( int xid, RegionAllocator* alloc, pageid_t pid );
+  dataPage( int xid, regionAllocator* alloc, pageid_t pid );
 
   //to be used to create new data pages
-  DataPage( int xid, pageid_t page_count, RegionAllocator* alloc);
+  dataPage( int xid, pageid_t page_count, regionAllocator* alloc);
 
-  ~DataPage() {
+  ~dataPage() {
     assert(write_offset_ == -1);
   }
 
@@ -100,8 +99,8 @@ public:
 
   }
 
-  bool append(datatuple const * dat);
-  bool recordRead(const  datatuple::key_t key, size_t keySize,  datatuple ** buf);
+  bool append(dataTuple const * dat);
+  bool recordRead(const  dataTuple::key_t key, size_t keySize,  dataTuple ** buf);
 
   inline uint16_t recordCount();
 
@@ -150,7 +149,7 @@ private:
   int xid_;
   pageid_t page_count_;
   const pageid_t initial_page_count_;
-  RegionAllocator *alloc_;
+  regionAllocator *alloc_;
   const pageid_t first_page_;
   off_t write_offset_; // points to the next free byte (ignoring page boundaries)
 };

@@ -48,16 +48,16 @@ public:
     short port;
 
 private:
-    ResponseCode::type insert(datatuple* tuple);
+    ResponseCode::type insert(dataTuple* tuple);
     uint32_t getDatabaseId(const std::string& databaseName);
     uint32_t nextDatabaseId();
-    datatuple* get(uint32_t databaseId, const std::string& recordName);
-    datatuple* get(datatuple* tuple);
-    datatuple* buildTuple(uint32_t databaseId, const std::string& recordName);
-    datatuple* buildTuple(uint32_t databaseId, const std::string& recordName, const std::string& recordBody);
-    datatuple* buildTuple(uint32_t databaseId, const std::string& recordName, const void* body, uint32_t bodySize);
+    dataTuple* get(uint32_t databaseId, const std::string& recordName);
+    dataTuple* get(dataTuple* tuple);
+    dataTuple* buildTuple(uint32_t databaseId, const std::string& recordName);
+    dataTuple* buildTuple(uint32_t databaseId, const std::string& recordName, const std::string& recordBody);
+    dataTuple* buildTuple(uint32_t databaseId, const std::string& recordName, const void* body, uint32_t bodySize);
     void initNextDatabaseId();
-    blsm* ltable_;
+    bLSM* ltable_;
     uint32_t nextDatabaseId_;
     pthread_mutex_t mutex_;
 };

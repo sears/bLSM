@@ -45,7 +45,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     unlink("logfile.txt");
     system("rm -rf stasis_log/");
 
-    blsm::init_stasis();
+    bLSM::init_stasis();
 
     //data generation
     std::vector<std::string> * data_arr = new std::vector<std::string>;
@@ -70,8 +70,8 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     int xid = Tbegin();
 
-    blsm * ltable = new blsm(10 * 1024 * 1024, 1000, 10000, 5);
-    merge_scheduler mscheduler(ltable);
+    bLSM * ltable = new bLSM(10 * 1024 * 1024, 1000, 10000, 5);
+    mergeScheduler mscheduler(ltable);
 
     recordid table_root = ltable->allocTable(xid);
 
@@ -89,7 +89,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     for(size_t i = 0; i < NUM_ENTRIES; i++)
     {
         //prepare the key
-        datatuple *newtuple = datatuple::create((*key_arr)[i].c_str(), (*key_arr)[i].length()+1,(*data_arr)[i].c_str(), (*data_arr)[i].length()+1);
+        dataTuple *newtuple = dataTuple::create((*key_arr)[i].c_str(), (*key_arr)[i].length()+1,(*data_arr)[i].c_str(), (*data_arr)[i].length()+1);
 
         /*
         printf("key: \t, keylen: %u\ndata:  datalen: %u\n",
@@ -106,7 +106,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         gettimeofday(&ti_end,0);
         insert_time += tv_to_double(ti_end) - tv_to_double(ti_st);
 
-        datatuple::freetuple(newtuple);
+        dataTuple::freetuple(newtuple);
         
     }
     gettimeofday(&stop_tv,0);
@@ -132,14 +132,14 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
         //get the key
         uint32_t keylen = (*key_arr)[ri].length()+1;        
-        datatuple::key_t rkey = (datatuple::key_t) malloc(keylen);
+        dataTuple::key_t rkey = (dataTuple::key_t) malloc(keylen);
         memcpy((byte*)rkey, (*key_arr)[ri].c_str(), keylen);
         //for(int j=0; j<keylen-1; j++)
         //rkey[j] = (*key_arr)[ri][j];
         //rkey[keylen-1]='\0';
 
         //find the key with the given tuple
-        datatuple *dt = ltable->findTuple(xid, rkey, keylen);
+        dataTuple *dt = ltable->findTuple(xid, rkey, keylen);
 
         assert(dt!=0);
         //if(dt!=0)
@@ -147,7 +147,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 			found_tuples++;
 			assert(dt->rawkeylen() == (*key_arr)[ri].length()+1);
 			assert(dt->datalen() == (*data_arr)[ri].length()+1);
-			datatuple::freetuple(dt);
+			dataTuple::freetuple(dt);
         }
         dt = 0;
         free(rkey);
@@ -168,7 +168,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     Tcommit(xid);
     delete ltable;
-    blsm::deinit_stasis();
+    bLSM::deinit_stasis();
 }
 
 

@@ -44,7 +44,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     sync();
 
-    blsm::init_stasis();
+    bLSM::init_stasis();
 
     int xid = Tbegin();
 
@@ -78,10 +78,10 @@ void insertProbeIter(size_t NUM_ENTRIES)
     for(size_t i = 0; i < NUM_ENTRIES; i++)
     {
         //prepare the tuple
-        datatuple* newtuple = datatuple::create(key_arr[i].c_str(), key_arr[i].length()+1, data_arr[i].c_str(), data_arr[i].length()+1);
+        dataTuple* newtuple = dataTuple::create(key_arr[i].c_str(), key_arr[i].length()+1, data_arr[i].c_str(), data_arr[i].length()+1);
 
         ltable_c1->insertTuple(xid, newtuple);
-        datatuple::freetuple(newtuple);
+        dataTuple::freetuple(newtuple);
     }
     printf("\nTREE STRUCTURE\n");
     ltable_c1->print_tree(xid);
@@ -99,13 +99,13 @@ void insertProbeIter(size_t NUM_ENTRIES)
     diskTreeComponent::iterator * tree_itr = ltable_c1->open_iterator();
 
 
-    datatuple *dt=0;
+    dataTuple *dt=0;
     while( (dt=tree_itr->next_callerFrees()) != NULL)
     {
         assert(dt->rawkeylen() == key_arr[tuplenum].length()+1);
         assert(dt->datalen() == data_arr[tuplenum].length()+1);
         tuplenum++;
-        datatuple::freetuple(dt);
+        dataTuple::freetuple(dt);
         dt = 0;
     }
     delete(tree_itr);
@@ -121,18 +121,18 @@ void insertProbeIter(size_t NUM_ENTRIES)
         //randomly pick a key
         int ri = rand()%key_arr.size();
 
-		datatuple *dt = ltable_c1->findTuple(xid, (const datatuple::key_t) key_arr[ri].c_str(), (size_t)key_arr[ri].length()+1);
+		dataTuple *dt = ltable_c1->findTuple(xid, (const dataTuple::key_t) key_arr[ri].c_str(), (size_t)key_arr[ri].length()+1);
 
         assert(dt!=0);
         assert(dt->rawkeylen() == key_arr[ri].length()+1);
         assert(dt->datalen() == data_arr[ri].length()+1);
-        datatuple::freetuple(dt);
+        dataTuple::freetuple(dt);
         dt = 0;        
     }
 
     printf("Random Reads completed.\n");
     Tcommit(xid);
-    blsm::deinit_stasis();
+    bLSM::deinit_stasis();
 }
 
 /** @test

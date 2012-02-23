@@ -182,9 +182,9 @@ class mergeStats {
         just_handed_off = true;
       }
     }
-    void merged_tuples(datatuple * merged, datatuple * small, datatuple * large) {
+    void merged_tuples(dataTuple * merged, dataTuple * small, dataTuple * large) {
     }
-    void wrote_datapage(DataPage *dp) {
+    void wrote_datapage(dataPage *dp) {
 #if EXTENDED_STATS
       stats_num_datapages_out++;
       stats_bytes_out_with_overhead += (PAGE_SIZE * dp->get_page_count());

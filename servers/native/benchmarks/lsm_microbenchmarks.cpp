@@ -71,12 +71,12 @@ int main (int argc, char * argv[]) {
 	printf("Hard limit=%lld\n", (long long)((stasis_dirty_page_count_hard_limit*PAGE_SIZE)/MB));
 	printf("Hard limit is %f pct.\n", 100.0 * ((double)stasis_dirty_page_count_hard_limit)/((double)stasis_buffer_manager_size));
 
-	blsm::init_stasis();
+	bLSM::init_stasis();
 
-	RegionAllocator * readableAlloc = NULL;
+	regionAllocator * readableAlloc = NULL;
 	if(!mode) {
 		int xid = Tbegin();
-		RegionAllocator * alloc = new RegionAllocator(xid, num_pages);
+		regionAllocator * alloc = new regionAllocator(xid, num_pages);
 		printf("Starting first write of %lld mb\n", (long long)mb);
 		struct timeval start, start_sync, stop; double elapsed;
 		gettimeofday(&start, 0);
@@ -100,7 +100,7 @@ int main (int argc, char * argv[]) {
 
 	if(!mode) {
 		int xid = Tbegin();
-		RegionAllocator * alloc = new RegionAllocator(xid, num_pages);
+		regionAllocator * alloc = new regionAllocator(xid, num_pages);
 		printf("Starting write with parallel read of %lld mb\n", (long long)mb);
 		struct timeval start, start_sync, stop; double elapsed;
 		gettimeofday(&start, 0);
@@ -134,11 +134,11 @@ int main (int argc, char * argv[]) {
 		struct timeval start, start_sync, stop; double elapsed;
 		printf("Starting write of giant datapage\n");
 		gettimeofday(&start, 0);
-		RegionAllocator * alloc = new RegionAllocator(xid, num_pages);
-		DataPage * dp = new DataPage(xid, num_pages-1, alloc);
+		regionAllocator * alloc = new regionAllocator(xid, num_pages);
+		dataPage * dp = new DataPage(xid, num_pages-1, alloc);
 		byte * key = (byte*)calloc(100, 1);
 		byte * val = (byte*)calloc(900, 1);
-		datatuple * tup = datatuple::create(key, 100, val, 900);
+		dataTuple * tup = dataTuple::create(key, 100, val, 900);
 		free(key);
 		free(val);
 		while(1) {
@@ -160,13 +160,13 @@ int main (int argc, char * argv[]) {
 		struct timeval start, start_sync, stop; double elapsed;
 		printf("Starting write of many small datapages\n");
 		gettimeofday(&start, 0);
-		RegionAllocator * alloc = new RegionAllocator(xid, num_pages);
+		regionAllocator * alloc = new regionAllocator(xid, num_pages);
 		byte * key = (byte*)calloc(100, 1);
 		byte * val = (byte*)calloc(900, 1);
-		datatuple * tup = datatuple::create(key, 100, val, 900);
+		dataTuple * tup = dataTuple::create(key, 100, val, 900);
 		free(key);
 		free(val);
-		DataPage * dp = 0;
+		dataPage * dp = 0;
 		uint64_t this_count = 0;
 		uint64_t count  = 0;
 		uint64_t dp_count = 0;
@@ -199,15 +199,15 @@ int main (int argc, char * argv[]) {
 		struct timeval start, start_sync, stop; double elapsed;
 		printf("Starting two parallel writes of many small datapages\n");
 		gettimeofday(&start, 0);
-		RegionAllocator * alloc = new RegionAllocator(xid, num_pages/2);
-		RegionAllocator * alloc2 = new RegionAllocator(xid, num_pages/2);
+		regionAllocator * alloc = new regionAllocator(xid, num_pages/2);
+		regionAllocator * alloc2 = new regionAllocator(xid, num_pages/2);
 		byte * key = (byte*)calloc(100, 1);
 		byte * val = (byte*)calloc(900, 1);
-		datatuple * tup = datatuple::create(key, 100, val, 900);
+		dataTuple * tup = dataTuple::create(key, 100, val, 900);
 		free(key);
 		free(val);
-		DataPage * dp = 0;
-		DataPage * dp2 = 0;
+		dataPage * dp = 0;
+		dataPage * dp2 = 0;
 		uint64_t this_count = 0;
 		uint64_t count  = 0;
 		uint64_t dp_count = 0;
@@ -241,29 +241,29 @@ int main (int argc, char * argv[]) {
 
 	}
 
-	RegionAllocator * read_alloc = NULL;
-	RegionAllocator * read_alloc2 = NULL;
-	RegionAllocator * read_alloc3 = NULL;
-	RegionAllocator * read_alloc4 = NULL;
+	regionAllocator * read_alloc = NULL;
+	regionAllocator * read_alloc2 = NULL;
+	regionAllocator * read_alloc3 = NULL;
+	regionAllocator * read_alloc4 = NULL;
 
 	if(!mode) {
 		int xid = Tbegin();
 		struct timeval start, start_sync, stop; double elapsed;
 		printf("Starting four parallel writes of many small datapages\n");
 		gettimeofday(&start, 0);
-		RegionAllocator * alloc = new RegionAllocator(xid, num_pages/4);
-		RegionAllocator * alloc2 = new RegionAllocator(xid, num_pages/4);
-		RegionAllocator * alloc3 = new RegionAllocator(xid, num_pages/4);
-		RegionAllocator * alloc4 = new RegionAllocator(xid, num_pages/4);
+		regionAllocator * alloc = new regionAllocator(xid, num_pages/4);
+		regionAllocator * alloc2 = new regionAllocator(xid, num_pages/4);
+		regionAllocator * alloc3 = new regionAllocator(xid, num_pages/4);
+		regionAllocator * alloc4 = new regionAllocator(xid, num_pages/4);
 		byte * key = (byte*)calloc(100, 1);
 		byte * val = (byte*)calloc(900, 1);
-		datatuple * tup = datatuple::create(key, 100, val, 900);
+		dataTuple * tup = dataTuple::create(key, 100, val, 900);
 		free(key);
 		free(val);
-		DataPage * dp = 0;
-		DataPage * dp2 = 0;
-		DataPage * dp3 = 0;
-		DataPage * dp4 = 0;
+		dataPage * dp = 0;
+		dataPage * dp2 = 0;
+		dataPage * dp3 = 0;
+		dataPage * dp4 = 0;
 		uint64_t this_count = 0;
 		uint64_t count  = 0;
 		uint64_t dp_count = 0;
@@ -317,19 +317,19 @@ int main (int argc, char * argv[]) {
 		struct timeval start, start_sync, stop; double elapsed;
 		printf("Starting four parallel writes of many small datapages\n");
 		gettimeofday(&start, 0);
-		RegionAllocator * alloc = new RegionAllocator(xid, num_pages/4);
-		RegionAllocator * alloc2 = new RegionAllocator(xid, num_pages/4);
-		RegionAllocator * alloc3 = new RegionAllocator(xid, num_pages/4);
-		RegionAllocator * alloc4 = new RegionAllocator(xid, num_pages/4);
+		regionAllocator * alloc = new regionAllocator(xid, num_pages/4);
+		regionAllocator * alloc2 = new regionAllocator(xid, num_pages/4);
+		regionAllocator * alloc3 = new regionAllocator(xid, num_pages/4);
+		regionAllocator * alloc4 = new regionAllocator(xid, num_pages/4);
 		byte * key = (byte*)calloc(100, 1);
 		byte * val = (byte*)calloc(900, 1);
-		datatuple * tup = datatuple::create(key, 100, val, 900);
+		dataTuple * tup = dataTuple::create(key, 100, val, 900);
 		free(key);
 		free(val);
-		DataPage * dp = 0;
-		DataPage * dp2 = 0;
-		DataPage * dp3 = 0;
-		DataPage * dp4 = 0;
+		dataPage * dp = 0;
+		dataPage * dp2 = 0;
+		dataPage * dp3 = 0;
+		dataPage * dp4 = 0;
 		uint64_t this_count = 0;
 		uint64_t count  = 0;
 		uint64_t dp_count = 0;
@@ -348,15 +348,15 @@ int main (int argc, char * argv[]) {
 		pageid_t i3 = regions3[0];
 		pageid_t i4 = regions4[0];
 
-		DataPage * rdp  = new DataPage(xid, 0, i1);
-		DataPage * rdp2 = new DataPage(xid, 0, i2);
-		DataPage * rdp3 = new DataPage(xid, 0, i3);
-		DataPage * rdp4 = new DataPage(xid, 0, i4);
+		dataPage * rdp  = new DataPage(xid, 0, i1);
+		dataPage * rdp2 = new DataPage(xid, 0, i2);
+		dataPage * rdp3 = new DataPage(xid, 0, i3);
+		dataPage * rdp4 = new DataPage(xid, 0, i4);
 
-		DataPage::iterator it1 = rdp->begin();
-		DataPage::iterator it2 = rdp2->begin();
-		DataPage::iterator it3 = rdp3->begin();
-		DataPage::iterator it4 = rdp4->begin();
+		dataPage::iterator it1 = rdp->begin();
+		dataPage::iterator it2 = rdp2->begin();
+		dataPage::iterator it3 = rdp3->begin();
+		dataPage::iterator it4 = rdp4->begin();
 
 		while((count * 1000) < (mb * 1024*1024)) {
 			if((!dp) || !dp->append(tup)) {
@@ -375,7 +375,7 @@ int main (int argc, char * argv[]) {
 				dp4 = new DataPage(xid, 2, alloc4);
 				//dp_count++;
 			}
-			datatuple * t;
+			dataTuple * t;
 			if((!rdp) || !(t = it1.getnext())) {
 			  i1+= rdp->get_page_count();
 			  if(rdp) delete rdp;
@@ -384,7 +384,7 @@ int main (int argc, char * argv[]) {
 			  it1 = rdp->begin();
 			  t = it1.getnext();
 			}
-			if(t) datatuple::freetuple(t);
+			if(t) dataTuple::freetuple(t);
 			if((!rdp2) || !(t = it2.getnext())) {
 			  i2+= rdp2->get_page_count();
 			  if(rdp2) delete rdp2;
@@ -393,7 +393,7 @@ int main (int argc, char * argv[]) {
 			  it2 = rdp2->begin();
 			  t = it2.getnext();
 			}
-			if(t) datatuple::freetuple(t);
+			if(t) dataTuple::freetuple(t);
 			if((!rdp3) || !(t = it3.getnext())) {
 			  i3+= rdp3->get_page_count();
 			  if(rdp3) delete rdp3;
@@ -402,7 +402,7 @@ int main (int argc, char * argv[]) {
 			  it3 = rdp3->begin();
 			  t = it3.getnext();
 			}
-			if(t) datatuple::freetuple(t);
+			if(t) dataTuple::freetuple(t);
 			if((!rdp4) || !(t = it4.getnext())) {
 			  i4+= rdp4->get_page_count();
 			  if(rdp4) delete rdp4;
@@ -411,7 +411,7 @@ int main (int argc, char * argv[]) {
 			  it4 = rdp4->begin();
 			  t = it4.getnext();
 			}
-			if(t) datatuple::freetuple(t);
+			if(t) dataTuple::freetuple(t);
 
 			count += 8;
 			this_count++;
@@ -441,5 +441,5 @@ int main (int argc, char * argv[]) {
 	}
 
 
-	blsm::deinit_stasis();
+	bLSM::deinit_stasis();
 }

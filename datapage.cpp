@@ -42,7 +42,7 @@ static int notSupported(int xid, Page * p) { return 0; }
 
 END_C_DECLS
 
-void DataPage::register_stasis_page_impl() {
+void dataPage::register_stasis_page_impl() {
 	static page_impl pi =  {
 	    DATA_PAGE,
 	    1,
@@ -76,7 +76,7 @@ void DataPage::register_stasis_page_impl() {
 
 }
 
-DataPage::DataPage(int xid, RegionAllocator * alloc, pageid_t pid):  // XXX Hack!! The read-only constructor signature is too close to the other's
+dataPage::dataPage(int xid, regionAllocator * alloc, pageid_t pid):  // XXX Hack!! The read-only constructor signature is too close to the other's
   xid_(xid),
   page_count_(1), // will be opportunistically incremented as we scan the datapage.
   initial_page_count_(-1), // used by append.
@@ -94,7 +94,7 @@ DataPage::DataPage(int xid, RegionAllocator * alloc, pageid_t pid):  // XXX Hack
   releasePage(p);
 }
 
-DataPage::DataPage(int xid, pageid_t page_count, RegionAllocator *alloc) :
+dataPage::dataPage(int xid, pageid_t page_count, regionAllocator *alloc) :
   xid_(xid),
   page_count_(1),
   initial_page_count_(page_count),
@@ -107,11 +107,11 @@ DataPage::DataPage(int xid, pageid_t page_count, RegionAllocator *alloc) :
   initialize();
 }
 
-void DataPage::initialize() {
+void dataPage::initialize() {
   initialize_page(first_page_);
 }
 
-void DataPage::initialize_page(pageid_t pageid) {
+void dataPage::initialize_page(pageid_t pageid) {
   //load the first page
   Page *p;
 #ifdef CHECK_FOR_SCRIBBLING
@@ -144,7 +144,7 @@ void DataPage::initialize_page(pageid_t pageid) {
   releasePage(p);
 }
 
-size_t DataPage::write_bytes(const byte * buf, ssize_t remaining, Page ** latch_p) {
+size_t dataPage::write_bytes(const byte * buf, ssize_t remaining, Page ** latch_p) {
   if(latch_p) { *latch_p  = NULL; }
   recordid chunk = calc_chunk_from_offset(write_offset_);
   if(chunk.size > remaining) {
@@ -167,7 +167,7 @@ size_t DataPage::write_bytes(const byte * buf, ssize_t remaining, Page ** latch_
   }
   return chunk.size;
 }
-size_t DataPage::read_bytes(byte * buf, off_t offset, ssize_t remaining) {
+size_t dataPage::read_bytes(byte * buf, off_t offset, ssize_t remaining) {
   recordid chunk = calc_chunk_from_offset(offset);
   if(chunk.size > remaining) {
     chunk.size = remaining;
@@ -190,7 +190,7 @@ size_t DataPage::read_bytes(byte * buf, off_t offset, ssize_t remaining) {
   return chunk.size;
 }
 
-bool DataPage::initialize_next_page() {
+bool dataPage::initialize_next_page() {
   recordid rid = calc_chunk_from_offset(write_offset_);
   assert(rid.slot == 0);
   DEBUG("\t\t%lld\n", (long long)rid.page);
@@ -215,7 +215,7 @@ bool DataPage::initialize_next_page() {
   return true;
 }
 
-Page * DataPage::write_data_and_latch(const byte * buf, size_t len, bool init_next, bool latch) {
+Page * dataPage::write_data_and_latch(const byte * buf, size_t len, bool init_next, bool latch) {
   bool first = true;
   Page * p = 0;
   while(1) {
@@ -255,11 +255,11 @@ Page * DataPage::write_data_and_latch(const byte * buf, size_t len, bool init_ne
   }
 }
 
-bool DataPage::write_data(const byte * buf, size_t len, bool init_next) {
+bool dataPage::write_data(const byte * buf, size_t len, bool init_next) {
   return 0 != write_data_and_latch(buf, len, init_next, false);
 }
 
-bool DataPage::read_data(byte * buf, off_t offset, size_t len) {
+bool dataPage::read_data(byte * buf, off_t offset, size_t len) {
   while(1) {
     assert(len > 0);
     size_t read_count = read_bytes(buf, offset, len);
@@ -275,7 +275,7 @@ bool DataPage::read_data(byte * buf, off_t offset, size_t len) {
   }
 }
 
-bool DataPage::append(datatuple const * dat)
+bool dataPage::append(dataTuple const * dat)
 {
   // First, decide if we should append to this datapage, based on whether
   // appending will waste more or less space than starting a new datapage
@@ -344,21 +344,21 @@ bool DataPage::append(datatuple const * dat)
   return succ;
 }
 
-bool DataPage::recordRead(const datatuple::key_t key, size_t keySize,  datatuple ** buf)
+bool dataPage::recordRead(const dataTuple::key_t key, size_t keySize,  dataTuple ** buf)
 {
   iterator itr(this, NULL);
 
   int match = -1;
   while((*buf=itr.getnext()) != 0) {
-    match = datatuple::compare((*buf)->strippedkey(), (*buf)->strippedkeylen(), key, keySize);
+    match = dataTuple::compare((*buf)->strippedkey(), (*buf)->strippedkeylen(), key, keySize);
 
     if(match<0) { //keep searching
-      datatuple::freetuple(*buf);
+      dataTuple::freetuple(*buf);
       *buf=0;
     } else if(match==0) { //found
       return true;
     } else { // match > 0, then does not exist
-      datatuple::freetuple(*buf);
+      dataTuple::freetuple(*buf);
       *buf = 0;
       break;
     }
@@ -371,7 +371,7 @@ bool DataPage::recordRead(const datatuple::key_t key, size_t keySize,  datatuple
 ///////////////////////////////////////////////////////////////
 
 
-datatuple* DataPage::iterator::getnext() {
+dataTuple* dataPage::iterator::getnext() {
   len_t len;
   bool succ;
   if(dp == NULL) { return NULL; }
@@ -398,7 +398,7 @@ datatuple* DataPage::iterator::getnext() {
 
   read_offset_ += len;
 
-  datatuple *ret = datatuple::from_bytes(buf);
+  dataTuple *ret = dataTuple::from_bytes(buf);
 
   free(buf);
 

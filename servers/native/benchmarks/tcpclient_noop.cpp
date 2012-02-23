@@ -38,11 +38,11 @@ char ** thrargv;
 void * worker (void * arg) {
   logstore_handle_t * l = util_open_conn(thrargc-2, thrargv+2);
   for(int i = 0; i < threadopcount; i++) {
-    datatuple * ret = logstore_client_op(l, OP_DBG_NOOP);
+    dataTuple * ret = logstore_client_op(l, OP_DBG_NOOP);
     if(ret == NULL) {
         perror("No-op failed"); return (void*)-1;
     } else {
-        datatuple::freetuple(ret);
+        dataTuple::freetuple(ret);
     }
   }
   logstore_client_close(l);

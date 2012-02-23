@@ -43,7 +43,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     unlink("logfile.txt");
     system("rm -rf stasis_log/");
 
-    blsm::init_stasis();
+    bLSM::init_stasis();
 
     //data generation
 //    std::vector<std::string> * data_arr = new std::vector<std::string>;
@@ -62,8 +62,8 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     int xid = Tbegin();
 
-    blsm *ltable = new blsm(10*1024*1024, 1000, 10000, 100);
-    merge_scheduler mscheduler(ltable);
+    bLSM *ltable = new bLSM(10*1024*1024, 1000, 10000, 100);
+    mergeScheduler mscheduler(ltable);
 
     recordid table_root = ltable->allocTable(xid);
 
@@ -85,7 +85,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         getnextdata(ditem, 10*8192);
 
         //prepare the tuple
-        datatuple *newtuple = datatuple::create((*key_arr)[i].c_str(), (*key_arr)[i].length()+1, ditem.c_str(), ditem.length()+1);
+        dataTuple *newtuple = dataTuple::create((*key_arr)[i].c_str(), (*key_arr)[i].length()+1, ditem.c_str(), ditem.length()+1);
 
         datasize += newtuple->byte_length();
 
@@ -94,7 +94,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         gettimeofday(&ti_end,0);
         insert_time += tv_to_double(ti_end) - tv_to_double(ti_st);
 
-        datatuple::freetuple(newtuple);
+        dataTuple::freetuple(newtuple);
     }
     gettimeofday(&stop_tv,0);
     printf("insert time: %6.1f\n", insert_time);
@@ -109,7 +109,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     printf("merge threads finished.\n");
     gettimeofday(&stop_tv,0);
     printf("run time: %6.1f\n", (tv_to_double(stop_tv) - tv_to_double(start_tv)));
-    blsm::deinit_stasis();
+    bLSM::deinit_stasis();
     
 }
 

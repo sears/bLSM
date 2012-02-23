@@ -74,15 +74,15 @@ class diskTreeComponent {
   recordid get_datapage_allocator_rid();
   recordid get_internal_node_allocator_rid();
   internalNodes * get_internal_nodes() { return ltree; }
-  datatuple* findTuple(int xid, datatuple::key_t key, size_t keySize);
-  int insertTuple(int xid, datatuple *t);
+  dataTuple* findTuple(int xid, dataTuple::key_t key, size_t keySize);
+  int insertTuple(int xid, dataTuple *t);
   void writes_done();
 
 
   iterator * open_iterator(mergeManager * mgr = NULL, double target_size = 0, bool * flushing = NULL) {
     return new iterator(ltree, mgr, target_size, flushing);
   }
-  iterator * open_iterator(datatuple * key) {
+  iterator * open_iterator(dataTuple * key) {
     if(key != NULL) {
       return new iterator(ltree, key);
     } else {
@@ -100,10 +100,10 @@ class diskTreeComponent {
   }
 
  private:
-  DataPage* insertDataPage(int xid, datatuple *tuple);
+  dataPage* insertDataPage(int xid, dataTuple *tuple);
 
   internalNodes * ltree;
-  DataPage* dp;
+  dataPage* dp;
   pageid_t datapage_size;
   /*mergeManager::mergeStats*/ void *stats; // XXX hack to work around circular includes.
 
@@ -122,8 +122,8 @@ class diskTreeComponent {
     //appends a leaf page, val_page is the id of the leaf page
     recordid appendPage(int xid, const byte *key,size_t keySize, pageid_t val_page);
 
-    inline RegionAllocator* get_datapage_alloc() { return datapage_alloc; }
-    inline RegionAllocator* get_internal_node_alloc() { return internal_node_alloc; }
+    inline regionAllocator* get_datapage_alloc() { return datapage_alloc; }
+    inline regionAllocator* get_internal_node_alloc() { return internal_node_alloc; }
     const recordid &get_root_rec(){return root_rec;}
 
   private:
@@ -168,8 +168,8 @@ class diskTreeComponent {
     void print_tree(int xid, pageid_t pid, int64_t depth);
 
     recordid root_rec;
-    RegionAllocator* internal_node_alloc;
-    RegionAllocator* datapage_alloc;
+    regionAllocator* internal_node_alloc;
+    regionAllocator* datapage_alloc;
 
     struct indexnode_rec {
       pageid_t ptr;
@@ -178,8 +178,8 @@ class diskTreeComponent {
   public:
     class iterator {
     public:
-      iterator(int xid, RegionAllocator *ro_alloc, recordid root);
-      iterator(int xid, RegionAllocator *ro_alloc, recordid root, const byte* key, len_t keylen);
+      iterator(int xid, regionAllocator *ro_alloc, recordid root);
+      iterator(int xid, regionAllocator *ro_alloc, recordid root, const byte* key, len_t keylen);
       int next();
       void close();
 
@@ -197,7 +197,7 @@ class diskTreeComponent {
       inline void releaseLock() { }
 
     private:
-      RegionAllocator * ro_alloc_;
+      regionAllocator * ro_alloc_;
       Page * p;
       int xid_;
       bool done;
@@ -216,21 +216,21 @@ class diskTreeComponent {
   public:
       explicit iterator(diskTreeComponent::internalNodes *tree, mergeManager * mgr = NULL, double target_size = 0, bool * flushing = NULL);
 
-      explicit iterator(diskTreeComponent::internalNodes *tree,datatuple *key);
+      explicit iterator(diskTreeComponent::internalNodes *tree,dataTuple *key);
 
       ~iterator();
 
-      datatuple * next_callerFrees();
+      dataTuple * next_callerFrees();
 
   private:
-    void init_iterators(datatuple * key1, datatuple * key2);
-    inline void init_helper(datatuple * key1);
+    void init_iterators(dataTuple * key1, dataTuple * key2);
+    inline void init_helper(dataTuple * key1);
 
     explicit iterator() { abort(); }
     void operator=(iterator & t) { abort(); }
     int operator-(iterator & t) { abort(); }
 
-    RegionAllocator * ro_alloc_;  // has a filehandle that we use to optimize sequential scans.
+    regionAllocator * ro_alloc_;  // has a filehandle that we use to optimize sequential scans.
     recordid tree_; //root of the tree
     mergeManager * mgr_;
     double   target_progress_delta_;
@@ -239,8 +239,8 @@ class diskTreeComponent {
     diskTreeComponent::internalNodes::iterator* lsmIterator_;
 
     pageid_t curr_pageid; //current page id
-    DataPage *curr_page;   //current page
-    typedef DataPage::iterator DPITR_T;
+    dataPage *curr_page;   //current page
+    typedef dataPage::iterator DPITR_T;
     DPITR_T *dp_itr;
 
   };

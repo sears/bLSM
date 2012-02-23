@@ -24,12 +24,12 @@
 
 #include <stasis/transactional.h>
 
-class RegionAllocator
+class regionAllocator
 {
 public:
 
     // Open an existing region allocator.
-    RegionAllocator(int xid, recordid rid) :
+    regionAllocator(int xid, recordid rid) :
       nextPage_(INVALID_PAGE),
       endOfRegion_(INVALID_PAGE),
       bm_((stasis_buffer_manager_t*)stasis_runtime_buffer_manager()),
@@ -39,7 +39,7 @@ public:
         regionCount_ = TarrayListLength(xid, header_.region_list);
     }
   // Create a new region allocator.
-  RegionAllocator(int xid, pageid_t region_page_count) :
+  regionAllocator(int xid, pageid_t region_page_count) :
       nextPage_(0),
       endOfRegion_(0),
       regionCount_(0),
@@ -51,7 +51,7 @@ public:
       header_.region_page_count = region_page_count;
       Tset(xid, rid_, &header_);
   }
-  explicit RegionAllocator() :
+  explicit regionAllocator() :
     nextPage_(INVALID_PAGE),
     endOfRegion_(INVALID_PAGE),
     bm_((stasis_buffer_manager_t*)stasis_runtime_buffer_manager()),
@@ -59,7 +59,7 @@ public:
     rid_.page = INVALID_PAGE;
     regionCount_ = -1;
   }
-  ~RegionAllocator() {
+  ~regionAllocator() {
     bm_->closeHandleImpl(bm_, bmh_);
   }
   Page * load_page(int xid, pageid_t p) { return bm_->loadPageImpl(bm_, bmh_, xid, p, UNKNOWN_TYPE_PAGE); }

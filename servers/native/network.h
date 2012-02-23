@@ -278,7 +278,7 @@ static inline int writeoptosocket(int sockd, network_op_t op) {
 
  */
 
-static inline datatuple* readtuplefromsocket(FILE * sockf, int * err) {
+static inline dataTuple* readtuplefromsocket(FILE * sockf, int * err) {
 
   len_t keylen, datalen, buflen;
 
@@ -286,12 +286,12 @@ static inline datatuple* readtuplefromsocket(FILE * sockf, int * err) {
   if(keylen == DELETE) return NULL; // *err is zero.
   if(( *err = readfromsocket(sockf, &datalen, sizeof(datalen)) )) return NULL;
 
-  buflen = datatuple::length_from_header(keylen, datalen);
+  buflen = dataTuple::length_from_header(keylen, datalen);
   byte*  bytes = (byte*) malloc(buflen);
 
   if(( *err = readfromsocket(sockf, bytes, buflen)             )) { free(bytes); return NULL; }
 
-  datatuple * ret = datatuple::from_bytes(keylen, datalen, bytes);
+  dataTuple * ret = dataTuple::from_bytes(keylen, datalen, bytes);
   free(bytes);
   return ret;
 }
@@ -301,7 +301,7 @@ static inline datatuple* readtuplefromsocket(FILE * sockf, int * err) {
     @param error will be set to zero on succes, a logstore error number on failure
     @return a datatuple, or NULL.
  */
-static inline datatuple* readtuplefromsocket(int sockd, int * err) {
+static inline dataTuple* readtuplefromsocket(int sockd, int * err) {
 
 	len_t keylen, datalen, buflen;
 
@@ -309,7 +309,7 @@ static inline datatuple* readtuplefromsocket(int sockd, int * err) {
     if(keylen == DELETE) return NULL; // *err is zero.
     if(( *err = readfromsocket(sockd, &datalen, sizeof(datalen)) )) return NULL;
 
-    buflen = datatuple::length_from_header(keylen, datalen);
+    buflen = dataTuple::length_from_header(keylen, datalen);
 
     // TODO remove the malloc / free in readtuplefromsocket, either with a
     // two-stage API for datatuple::create, or with realloc.
@@ -317,7 +317,7 @@ static inline datatuple* readtuplefromsocket(int sockd, int * err) {
 
     if(( *err = readfromsocket(sockd, bytes, buflen)             )) return NULL;
 
-	datatuple * ret = datatuple::from_bytes(keylen, datalen, bytes);
+	dataTuple * ret = dataTuple::from_bytes(keylen, datalen, bytes);
 	free(bytes);
 	return ret;
 }
@@ -329,7 +329,7 @@ static inline int writeendofiteratortosocket(FILE * sockf) {
 static inline int writeendofiteratortosocket(int sockd) {
 	return writetosocket(sockd, &DELETE, sizeof(DELETE));
 }
-static inline int writetupletosocket(FILE * sockf, const datatuple *tup) {
+static inline int writetupletosocket(FILE * sockf, const dataTuple *tup) {
   len_t keylen, datalen;
   int err;
 
@@ -339,11 +339,11 @@ static inline int writetupletosocket(FILE * sockf, const datatuple *tup) {
     const byte* buf = tup->get_bytes(&keylen, &datalen);
     if(( err = writetosocket(sockf, &keylen, sizeof(keylen))                             )) return err;
     if(( err = writetosocket(sockf, &datalen, sizeof(datalen))                           )) return err;
-    if(( err = writetosocket(sockf, buf, datatuple::length_from_header(keylen, datalen)) )) return err;
+    if(( err = writetosocket(sockf, buf, dataTuple::length_from_header(keylen, datalen)) )) return err;
   }
   return 0;
 }
-static inline int writetupletosocket(int sockd, const datatuple* tup) {
+static inline int writetupletosocket(int sockd, const dataTuple* tup) {
 	len_t keylen, datalen;
 	int err;
 
@@ -353,7 +353,7 @@ static inline int writetupletosocket(int sockd, const datatuple* tup) {
 		const byte* buf = tup->get_bytes(&keylen, &datalen);
 		if(( err = writetosocket(sockd, &keylen, sizeof(keylen))                             )) return err;
 		if(( err = writetosocket(sockd, &datalen, sizeof(datalen))                           )) return err;
-		if(( err = writetosocket(sockd, buf, datatuple::length_from_header(keylen, datalen)) )) return err;
+		if(( err = writetosocket(sockd, buf, dataTuple::length_from_header(keylen, datalen)) )) return err;
 	}
 	return 0;
 

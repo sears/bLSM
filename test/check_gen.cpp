@@ -29,18 +29,18 @@ int main(int argc, char **argv)
 
     sync();
 
-    blsm::init_stasis();
+    bLSM::init_stasis();
 
     int xid = Tbegin();
 
-    blsm *ltable = new blsm(1000, 10000, 5);
+    bLSM *ltable = new bLSM(1000, 10000, 5);
 
     recordid table_root = ltable->allocTable(xid);
 
     Tcommit(xid);
 
     xid = Tbegin();
-    RegionAllocator * ro_alloc = new RegionAllocator();
+    regionAllocator * ro_alloc = new regionAllocator();
 
     diskTreeComponent::internalNodes::iterator * it = new diskTreeComponent::internalNodes::iterator(xid,ro_alloc, ltable->get_tree_c2()->get_root_rid() );
     it->close();
@@ -48,7 +48,7 @@ int main(int argc, char **argv)
     delete ro_alloc;
     Tcommit(xid);
     delete ltable;
-    blsm::deinit_stasis();
+    bLSM::deinit_stasis();
 
 
 

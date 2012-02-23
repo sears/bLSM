@@ -53,7 +53,7 @@ struct pthread_data {
     
     int *workitem; //id of the socket to work
 
-    blsm *ltable;
+    bLSM *ltable;
     bool *sys_alive;
 
     #ifdef STATS_ENABLED
@@ -111,7 +111,7 @@ public:
             delete qlock;
         }
     
-    void startserver(blsm *ltable);
+    void startserver(bLSM *ltable);
 
     void stopserver();
     
@@ -140,7 +140,7 @@ private:
     int * self_pipe; // write a byte to self_pipe[1] to wake up select().
     std::vector<pthread_item *> th_list; // list of threads
 
-    blsm *ltable;
+    bLSM *ltable;
 
     #ifdef STATS_ENABLED
     int num_reqs;

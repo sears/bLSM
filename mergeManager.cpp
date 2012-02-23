@@ -425,7 +425,7 @@ void mergeManager::tick(mergeStats * s) {
   }
 }
 
-void mergeManager::read_tuple_from_small_component(int merge_level, datatuple * tup) {
+void mergeManager::read_tuple_from_small_component(int merge_level, dataTuple * tup) {
   if(tup) {
     mergeStats * s = get_merge_stats(merge_level);
     (s->num_tuples_in_small)++;
@@ -450,7 +450,7 @@ void mergeManager::read_tuple_from_large_component(int merge_level, int tuple_co
   }
 }
 
-void mergeManager::wrote_tuple(int merge_level, datatuple * tup) {
+void mergeManager::wrote_tuple(int merge_level, dataTuple * tup) {
   mergeStats * s = get_merge_stats(merge_level);
   (s->num_tuples_out)++;
   (s->bytes_out) += tup->byte_length();
@@ -543,7 +543,7 @@ void mergeManager::init_helper(void) {
   pthread_create(&update_progress_pthread, 0, merge_manager_update_progress_thread, (void*)this);
 }
 
-mergeManager::mergeManager(blsm *ltable):
+mergeManager::mergeManager(bLSM *ltable):
   UPDATE_PROGRESS_PERIOD(0.005),
   ltable(ltable) {
   c0 = new mergeStats(0, ltable ? ltable->max_c0_size : 10000000);
@@ -551,7 +551,7 @@ mergeManager::mergeManager(blsm *ltable):
   c2 = new mergeStats(2, 0);
   init_helper();
 }
-mergeManager::mergeManager(blsm *ltable, int xid, recordid rid):
+mergeManager::mergeManager(bLSM *ltable, int xid, recordid rid):
   UPDATE_PROGRESS_PERIOD(0.005),
   ltable(ltable) {
   marshalled_header h;
@@ -581,7 +581,7 @@ void mergeManager::marshal(int xid, recordid rid) {
 void mergeManager::pretty_print(FILE * out) {
 
 #if EXTENDED_STATS
-  blsm * lt = ltable;
+  bLSM * lt = ltable;
   bool have_c0  = false;
   bool have_c0m = false;
   bool have_c1  = false;

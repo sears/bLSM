@@ -37,7 +37,7 @@
 #include <fcntl.h>
 
 void *serverLoop(void *args);
-void logserver::startserver(blsm *ltable)
+void logserver::startserver(bLSM *ltable)
 {
     sys_alive = true;
     this->ltable = ltable;
@@ -474,7 +474,7 @@ void * thread_work_fn( void * args)
         int err = opcode == OP_DONE || opiserror(opcode); //close the conn on failure
 
         //step 2: read the first tuple from client
-        datatuple *tuple = 0, *tuple2 = 0;
+        dataTuple *tuple = 0, *tuple2 = 0;
         if(!err) { tuple  = readtuplefromsocket(*(item->data->workitem), &err); }
         //        read the second tuple from client
         if(!err) { tuple2 = readtuplefromsocket(*(item->data->workitem), &err); }
@@ -483,8 +483,8 @@ void * thread_work_fn( void * args)
 		if(!err) { err = requestDispatch<int>::dispatch_request(opcode, tuple, tuple2, item->data->ltable, *(item->data->workitem)); }
 
         //free the tuple
-        if(tuple)  datatuple::freetuple(tuple);
-        if(tuple2) datatuple::freetuple(tuple2);
+        if(tuple)  dataTuple::freetuple(tuple);
+        if(tuple2) dataTuple::freetuple(tuple2);
 
 		pthread_mutex_lock(item->data->qlock);
 

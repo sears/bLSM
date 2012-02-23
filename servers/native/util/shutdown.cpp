@@ -16,12 +16,12 @@ void usage(char * argv[]) {
 int main(int argc, char * argv[]) {
     logstore_handle_t * l = util_open_conn(argc, argv);
 
-    datatuple * ret = logstore_client_op(l, OP_SHUTDOWN);
+    dataTuple * ret = logstore_client_op(l, OP_SHUTDOWN);
 
     if(ret == NULL) {
       perror("Shutdown failed."); return 3;
     } else {
-      datatuple::freetuple(ret);
+      dataTuple::freetuple(ret);
     }
     logstore_client_close(l);
     printf("Shutdown in progress\n");

@@ -20,14 +20,14 @@
 #include "datatuple.h"
 
 void memTreeComponent::tearDownTree(rbtree_ptr_t tree) {
-    datatuple * t = 0;
+    dataTuple * t = 0;
     rbtree_t::iterator old;
     for(rbtree_t::iterator delitr  = tree->begin();
                            delitr != tree->end();
                            delitr++) {
     	if(t) {
     		tree->erase(old);
-    		datatuple::freetuple(t);
+    		dataTuple::freetuple(t);
     		t = 0;
     	}
     	t = *delitr;
@@ -35,7 +35,7 @@ void memTreeComponent::tearDownTree(rbtree_ptr_t tree) {
     }
 	if(t) {
 		tree->erase(old);
-		datatuple::freetuple(t);
+		dataTuple::freetuple(t);
 	}
     delete tree;
 }

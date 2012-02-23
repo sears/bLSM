@@ -21,7 +21,7 @@
 
 // t2 is the newer tuple.
 // we return deletes here.  our caller decides what to do with them.
-datatuple* tuplemerger::merge(const datatuple *t1, const datatuple *t2)
+dataTuple* tupleMerger::merge(const dataTuple *t1, const dataTuple *t2)
 {
   if(!(t1->isDelete() || t2->isDelete())) {
     return (*merge_fp)(t1,t2);
@@ -38,7 +38,7 @@ datatuple* tuplemerger::merge(const datatuple *t1, const datatuple *t2)
  * deletes are handled by the tuplemerger::merge function
  * so here neither t1 nor t2 is a delete datatuple
  **/
-datatuple* append_merger(const datatuple *t1, const datatuple *t2)
+dataTuple* append_merger(const dataTuple *t1, const dataTuple *t2)
 {
 	assert(!(t1->isDelete() || t2->isDelete()));
     len_t rawkeylen = t1->rawkeylen();
@@ -47,7 +47,7 @@ datatuple* append_merger(const datatuple *t1, const datatuple *t2)
     memcpy(data, t1->data(), t1->datalen());
     memcpy(data + t1->datalen(), t2->data(), t2->datalen());
 
-	return datatuple::create(t1->rawkey(), rawkeylen, data, datalen);
+	return dataTuple::create(t1->rawkey(), rawkeylen, data, datalen);
 }
 
 /**
@@ -56,7 +56,7 @@ datatuple* append_merger(const datatuple *t1, const datatuple *t2)
  * deletes are handled by the tuplemerger::merge function
  * so here neither t1 nor t2 is a delete datatuple
  **/
-datatuple* replace_merger(const datatuple *t1, const datatuple *t2)
+dataTuple* replace_merger(const dataTuple *t1, const dataTuple *t2)
 {
 	return t2->create_copy();
 }

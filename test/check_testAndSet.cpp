@@ -42,7 +42,7 @@
 
 unsigned char vals[NUM_THREADS];
 
-blsm * ltable;
+bLSM * ltable;
 
 int myucharcmp(const void * ap, const void * bp) {
   unsigned char a = *(unsigned char*)ap;
@@ -56,11 +56,11 @@ void * worker(void * idp) {
   while(!succ) {
     unsigned char key = random() % NUM_THREADS;
     printf("id = %d key = %d\n", (int)id, (int)key);
-    datatuple * dt = datatuple::create(&key, sizeof(key), &id, sizeof(id));
-    datatuple * dtdelete = datatuple::create(&key, sizeof(key));
+    dataTuple * dt = dataTuple::create(&key, sizeof(key), &id, sizeof(id));
+    dataTuple * dtdelete = dataTuple::create(&key, sizeof(key));
     succ = ltable->testAndSetTuple(dt, dtdelete);
-    datatuple::freetuple(dt);
-    datatuple::freetuple(dtdelete);
+    dataTuple::freetuple(dt);
+    dataTuple::freetuple(dtdelete);
     vals[id] = key;
   }
   return 0;
@@ -73,12 +73,12 @@ void insertProbeIter(size_t NUM_ENTRIES)
     unlink("logfile.txt");
     system("rm -rf stasis_log/");
 
-    blsm::init_stasis();
+    bLSM::init_stasis();
     int xid = Tbegin();
 
-    ltable = new blsm(10 * 1024 * 1024, 1000, 10000, 5);
+    ltable = new bLSM(10 * 1024 * 1024, 1000, 10000, 5);
 
-    merge_scheduler mscheduler(ltable);
+    mergeScheduler mscheduler(ltable);
 
     recordid table_root = ltable->allocTable(xid);
 
@@ -106,7 +106,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     mscheduler.shutdown();
     delete ltable;
-    blsm::deinit_stasis();
+    bLSM::deinit_stasis();
 
     printf("\npass\n");
 }

@@ -26,7 +26,7 @@
 class memTreeComponent {
 public:
 //  typedef std::set<datatuple*, datatuple, stlslab<datatuple*> > rbtree_t;
-  typedef std::set<datatuple*, datatuple> rbtree_t;
+  typedef std::set<dataTuple*, dataTuple> rbtree_t;
   typedef rbtree_t* rbtree_ptr_t;
 
   static void tearDownTree(rbtree_ptr_t t);
@@ -47,7 +47,7 @@ public:
       init_iterators(s, NULL, NULL);
     }
 
-    iterator( rbtree_t *s, datatuple *&key )
+    iterator( rbtree_t *s, dataTuple *&key )
       : first_(true), done_(s == NULL) {
       init_iterators(s, key, NULL);
     }
@@ -57,7 +57,7 @@ public:
       delete itend_;
     }
 
-    datatuple* next_callerFrees() {
+    dataTuple* next_callerFrees() {
       if(done_) { return NULL; }
       if(first_) { first_ = 0;} else { (*it_)++; }
       if(*it_==*itend_) { done_= true; return NULL; }
@@ -67,7 +67,7 @@ public:
 
 
   private:
-    void init_iterators(rbtree_t * s, datatuple * key1, datatuple * key2) {
+    void init_iterators(rbtree_t * s, dataTuple * key1, dataTuple * key2) {
       if(s) {
         it_    = key1 ? new MTITER(s->lower_bound(key1))  : new MTITER(s->begin());
         itend_ = key2 ? new MTITER(s->upper_bound(key2)) : new MTITER(s->end());
@@ -114,7 +114,7 @@ public:
       }
       if(mut_) pthread_mutex_unlock(mut_);
     }
-    revalidatingIterator( rbtree_t *s, pthread_mutex_t * rb_mut, datatuple *&key ) : s_(s), mut_(rb_mut) {
+    revalidatingIterator( rbtree_t *s, pthread_mutex_t * rb_mut, dataTuple *&key ) : s_(s), mut_(rb_mut) {
       if(mut_) pthread_mutex_lock(mut_);
       if(key) {
         if(s_->find(key) != s_->end()) {
@@ -136,12 +136,12 @@ public:
     }
 
     ~revalidatingIterator() {
-      if(next_ret_) datatuple::freetuple(next_ret_);
+      if(next_ret_) dataTuple::freetuple(next_ret_);
     }
 
-    datatuple* next_callerFrees() {
+    dataTuple* next_callerFrees() {
       if(mut_) pthread_mutex_lock(mut_);
-      datatuple * ret = next_ret_;
+      dataTuple * ret = next_ret_;
       if(next_ret_) {
         if(s_->upper_bound(next_ret_) == s_->end()) {
           next_ret_ = 0;
@@ -159,7 +159,7 @@ public:
     int  operator-(revalidatingIterator & t) { abort(); }
 
     rbtree_t *s_;
-    datatuple * next_ret_;
+    dataTuple * next_ret_;
     pthread_mutex_t * mut_;
   };
 
@@ -174,7 +174,7 @@ public:
     typedef rbtree_t::const_iterator MTITER;
 
 
-    void populate_next_ret_impl(std::_Rb_tree_const_iterator<datatuple*>/*MTITER*/ it) {
+    void populate_next_ret_impl(std::_Rb_tree_const_iterator<dataTuple*>/*MTITER*/ it) {
       num_batched_ = 0;
       cur_off_ = 0;
       while(it != s_->end() && num_batched_ < batch_size_) {
@@ -183,7 +183,7 @@ public:
         it++;
       }
     }
-    void populate_next_ret(datatuple *key=NULL, bool include_key=false) {
+    void populate_next_ret(dataTuple *key=NULL, bool include_key=false) {
       if(cur_off_ == num_batched_) {
         if(mut_) pthread_mutex_lock(mut_);
         if(mgr_) {
@@ -206,24 +206,24 @@ public:
 
   public:
     batchedRevalidatingIterator( rbtree_t *s, mergeManager * mgr, int64_t target_size, bool * flushing, int batch_size, pthread_mutex_t * rb_mut ) : s_(s), mgr_(mgr), target_size_(target_size), flushing_(flushing), batch_size_(batch_size), num_batched_(batch_size), cur_off_(batch_size), mut_(rb_mut) {
-      next_ret_ = (datatuple**)malloc(sizeof(next_ret_[0]) * batch_size_);
+      next_ret_ = (dataTuple**)malloc(sizeof(next_ret_[0]) * batch_size_);
       populate_next_ret();
     }
-      batchedRevalidatingIterator( rbtree_t *s, int batch_size, pthread_mutex_t * rb_mut, datatuple *&key ) : s_(s), mgr_(NULL), target_size_(0), flushing_(0), batch_size_(batch_size), num_batched_(batch_size), cur_off_(batch_size), mut_(rb_mut) {
-      next_ret_ = (datatuple**)malloc(sizeof(next_ret_[0]) * batch_size_);
+      batchedRevalidatingIterator( rbtree_t *s, int batch_size, pthread_mutex_t * rb_mut, dataTuple *&key ) : s_(s), mgr_(NULL), target_size_(0), flushing_(0), batch_size_(batch_size), num_batched_(batch_size), cur_off_(batch_size), mut_(rb_mut) {
+      next_ret_ = (dataTuple**)malloc(sizeof(next_ret_[0]) * batch_size_);
       populate_next_ret(key, true);
     }
 
     ~batchedRevalidatingIterator() {
       for(int i = cur_off_; i < num_batched_; i++) {
-        datatuple::freetuple(next_ret_[i]);
+        dataTuple::freetuple(next_ret_[i]);
       }
       free(next_ret_);
     }
 
-    datatuple* next_callerFrees() {
+    dataTuple* next_callerFrees() {
       if(cur_off_ == num_batched_) { return NULL; } // the last thing we did is call populate_next_ret_(), which only leaves us in this state at the end of the iterator.
-      datatuple * ret = next_ret_[cur_off_];
+      dataTuple * ret = next_ret_[cur_off_];
       cur_off_++;
       populate_next_ret(ret);
       return ret;
@@ -235,7 +235,7 @@ public:
     int  operator-(batchedRevalidatingIterator & t) { abort(); }
 
     rbtree_t *s_;
-    datatuple ** next_ret_;
+    dataTuple ** next_ret_;
     mergeManager * mgr_;
     int64_t target_size_; // the low-water size for the tree.  If cur_size_ is not null, and *cur_size_ < C * target_size_, we sleep.
     bool* flushing_; // never block if *flushing is true.

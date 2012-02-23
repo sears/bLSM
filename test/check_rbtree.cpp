@@ -63,7 +63,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     for(size_t i = 0; i < NUM_ENTRIES; i++)
     {
         //prepare the key
-        datatuple *newtuple = datatuple::create(key_arr[i].c_str(), key_arr[i].length()+1,data_arr[i].c_str(), data_arr[i].length()+1);
+        dataTuple *newtuple = dataTuple::create(key_arr[i].c_str(), key_arr[i].length()+1,data_arr[i].c_str(), data_arr[i].length()+1);
 
         datasize += newtuple->byte_length();
 
@@ -83,14 +83,14 @@ void insertProbeIter(size_t NUM_ENTRIES)
         int ri = i;
 
         //prepare a search tuple
-        datatuple *search_tuple = datatuple::create(key_arr[ri].c_str(), key_arr[ri].length()+1);
+        dataTuple *search_tuple = dataTuple::create(key_arr[ri].c_str(), key_arr[ri].length()+1);
         
         //step 1: look in tree_c0
 
 	memTreeComponent::rbtree_t::iterator rbitr = rbtree.find(search_tuple);
         if(rbitr != rbtree.end())
         {
-            datatuple *tuple = *rbitr;
+            dataTuple *tuple = *rbitr;
 
             found_tuples++;
             assert(tuple->rawkeylen() == key_arr[ri].length()+1);
@@ -101,7 +101,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
             printf("Not in scratch_tree\n");
         }
         
-        datatuple::freetuple(search_tuple);
+        dataTuple::freetuple(search_tuple);
     }
     printf("found %d\n", found_tuples);    
 }

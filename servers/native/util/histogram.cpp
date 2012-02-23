@@ -47,7 +47,7 @@ int main(int argc, char * argv[]) {
     	fprintf(stderr, "Histogram request returned logstore error code %d\n", rcode);
     	perror("Histogram generation failed."); return 3;
     } else {
-    	datatuple *ret;
+    	dataTuple *ret;
     	bool first = true;
     	while(( ret = logstore_client_next_tuple(l) )) {
     		if(first) {
@@ -59,7 +59,7 @@ int main(int argc, char * argv[]) {
     			assert(ret->strippedkey()[ret->strippedkeylen()-1] == 0); // check for null terminator.
     			printf("\t%s\n", (char*)ret->strippedkey());
     		}
-    		datatuple::freetuple(ret);
+    		dataTuple::freetuple(ret);
     	}
     }
 

@@ -45,7 +45,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
     sync();
 
-    blsm::init_stasis();
+    bLSM::init_stasis();
 
     double delete_freq = .05;
     double update_freq = .15;
@@ -120,8 +120,8 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     int xid = Tbegin();
 
-    blsm *ltable = new blsm(10 * 1024 * 1024, 1000, 1000, 40);
-    merge_scheduler mscheduler(ltable);
+    bLSM *ltable = new bLSM(10 * 1024 * 1024, 1000, 1000, 40);
+    mergeScheduler mscheduler(ltable);
 
     recordid table_root = ltable->allocTable(xid);
 
@@ -145,7 +145,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         getnextdata(ditem, 8192);
 
         //prepare the key
-        datatuple *newtuple = datatuple::create((*key_arr)[i].c_str(), (*key_arr)[i].length()+1, ditem.c_str(), ditem.length()+1);
+        dataTuple *newtuple = dataTuple::create((*key_arr)[i].c_str(), (*key_arr)[i].length()+1, ditem.c_str(), ditem.length()+1);
         
         datasize += newtuple->byte_length();
 
@@ -154,7 +154,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
         gettimeofday(&ti_end,0);
         insert_time += tv_to_double(ti_end) - tv_to_double(ti_st);
 
-        datatuple::freetuple(newtuple);
+        dataTuple::freetuple(newtuple);
 
         double rval = ((rand() % 100)+.0)/100;        
         if( rval < delete_freq) //delete a key 
@@ -164,14 +164,14 @@ void insertProbeIter(size_t NUM_ENTRIES)
             {
                 delcount++;
 
-                datatuple *deltuple = datatuple::create((*key_arr)[del_index].c_str(), (*key_arr)[del_index].length()+1);
+                dataTuple *deltuple = dataTuple::create((*key_arr)[del_index].c_str(), (*key_arr)[del_index].length()+1);
 
                 gettimeofday(&ti_st,0);        
                 ltable->insertTuple(deltuple);
                 gettimeofday(&ti_end,0);
                 insert_time += tv_to_double(ti_end) - tv_to_double(ti_st);
 
-                datatuple::freetuple(deltuple);
+                dataTuple::freetuple(deltuple);
 
                 del_list.push_back(del_index);
                 
@@ -185,14 +185,14 @@ void insertProbeIter(size_t NUM_ENTRIES)
                 getnextdata(ditem, 512);
 
                 upcount++;
-                datatuple *uptuple = datatuple::create((*key_arr)[up_index].c_str(), (*key_arr)[up_index].length()+1,
+                dataTuple *uptuple = dataTuple::create((*key_arr)[up_index].c_str(), (*key_arr)[up_index].length()+1,
 													   ditem.c_str(), ditem.length()+1);
                 gettimeofday(&ti_st,0);        
                 ltable->insertTuple(uptuple);
                 gettimeofday(&ti_end,0);
                 insert_time += tv_to_double(ti_end) - tv_to_double(ti_st);
 
-                datatuple::freetuple(uptuple);
+                dataTuple::freetuple(uptuple);
             }            
 
         }
@@ -219,11 +219,11 @@ void insertProbeIter(size_t NUM_ENTRIES)
 
         //get the key
         uint32_t keylen = (*key_arr)[ri].length()+1;        
-        datatuple::key_t rkey = (datatuple::key_t) malloc(keylen);
+        dataTuple::key_t rkey = (dataTuple::key_t) malloc(keylen);
         memcpy((byte*)rkey, (*key_arr)[ri].c_str(), keylen);
 
         //find the key with the given tuple
-        datatuple *dt = ltable->findTuple(xid, rkey, keylen);
+        dataTuple *dt = ltable->findTuple(xid, rkey, keylen);
 
         if(std::find(del_list.begin(), del_list.end(), i) == del_list.end())
         {
@@ -231,7 +231,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
             assert(!dt->isDelete());
             found_tuples++;
             assert(dt->rawkeylen() == (*key_arr)[ri].length()+1);
-            datatuple::freetuple(dt);
+            dataTuple::freetuple(dt);
         }
         else
         {
@@ -239,7 +239,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
             {
                 assert(dt->rawkeylen() == (*key_arr)[ri].length()+1);
                 assert(dt->isDelete());
-                datatuple::freetuple(dt);
+                dataTuple::freetuple(dt);
             }
         }
         dt = 0;
@@ -265,7 +265,7 @@ void insertProbeIter(size_t NUM_ENTRIES)
     
     Tcommit(xid);
     delete ltable;
-    blsm::deinit_stasis();
+    bLSM::deinit_stasis();
 }
 
 

@@ -35,7 +35,7 @@
 #include <csignal>
 
 logserver *lserver=0;
-merge_scheduler *mscheduler=0;
+mergeScheduler *mscheduler=0;
 
 /*void ignore_pipe(int param)
 {
@@ -53,7 +53,7 @@ void terminate (int param)
 
 	  printf("Deinitializing stasis...\n");
 	  fflush(stdout);
-	  blsm::deinit_stasis();
+	  bLSM::deinit_stasis();
 
 	  exit(0);
 }
@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
 
     prev_fn = signal (SIGINT,terminate);
 
-    blsm::init_stasis();
+    bLSM::init_stasis();
 
     int xid = Tbegin();
 
@@ -84,7 +84,7 @@ int main(int argc, char *argv[])
       printf("note: running w/ 2GB c0 for benchmarking"); // XXX build a separate test server and deployment server?
     }
 
-    blsm ltable(c0_size);
+    bLSM ltable(c0_size);
 
     recordid table_root = ROOT_RECORD;
     if(TrecordType(xid, ROOT_RECORD) == INVALID_SLOT) {
@@ -100,7 +100,7 @@ int main(int argc, char *argv[])
 
     Tcommit(xid);
 
-    mscheduler = new merge_scheduler(&ltable);
+    mscheduler = new mergeScheduler(&ltable);
     mscheduler->start();
 
     lserver = new logserver(100, 32432);
