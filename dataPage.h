@@ -24,7 +24,7 @@
 
 #include <stasis/page.h>
 #include <stasis/constants.h>
-#include "datatuple.h"
+#include "dataTuple.h"
 #include "regionAllocator.h"
 
 //#define CHECK_FOR_SCRIBBLING

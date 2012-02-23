@@ -25,7 +25,7 @@
 #include <stasis/common.h>
 #include <sys/time.h>
 #include <stdio.h>
-#include <datatuple.h>
+#include <dataTuple.h>
 
 class bLSM;
 class mergeStats;

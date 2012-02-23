@@ -19,7 +19,7 @@
 #ifndef _MERGER_H_
 #define _MERGER_H_
 
-#include "blsm.h"
+#include "bLSM.h"
 
 #include <stasis/common.h>
 

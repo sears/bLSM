@@ -17,8 +17,8 @@
  *
  *      Author: makdere
  */
-#include "blsm.h"
-#include "datapage.h"
+#include "bLSM.h"
+#include "dataPage.h"
 #include "regionAllocator.h"
 
 #include <stasis/page.h>

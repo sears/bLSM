@@ -22,7 +22,7 @@
 #include <iostream>
 #include <algorithm>
 #include <sstream>
-#include "blsm.h"
+#include "bLSM.h"
 #include "regionAllocator.h"
 #include "diskTreeComponent.h"
 

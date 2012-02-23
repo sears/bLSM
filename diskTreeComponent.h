@@ -22,8 +22,8 @@
 #ifndef DISKTREECOMPONENT_H_
 #define DISKTREECOMPONENT_H_
 
-#include "datapage.h"
-#include "datatuple.h"
+#include "dataPage.h"
+#include "dataTuple.h"
 #include "mergeStats.h"
 #include "bloomFilter.h"
 #include <stasis/util/crc32.h>

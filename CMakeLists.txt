@@ -80,5 +80,5 @@ ENDIF ( "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU" )
 
 #CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 IF ( HAVE_STASIS )
-  ADD_LIBRARY(blsm blsm.cpp diskTreeComponent.cpp memTreeComponent.cpp datapage.cpp merger.cpp tuplemerger.cpp mergeStats.cpp mergeManager.cpp bloomFilter.c)
+  ADD_LIBRARY(blsm bLSM.cpp diskTreeComponent.cpp memTreeComponent.cpp dataPage.cpp mergeScheduler.cpp tupleMerger.cpp mergeStats.cpp mergeManager.cpp bloomFilter.c)
 ENDIF ( HAVE_STASIS )

@@ -17,7 +17,7 @@
  *
  */
 #include "memTreeComponent.h"
-#include "datatuple.h"
+#include "dataTuple.h"
 
 void memTreeComponent::tearDownTree(rbtree_ptr_t tree) {
     dataTuple * t = 0;

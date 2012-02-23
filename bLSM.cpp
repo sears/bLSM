@@ -16,8 +16,8 @@
  * limitations under the License.
  *
  */
-#include "blsm.h"
-#include "merger.h"
+#include "bLSM.h"
+#include "mergeScheduler.h"
 
 #include <stasis/transactional.h>
 #include <stasis/bufferManager.h>

@@ -25,7 +25,7 @@
 
 #include "diskTreeComponent.h"
 #include "memTreeComponent.h"
-#include "tuplemerger.h"
+#include "tupleMerger.h"
 #include "mergeManager.h"
 #include "mergeStats.h"
 

@@ -16,7 +16,7 @@ all: main/blsm_client main/blsm_server
 
 main/blsm_client :
 
-main/blsm_server : blsmRequestHandler.cpp
+main/blsm_server : bLSMRequestHandler.cpp
 
 clean:
 	rm -f main/blsm_client main/blsm_server

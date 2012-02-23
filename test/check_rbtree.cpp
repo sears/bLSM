@@ -22,9 +22,9 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
-#include "blsm.h"
-#include "datapage.h"
-#include "merger.h"
+#include "bLSM.h"
+#include "dataPage.h"
+#include "mergeScheduler.h"
 #include <assert.h>
 #include <limits.h>
 #include <math.h>

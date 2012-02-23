@@ -24,7 +24,7 @@
 #include <math.h>
 #include <ctype.h>
 
-#include "merger.h"
+#include "mergeScheduler.h"
 #include "diskTreeComponent.h"
 #include "regionAllocator.h"
 

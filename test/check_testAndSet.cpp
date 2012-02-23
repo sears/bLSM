@@ -23,8 +23,8 @@
 #include <vector>
 #include <iostream>
 #include <sstream>
-#include "datapage.h"
-#include "merger.h"
+#include "dataPage.h"
+#include "mergeScheduler.h"
 #include <assert.h>
 #include <limits.h>
 #include <math.h>

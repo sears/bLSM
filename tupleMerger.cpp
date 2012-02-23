@@ -16,8 +16,8 @@
  * limitations under the License.
  *
  */
-#include "tuplemerger.h"
-#include "blsm.h"
+#include "tupleMerger.h"
+#include "bLSM.h"
 
 // t2 is the newer tuple.
 // we return deletes here.  our caller decides what to do with them.

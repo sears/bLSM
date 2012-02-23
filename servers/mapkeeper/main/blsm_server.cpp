@@ -7,9 +7,9 @@
 #include <transport/TBufferTransports.h>
 #include <concurrency/ThreadManager.h>
 #include <concurrency/PosixThreadFactory.h>
-#include "blsm.h"
-#include "datatuple.h"
-#include "blsmRequestHandler.h"
+#include "bLSM.h"
+#include "dataTuple.h"
+#include "bLSMRequestHandler.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;

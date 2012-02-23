@@ -28,8 +28,8 @@
 
 #include <sys/time.h>
 #include <stdio.h>
-#include "datatuple.h"
-#include "datapage.h"
+#include "dataTuple.h"
+#include "dataPage.h"
 
 #include <mergeManager.h> // XXX for double_to_ts, etc... create a util class.
 

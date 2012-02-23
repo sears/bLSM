@@ -17,7 +17,7 @@
  *
  */
 #include <math.h>
-#include "merger.h"
+#include "mergeScheduler.h"
 
 #include <stasis/transactional.h>
 

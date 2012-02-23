@@ -22,9 +22,9 @@
 
 #include <iostream>
 #include <signal.h>
-#include "merger.h"
-#include "blsm.h"
-#include "blsmRequestHandler.h"
+#include "mergeScheduler.h"
+#include "bLSM.h"
+#include "bLSMRequestHandler.h"
 
 int blind_update = 0; // updates check preimage by default.
 
