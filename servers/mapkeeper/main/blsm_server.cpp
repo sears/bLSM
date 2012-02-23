@@ -9,7 +9,7 @@
 #include <concurrency/PosixThreadFactory.h>
 #include "blsm.h"
 #include "datatuple.h"
-#include "LSMServerHandler.h"
+#include "blsmRequestHandler.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;

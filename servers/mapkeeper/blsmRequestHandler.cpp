@@ -24,7 +24,7 @@
 #include <signal.h>
 #include "merger.h"
 #include "blsm.h"
-#include "LSMServerHandler.h"
+#include "blsmRequestHandler.h"
 
 int blind_update = 0; // updates check preimage by default.
 
