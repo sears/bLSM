@@ -60,6 +60,10 @@ LSMServerHandler(int argc, char **argv)
             stasis_buffer_manager_size = (1024LL * 1024LL * 1024LL * 2LL) / PAGE_SIZE;  // 5GB total
             c0_size =                     1024LL * 1024LL * 1024LL * 3LL;
             printf("note: running w/ 5GB of memory for benchmarking on small box\n");
+        } else if(!strcmp(argv[i], "--benchmark-big")) {
+            stasis_buffer_manager_size = (1024LL * 1024LL * 1024LL * 16LL) / PAGE_SIZE;  // 26GB total
+            c0_size =                     1024LL * 1024LL * 1024LL * 10LL;
+            printf("note: running w/ 28GB of memory for benchmarking on big box\n");
         } else if(!strcmp(argv[i], "--log-mode")) {
             i++;
             log_mode = atoi(argv[i]);
@@ -95,7 +99,7 @@ LSMServerHandler(int argc, char **argv)
           stasis_handle_raid0_filenames = tok;
           stasis_handle_factory = stasis_handle_raid0_factory;
         } else {
-            fprintf(stderr, "Usage: %s [--test|--benchmark|--benchmark-small] [--log-mode <int>] [--expiry-delta <int>] [--raid0 file1,file2,...]", argv[0]);
+            fprintf(stderr, "Usage: %s [--test|--benchmark|--benchmark-small|--benchmark-big] [--log-mode <int>] [--expiry-delta <int>] [--raid0 file1,file2,...]", argv[0]);
             abort();
         }
     }
