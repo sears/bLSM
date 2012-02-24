@@ -74,8 +74,28 @@ LSMServerHandler(int argc, char **argv)
         } else if(!strcmp(argv[i], "--expiry-delta")) {
             i++;
             expiry_delta = atoi(argv[i]);
+        } else if(!strcmp(argv[i], "--raid0")) {
+          i++;
+          char * saveptr;
+          const char * delim = ",";
+          char * arg = strdup(argv[i]);
+          int toks = 0;
+          for(char * tok = strtok_r(arg, delim, &saveptr); tok; tok = strtok_r(0,delim,&saveptr)) {
+            toks++;
+          }
+          free(arg);
+          arg = strdup(argv[i]);
+          char ** tok = (char**)malloc(sizeof(tok[0]) * (1+toks));
+          int j = 0;
+          for(char * t = strtok_r(arg, delim, &saveptr); t; t = strtok_r(0,delim,&saveptr)) {
+            tok[j] = t;
+            j++;
+          }
+          tok[toks] = 0;
+          stasis_handle_raid0_filenames = tok;
+          stasis_handle_factory = stasis_handle_raid0_factory;
         } else {
-            fprintf(stderr, "Usage: %s [--test|--benchmark|--benchmark-small] [--log-mode <int>] [--expiry-delta <int>]", argv[0]);
+            fprintf(stderr, "Usage: %s [--test|--benchmark|--benchmark-small] [--log-mode <int>] [--expiry-delta <int>] [--raid0 file1,file2,...]", argv[0]);
             abort();
         }
     }
