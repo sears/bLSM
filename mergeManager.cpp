@@ -428,11 +428,14 @@ void mergeManager::tick(mergeStats * s) {
 void mergeManager::read_tuple_from_small_component(int merge_level, dataTuple * tup) {
   if(tup) {
     mergeStats * s = get_merge_stats(merge_level);
-    (s->num_tuples_in_small)++;
+    __sync_fetch_and_add(&s->num_tuples_in_small, 1);
+    //    (s->num_tuples_in_small)++;
 #if EXTENDED_STATS
-    (s->stats_bytes_in_small_delta) += tup->byte_length();
+    //    (s->stats_bytes_in_small_delta) += tup->byte_length();
+    __sync_fetch_and_add(&s->stats_bytes_in_small_delta, tup->byte_length());
 #endif
-    (s->bytes_in_small) += tup->byte_length();
+    //    (s->bytes_in_small) += tup->byte_length();
+    __sync_fetch_and_add(&s->bytes_in_small, tup->byte_length());
     if(merge_level != 0) {
       update_progress(s, tup->byte_length());
     }
