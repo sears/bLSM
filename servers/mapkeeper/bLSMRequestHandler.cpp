@@ -61,9 +61,9 @@ LSMServerHandler(int argc, char **argv)
             c0_size =                     1024LL * 1024LL * 1024LL * 3LL;
             printf("note: running w/ 5GB of memory for benchmarking on small box\n");
         } else if(!strcmp(argv[i], "--benchmark-big")) {
-            stasis_buffer_manager_size = (1024LL * 1024LL * 1024LL * 16LL) / PAGE_SIZE;  // 26GB total
-            c0_size =                     1024LL * 1024LL * 1024LL * 10LL;
-            printf("note: running w/ 28GB of memory for benchmarking on big box\n");
+            stasis_buffer_manager_size = (1024LL * 1024LL * 1024LL * 10LL) / PAGE_SIZE;  // 26GB total
+            c0_size =                     1024LL * 1024LL * 1024LL * 16LL;
+            printf("note: running w/ 26GB of memory for benchmarking on big box\n");
         } else if(!strcmp(argv[i], "--log-mode")) {
             i++;
             log_mode = atoi(argv[i]);
