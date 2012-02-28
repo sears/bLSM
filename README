@@ -24,7 +24,7 @@ relies upon the MapKeeper prototocol specification, which we also
 maintain:
 
 https://github.com/m1ch1/mapkeeper
-
+Apache 2.0 license: https://github.com/m1ch1/mapkeeper/blob/master/LICENSE.txt
 The generated MapKeeper files (and, therefore the bLSM MapKeeper
 bindings) also require Thrift and Boost.
 
