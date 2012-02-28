@@ -1,3 +1,37 @@
-Portions of this work are based upon Stasis' "Rose" LSM-Tree implementation.
+bLSM uses several 3rd party open source libraries and tools.
+
+This file summarizes the tools used, their purpose, and the licenses
+under which they're released.  Portions of bLSM are based upon Stasis'
+"Rose" LSM-Tree implementation.
 
 http://code.google.com/p/stasis/source/browse/trunk/benchmarks/rose.cpp
+
+Except as specifically stated below, the 3rd party software packages
+listed below are not distributed as part of this project, but instead
+are separately downloaded from the respective provider and built on
+the developer’s machine as a pre-build step.
+
+bLSM relies upon Stasis, a transactional storage library written and
+maintained by the authors of bLSM.
+
+TCL/TK license (BSD-style)
+http://code.google.com/p/stasis/source/browse/trunk/COPYING
+
+http://code.google.com/p/stasis/
+
+bLSM includes an example MapKeeper-compatible storage server, which
+relies upon the MapKeeper prototocol specification, which we also
+maintain:
+
+https://github.com/m1ch1/mapkeeper
+
+The generated MapKeeper files (and, therefore the bLSM MapKeeper
+bindings) also require Thrift and Boost.
+
+Thrift is a serialization and RPC framework:
+http://thrift.apache.org/
+Apache 2.0 license: http://svn.apache.org/viewvc/thrift/trunk/LICENSE?view=markup
+
+Boost is a collection of utility libraries for C++:
+http://www.boost.org/
+Boost Software License: http://www.boost.org/users/license.html
