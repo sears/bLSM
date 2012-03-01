@@ -27,7 +27,7 @@ Project(Stasis)
 
 SET(PACKAGE_VERSION 1)
 
-SUBDIRS(test util benchmarks servers/native)
+SUBDIRS(test servers/native)
 
 # Main decisions
 SET(BUILD_SHARED_LIBS ON)
