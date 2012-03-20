@@ -45,7 +45,7 @@ public:
   //  6GB ~= 100B * 500 GB / (datapage_size * 4KB)
   //  (100B * 500GB) / (6GB * 4KB) = 2.035
   // RCS: Set this to 1 so that we do (on average) one seek per b-tree read.
-  bLSM(int log_mode = 0, pageid_t max_c0_size = 100 * 1024 * 1024, pageid_t internal_region_size = 16384, pageid_t datapage_region_size = 16384, pageid_t datapage_size = 1);
+  bLSM(int log_mode = 0, pageid_t max_c0_size = 100 * 1024 * 1024, pageid_t internal_region_size = 16384, pageid_t datapage_region_size = 256000, pageid_t datapage_size = 1);
 
     ~bLSM();
 
