@@ -25,7 +25,7 @@
 #include "dataPage.h"
 #include "dataTuple.h"
 #include "mergeStats.h"
-#include "bloomFilter.h"
+#include <stasis/util/bloomFilter.h>
 #include <stasis/util/crc32.h>
 
 extern "C" {
@@ -50,10 +50,10 @@ class diskTreeComponent {
     stats(stats),
     bloom_filter(bloom_filter_size == 0
                 ? 0
-                : bloom_filter_create(diskTreeComponent_hash_func_a,
+                : stasis_bloom_filter_create(diskTreeComponent_hash_func_a,
                                       diskTreeComponent_hash_func_b,
                                       bloom_filter_size, 0.01))  {
-    if(bloom_filter) bloom_filter_print_stats(bloom_filter);
+    if(bloom_filter) stasis_bloom_filter_print_stats(bloom_filter);
   }
 
   diskTreeComponent(int xid, recordid root, recordid internal_node_state,
@@ -65,7 +65,7 @@ class diskTreeComponent {
     bloom_filter(0) {}
 
   ~diskTreeComponent() {
-    if(bloom_filter) bloom_filter_destroy(bloom_filter);
+    if(bloom_filter) stasis_bloom_filter_destroy(bloom_filter);
     delete dp;
     delete ltree;
   }
@@ -208,7 +208,7 @@ class diskTreeComponent {
     };
   };
 
-  bloom_filter_t * bloom_filter;
+  stasis_bloom_filter_t * bloom_filter;
 
   class iterator
   {

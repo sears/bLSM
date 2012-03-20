@@ -15,8 +15,6 @@
 # limitations under the License.
 IF( HAVE_STASIS )
   CREATE_CHECK(check_gen)
-  CREATE_CHECK(check_bloomFilter)
-  CREATE_CHECK(check_testAndSet)
   CREATE_CHECK(check_logtree)
   CREATE_CHECK(check_datapage)
   CREATE_CHECK(check_logtable)

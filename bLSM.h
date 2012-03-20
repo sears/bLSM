@@ -189,11 +189,11 @@ public:
     bool mightBeOnDisk(dataTuple * t) {
       if(tree_c1) {
         if(!tree_c1->bloom_filter) { DEBUG("no c1 bloom filter\n"); return true; }
-        if(bloom_filter_lookup(tree_c1->bloom_filter,           (const char*)t->strippedkey(), t->strippedkeylen())) { DEBUG("in c1\n"); return true; }
+        if(stasis_bloom_filter_lookup(tree_c1->bloom_filter,           (const char*)t->strippedkey(), t->strippedkeylen())) { DEBUG("in c1\n"); return true; }
       }
       if(tree_c1_prime) {
         if(!tree_c1_prime->bloom_filter) { DEBUG("no c1' bloom filter\n");  return true; }
-        if(bloom_filter_lookup(tree_c1_prime->bloom_filter,     (const char*)t->strippedkey(), t->strippedkeylen())) { DEBUG("in c1'\n"); return true; }
+        if(stasis_bloom_filter_lookup(tree_c1_prime->bloom_filter,     (const char*)t->strippedkey(), t->strippedkeylen())) { DEBUG("in c1'\n"); return true; }
       }
       return mightBeAfterMemMerge(t);
     }
@@ -202,13 +202,13 @@ public:
 
       if(tree_c1_mergeable) {
         if(!tree_c1_mergeable->bloom_filter) { DEBUG("no c1m bloom filter\n"); return true; }
-        if(bloom_filter_lookup(tree_c1_mergeable->bloom_filter,     (const char*)t->strippedkey(), t->strippedkeylen())) { DEBUG("in c1m'\n");return true; }
+        if(stasis_bloom_filter_lookup(tree_c1_mergeable->bloom_filter,     (const char*)t->strippedkey(), t->strippedkeylen())) { DEBUG("in c1m'\n");return true; }
       }
 
 
       if(tree_c2) {
         if(!tree_c2->bloom_filter) { DEBUG("no c2 bloom filter\n");  return true; }
-        if(bloom_filter_lookup(tree_c2->bloom_filter,           (const char*)t->strippedkey(), t->strippedkeylen())) { DEBUG("in c2\n");return true; }
+        if(stasis_bloom_filter_lookup(tree_c2->bloom_filter,           (const char*)t->strippedkey(), t->strippedkeylen())) { DEBUG("in c2\n");return true; }
       }
       return false;
     }

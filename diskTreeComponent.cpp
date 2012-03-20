@@ -79,7 +79,7 @@ void diskTreeComponent::writes_done() {
 int diskTreeComponent::insertTuple(int xid, dataTuple *t)
 {
   if(bloom_filter) {
-    bloom_filter_insert(bloom_filter, (const char*)t->strippedkey(), t->strippedkeylen());
+    stasis_bloom_filter_insert(bloom_filter, (const char*)t->strippedkey(), t->strippedkeylen());
   }
   int ret = 0; // no error.
   if(dp==0) {
@@ -135,7 +135,7 @@ dataTuple * diskTreeComponent::findTuple(int xid, dataTuple::key_t key, size_t k
     dataTuple * tup=0;
 
     if(bloom_filter) {
-      if(!bloom_filter_lookup(bloom_filter, (const char*)key, keySize)) {
+      if(!stasis_bloom_filter_lookup(bloom_filter, (const char*)key, keySize)) {
         return NULL;
       }
     }
