@@ -21,7 +21,7 @@ has a number of limitations that we plan to address in short order:
    partitioning the state on disk, and scheduling merges based on the heat of
    each partition.
 
-In the mean time, feel free to drop me a line at sears@cs.berkeley.edu
+In the mean time, feel free to drop me a line!
 
 Licensing
 =========
