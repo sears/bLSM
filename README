@@ -1,3 +1,31 @@
+bLSM initial release
+====================
+
+This is an initial release of bLSM, which is scheduled to appear in 
+Sigmod 2012.  bLSM is a general-purpose log structured merge tree that
+targets highly-available, scalable, key-value storage systems.
+
+We have been careful to minimize the number of seeks performed by read 
+and scan optimizations, and have introduced a new spring-and-gear "level 
+scheduler" that bounds write latencies.
+
+The implementation is currently geared toward performance testing, and 
+has a number of limitations that we plan to address in short order:
+
+ * Recovery does not work until after enough data has been inserted to 
+   start filling disk with data.
+
+ * bLSM does not take advantage of write skew to reduce write 
+   amplification.  As a side effect, certain heavily skewed workloads will 
+   lead to unacceptably write latencies.  We plan to address this by
+   partitioning the state on disk, and scheduling merges based on the heat of
+   each partition.
+
+In the mean time, feel free to drop me a line at sears@cs.berkeley.edu
+
+Licensing
+=========
+
 bLSM uses several 3rd party open source libraries and tools.
 
 This file summarizes the tools used, their purpose, and the licenses
