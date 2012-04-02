@@ -1,2 +1,0 @@
-#!/bin/sh
-exec /home/y/bin/setuidgid nobody /usr/sbin/cronolog -l /home/y/logs/dht_lsm_server/stdout.log "/home/y/logs/dht_lsm_server/stdout.log.%Y%m%d"
